@@ -869,3 +869,75 @@ body {
   --text-label-sm--letter-spacing: 0.04em;
   --text-label-sm--font-weight: 600;
 }
+
+/* =========================================
+   MOBILE RESPONSIVENESS (HP / TABLET)
+   ========================================= */
+@media (max-width: 768px) {
+  /* Layout POS Kasir */
+  .main-content {
+    flex-direction: column;
+    overflow-y: auto;
+  }
+  
+  .products-area {
+    min-height: 50vh;
+    flex: none;
+  }
+  
+  .cart-area {
+    width: 100% !important;
+    min-height: 50vh;
+    border-left: none !important;
+    border-top: 2px solid var(--border-color);
+  }
+  
+  .product-grid {
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)) !important;
+    padding: 0.5rem !important;
+    gap: 0.5rem !important;
+  }
+
+  /* Navigasi / Header */
+  .top-navbar, .sub-navbar {
+    height: auto !important;
+    flex-wrap: wrap;
+    padding: 10px !important;
+    gap: 10px;
+  }
+  
+  .search-container {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 10px 0;
+  }
+  
+  .search-input {
+    width: 100% !important;
+  }
+
+  .cat-pills-container {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  
+  /* Backoffice Layout */
+  .bo-container {
+    padding: 10px !important;
+  }
+  
+  .bo-form-grid {
+    grid-template-columns: 1fr !important; /* Susun form ke bawah */
+    gap: 10px !important;
+  }
+
+  .bo-table th, .bo-table td {
+    padding: 0.5rem !important;
+    font-size: 12px;
+  }
+
+  /* Scanner Modal */
+  #barcode-scanner-reader {
+    min-height: 300px !important;
+  }
+}

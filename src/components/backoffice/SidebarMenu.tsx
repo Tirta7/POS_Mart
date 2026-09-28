@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Package, Truck, Users, Settings, User } from 'lucide-react';
+import { Package, Truck, Users, Settings, User, PieChart, FlaskConical } from 'lucide-react';
 
 const SidebarMenu: React.FC = () => {
   const location = useLocation();
@@ -10,7 +10,9 @@ const SidebarMenu: React.FC = () => {
     { path: '/backoffice/customers', label: 'Data Pelanggan', icon: <User size={18} /> },
     { path: '/backoffice/suppliers', label: 'Data Supplier', icon: <Truck size={18} /> },
     { path: '/backoffice/employees', label: 'Data Karyawan', icon: <Users size={18} /> },
+    { path: '/backoffice/reports', label: 'Laporan & Analitik', icon: <PieChart size={18} /> },
     { path: '/backoffice/settings', label: 'Pengaturan', icon: <Settings size={18} /> },
+    { path: '/backoffice/seed', label: 'Seed Data Dummy', icon: <FlaskConical size={18} /> },
   ];
 
   return (

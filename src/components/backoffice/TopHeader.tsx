@@ -1,13 +1,18 @@
 import React from 'react';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useSettingsStore } from '../../store/useSettingsStore';
-import { Link, useLocation } from 'react-router-dom';
-import { Package, Truck, Users, LayoutDashboard } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { LogOut } from 'lucide-react';
 
 const TopHeader: React.FC = () => {
-  const { currentUser } = useAuthStore();
+  const { currentUser, logout } = useAuthStore();
   const { appName } = useSettingsStore();
-  const location = useLocation();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
 
   return (
     <div className="bo-header">
@@ -36,9 +41,16 @@ const TopHeader: React.FC = () => {
         <div className="bo-user-profile">
           <div>
             <div className="bo-user-name">{currentUser?.name}</div>
-            <div className="bo-user-id">ID: #{currentUser?.pin}</div>
+            <div className="bo-user-id">ID: #{currentUser?.id?.toUpperCase()} • {currentUser?.role}</div>
           </div>
           <img src="https://i.pravatar.cc/100?img=5" alt="Avatar" className="bo-avatar" />
+          <button
+            onClick={handleLogout}
+            title="Logout"
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', padding: '4px', display: 'flex', alignItems: 'center' }}
+          >
+            <LogOut size={16} />
+          </button>
         </div>
       </div>
     </div>

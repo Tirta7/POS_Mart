@@ -7,6 +7,8 @@ export interface Product {
   location: string;
   unit: string;
   stock: number;
+  minStock?: number; // Minimum stock level for low stock alerts
+  reserved?: number; // stok yang sedang dikunci oleh HOLD
   baseUnitMultiplier: number;
   purchasePrice: number;
   sellingPrice: number;
@@ -27,6 +29,8 @@ export interface Employee {
   name: string;
   role: 'Cashier' | 'Supervisor' | 'Admin';
   pin: string;
+  username: string;
+  password: string;
   isActive: boolean;
 }
 
@@ -54,6 +58,28 @@ export interface CustomerOrder {
   orderId: string;
   date: string;
   total: number;
+  items: {
+    productId: string;
+    name: string;
+    qty: number;
+    price: number;
+    subtotal: number;
+  }[];
+}
+
+export interface SalesTransaction {
+  id: string;
+  date: string;
+  total: number;
+  subtotal: number;
+  tax: number;
+  rounding: number;
+  paymentMethod: string;
+  tendered: number;
+  change: number;
+  customerId?: string;
+  employeeId?: string;
+  employeeName?: string;
   items: {
     productId: string;
     name: string;
