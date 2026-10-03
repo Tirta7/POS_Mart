@@ -1,14 +1,17 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import TopHeader from '../../components/backoffice/TopHeader';
 import SidebarMenu from '../../components/backoffice/SidebarMenu';
 
 const BackofficeLayout: React.FC = () => {
+  // State drawer sidebar untuk tampilan mobile/tablet
+  const [menuOpen, setMenuOpen] = useState(false);
+
   return (
     <div className="bo-layout">
-      <TopHeader />
+      <TopHeader onMenuToggle={() => setMenuOpen(o => !o)} menuOpen={menuOpen} />
       <div className="bo-main-area">
-        <SidebarMenu />
+        <SidebarMenu open={menuOpen} onClose={() => setMenuOpen(false)} />
         <main className="bo-content">
           <Outlet />
         </main>

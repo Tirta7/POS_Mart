@@ -41,7 +41,7 @@ const SupplierData: React.FC = () => {
             <tbody>
               {suppliers.map(sup => (
                 <tr key={sup.id}>
-                  <td className="bo-table-sku">{sup.name}</td>
+                  <td className="bo-table-sku r-card-title">{sup.name}</td>
                   <td className="bo-table-bold">{sup.contact}</td>
                   <td style={{ fontWeight: '500', color: 'var(--text-muted)' }}>{sup.phone}</td>
                   <td style={{ textAlign: 'center' }}>

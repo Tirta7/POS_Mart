@@ -94,7 +94,7 @@ export const CustomerData = () => {
               filteredCustomers.map(c => (
                 <tr key={c.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
                   <td style={{ padding: '12px 8px', fontSize: '14px', fontWeight: 'bold' }}>{c.id}</td>
-                  <td style={{ padding: '12px 8px', fontSize: '14px', fontWeight: 'bold', color: 'var(--primary)' }}>{c.name}</td>
+                  <td className="r-card-title" style={{ padding: '12px 8px', fontSize: '14px', fontWeight: 'bold', color: 'var(--primary)' }}>{c.name}</td>
                   <td style={{ padding: '12px 8px', fontSize: '14px' }}>{c.phone}</td>
                   <td style={{ padding: '12px 8px', fontSize: '14px' }}>{c.address}</td>
                   <td style={{ padding: '12px 8px', fontSize: '14px', textAlign: 'center' }}>

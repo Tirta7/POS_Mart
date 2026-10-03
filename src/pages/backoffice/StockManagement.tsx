@@ -422,7 +422,7 @@ const StockManagement: React.FC = () => {
   );
 
   return (
-    <div className="bo-container">
+    <div className="bo-container r-kiosk">
       
       {/* Header */}
       <div className="bo-page-header" style={{ flexShrink: 0 }}>
@@ -432,14 +432,14 @@ const StockManagement: React.FC = () => {
         </div>
         <div className="bo-header-actions">
           <button className="bo-btn bo-btn-secondary" onClick={() => { setDrafts(readDrafts()); setSelectedIds([]); setShowDraftModal(true); }}>
-            <FileText size={16} /> Draf Tersimpan
+            <FileText size={16} /> <span className="hide-mobile">Draf Tersimpan</span><span className="show-mobile">Draf</span>
             {draftItems.length > 0 && <span style={{ marginLeft: '4px', background: '#6b7280', color: 'white', borderRadius: '10px', padding: '1px 6px', fontSize: '11px' }}>{draftItems.length}</span>}
           </button>
           <button className="bo-btn bo-btn-secondary" onClick={handleSaveDraft} disabled={sessionItems.length === 0} style={{ opacity: sessionItems.length === 0 ? 0.5 : 1 }}>
-            <Save size={16} /> Simpan Draf
+            <Save size={16} /> <span className="hide-mobile">Simpan Draf</span><span className="show-mobile">Simpan</span>
           </button>
           <button className="bo-btn bo-btn-primary" onClick={() => { setShowPostModal(true); setIsPosted(false); }} disabled={sessionItems.length === 0} style={{ opacity: sessionItems.length === 0 ? 0.5 : 1 }}>
-            <CheckCircle size={16} /> Konfirmasi &amp; Posting
+            <CheckCircle size={16} /> <span className="hide-mobile">Konfirmasi &amp; Posting</span><span className="show-mobile">Posting</span>
           </button>
         </div>
       </div>
@@ -462,7 +462,7 @@ const StockManagement: React.FC = () => {
 
       {/* Tabel sekarang langsung muncul di bawah header - form dipindah ke popup */}
       {/* Data Table */}
-      <div className="bo-card" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, marginBottom: 0 }}>
+      <div className="bo-card r-kiosk-card" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, marginBottom: 0 }}>
         <div className="bo-card-header" style={{ flexShrink: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <h3 className="bo-card-title" style={{ margin: 0 }}>
@@ -474,8 +474,8 @@ const StockManagement: React.FC = () => {
             </span>
           </div>
           
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-            <div style={{ position: 'relative', width: '220px' }}>
+          <div className="r-wrap-mobile" style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <div className="r-full-mobile" style={{ position: 'relative', width: '220px' }}>
               <Search size={16} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }} />
               <input
                 type="text"
@@ -491,7 +491,7 @@ const StockManagement: React.FC = () => {
               onClick={() => { resetForm(); setIsFormOpen(true); }}
               style={{ whiteSpace: 'nowrap', height: '36px', display: 'flex', alignItems: 'center', gap: '6px' }}
             >
-              <Plus size={16} /> Tambah Produk Baru
+              <Plus size={16} /> <span className="hide-mobile">Tambah Produk Baru</span><span className="show-mobile">Tambah</span>
             </button>
           </div>
         </div>
@@ -517,12 +517,12 @@ const StockManagement: React.FC = () => {
           ))}
         </div>
         <div className="bo-table-container">
-          <table className="bo-table">
+          <table className="bo-table r-sheet">
             <thead>
               <tr>
                 <th>ID</th>
                 <th>SKU</th>
-                <th>Nama Produk</th>
+                <th className="r-sheet-name">Nama Produk</th>
                 <th>Kategori</th>
                 <th style={{ textAlign: 'center' }}>Qty</th>
                 <th style={{ textAlign: 'right' }}>Harga Beli</th>
@@ -537,7 +537,7 @@ const StockManagement: React.FC = () => {
                 <tr key={p.id}>
                   <td className="bo-table-sku" style={{ color: '#6b7280' }}>{p.id}</td>
                   <td className="bo-table-sku">{p.sku}</td>
-                  <td className="bo-table-bold">{p.name}</td>
+                  <td className="bo-table-bold r-card-title r-sheet-name">{p.name}</td>
                   <td>
                     <span className="bo-badge bo-badge-gray">
                       {p.category}
@@ -812,8 +812,8 @@ const StockManagement: React.FC = () => {
         const selectable = draftItems.filter(i => i.pending);
         const allSelected = selectable.length > 0 && selectable.every(i => selectedIds.includes(i.id));
         return (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10001 }}>
-          <div style={{ backgroundColor: 'white', borderRadius: '14px', padding: '22px', width: '680px', maxWidth: '94%', maxHeight: '85vh', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 40px rgba(0,0,0,0.25)' }}>
+        <div className="r-modal-overlay" style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10001 }}>
+          <div className="r-modal" style={{ backgroundColor: 'white', borderRadius: '14px', padding: '22px', width: '680px', maxWidth: '94%', maxHeight: '85vh', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 40px rgba(0,0,0,0.25)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
               <h3 style={{ margin: 0, fontSize: '17px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <FileText size={18} color="var(--primary)" /> Draf Tersimpan
@@ -946,7 +946,7 @@ const StockManagement: React.FC = () => {
       )}
       {/* ===== DRAWER KANAN: FORM TAMBAH / EDIT PRODUK ===== */}
       {isFormOpen && (
-        <div style={{
+        <div className="pf-overlay" style={{
           position: 'fixed', inset: 0,
           backgroundColor: 'rgba(0,0,0,0.15)',
           backdropFilter: 'blur(1px)',
@@ -954,7 +954,7 @@ const StockManagement: React.FC = () => {
           zIndex: 9998,
           animation: `${drawerClosing ? 'fadeOut' : 'fadeIn'} 0.25s ease forwards`
         }}>
-          <div style={{
+          <div className={`pf-sheet${drawerClosing ? ' is-closing' : ''}`} style={{
             backgroundColor: 'white',
             width: '100%', maxWidth: '480px', height: '100%',
             boxShadow: '-12px 0 40px rgba(0,0,0,0.25)',
@@ -962,33 +962,34 @@ const StockManagement: React.FC = () => {
             animation: `${drawerClosing ? 'slideOutRight' : 'slideInRight'} 0.3s cubic-bezier(0.22,1,0.36,1) forwards`
           }}>
             {/* Drawer Header */}
-            <div style={{
+            <div className="pf-head" style={{
               background: 'linear-gradient(135deg, #1a0505 0%, #2d0a08 50%, #1a0505 100%)',
               padding: '18px 24px',
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               borderBottom: '1px solid rgba(218,41,28,0.3)',
               flexShrink: 0
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <div style={{
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
+                <div className="pf-head-icon" style={{
                   width: '36px', height: '36px', borderRadius: '10px',
                   background: 'linear-gradient(135deg, #da291c, #b91c1c)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  boxShadow: '0 4px 12px rgba(218,41,28,0.4)'
+                  boxShadow: '0 4px 12px rgba(218,41,28,0.4)', flexShrink: 0
                 }}>
                   {editingId ? <Save size={18} color="white" /> : <Plus size={18} color="white" />}
                 </div>
-                <div>
-                  <div style={{ color: 'white', fontWeight: 800, fontSize: '16px' }}>
+                <div style={{ minWidth: 0 }}>
+                  <div className="pf-title" style={{ color: 'white', fontWeight: 800, fontSize: '16px' }}>
                     {editingId ? 'Edit Data Produk' : 'Formulir Cepat Tambah Stok'}
                   </div>
-                  <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '12px' }}>
+                  <div className="pf-subtitle" style={{ color: 'rgba(255,255,255,0.4)', fontSize: '12px' }}>
                     {editingId ? `ID: ${productId}` : 'Isi semua field yang diperlukan'}
                   </div>
                 </div>
               </div>
               <button
                 type="button"
+                className="pf-close"
                 onClick={closeDrawer}
                 style={{
                   background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)',
@@ -1005,124 +1006,137 @@ const StockManagement: React.FC = () => {
 
             <form onSubmit={handleSubmit} style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
               {/* Drawer Body (scrollable) */}
-              <div style={{ flex: 1, overflowY: 'auto', padding: '22px 24px', backgroundColor: '#fafafa', display: 'flex', flexDirection: 'column', gap: '18px' }}>
+              <div className="pf-body" style={{ flex: 1, overflowY: 'auto', padding: '22px 24px', backgroundColor: '#fafafa', display: 'flex', flexDirection: 'column', gap: '18px' }}>
 
                 {/* Info Produk */}
-                <div className="bo-form-group" style={{ position: 'relative' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                    <label className="bo-label" style={{ marginBottom: 0 }}>ID PRODUK (BARCODE)</label>
-                    {!editingId && (
+                <div className="pf-section">Info Produk</div>
+                <div className="pf-group">
+                  <div className="bo-form-group" style={{ position: 'relative' }}>
+                    <div className="pf-labelbar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                      <label className="bo-label" style={{ marginBottom: 0 }}>ID Produk<span className="hide-mobile"> (Barcode)</span></label>
+                      {!editingId && (
+                        <button
+                          type="button"
+                          className="pf-mini-btn"
+                          onClick={() => setProductId(generateInternalBarcode(products))}
+                          title="Barang tidak punya barcode? Buat kode unik otomatis"
+                          style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}
+                        >
+                          ⚡<span className="pf-mini-text"> Buat Otomatis</span>
+                        </button>
+                      )}
+                    </div>
+                    <div className="pf-field" style={{ position: 'relative' }}>
+                      <input
+                        type="text" value={productId}
+                        onChange={(e) => setProductId(e.target.value)}
+                        onKeyDown={handleIdKeyDown}
+                        placeholder="Scan / ketik barcode"
+                        className="bo-input"
+                        style={{ backgroundColor: 'white', paddingRight: '40px', fontFamily: 'monospace', fontSize: '13px', letterSpacing: '0.5px' }}
+                        autoFocus={!(typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches)}
+                      />
                       <button
                         type="button"
-                        onClick={() => setProductId(generateInternalBarcode(products))}
-                        title="Barang tidak punya barcode? Buat kode unik otomatis"
-                        style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}
+                        onClick={() => setCameraScannerOpen(true)}
+                        title="Buka Kamera Scanner"
+                        style={{
+                          position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)',
+                          background: 'none', border: 'none', cursor: 'pointer',
+                          color: '#10b981', display: 'flex', alignItems: 'center', padding: '4px'
+                        }}
                       >
-                        ⚡ Buat Otomatis
-                      </button>
-                    )}
-                  </div>
-                  <div style={{ position: 'relative' }}>
-                    <input
-                      type="text" value={productId}
-                      onChange={(e) => setProductId(e.target.value)}
-                      onKeyDown={handleIdKeyDown}
-                      placeholder="Scan Barcode..."
-                      className="bo-input"
-                      style={{ backgroundColor: 'white', paddingRight: '40px', fontFamily: 'monospace', fontSize: '13px', letterSpacing: '0.5px' }}
-                      autoFocus
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setCameraScannerOpen(true)}
-                      title="Buka Kamera Scanner"
-                      style={{
-                        position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)',
-                        background: 'none', border: 'none', cursor: 'pointer',
-                        color: '#10b981', display: 'flex', alignItems: 'center', padding: '4px'
-                      }}
-                    >
-                      <Camera size={16} />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="bo-form-group">
-                  <label className="bo-label">NAMA PRODUK</label>
-                  <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Nama Barang Lengkap" className="bo-input" style={{ backgroundColor: 'white' }} required />
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-                  <div className="bo-form-group">
-                    <label className="bo-label">SKU BARANG</label>
-                    <input type="text" value={sku} onChange={(e) => setSku(e.target.value)} placeholder="Misal: SKU-123" className="bo-input" style={{ backgroundColor: 'white' }} required />
-                  </div>
-                  <div className="bo-form-group">
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                      <label className="bo-label" style={{ marginBottom: 0 }}>KATEGORI</label>
-                      <button type="button" onClick={() => setIsCategoryModalOpen(true)} style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontWeight: 'bold' }}>
-                        <Settings size={12} /> Kelola
+                        <Camera size={16} />
                       </button>
                     </div>
-                    <select value={category} onChange={(e) => setCategory(e.target.value)} className="bo-input" style={{ backgroundColor: 'white' }} required>
-                      {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                    </select>
+                  </div>
+
+                  <div className="bo-form-group">
+                    <label className="bo-label">Nama Produk</label>
+                    <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Nama barang lengkap" className="bo-input" style={{ backgroundColor: 'white' }} required />
+                  </div>
+
+                  <div className="r-grid-2 pf-cols-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                    <div className="bo-form-group">
+                      <label className="bo-label">SKU<span className="hide-mobile"> Barang</span></label>
+                      <input type="text" value={sku} onChange={(e) => setSku(e.target.value)} placeholder="Misal: SKU-123" className="bo-input" style={{ backgroundColor: 'white' }} required />
+                    </div>
+                    <div className="bo-form-group">
+                      <div className="pf-labelbar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                        <label className="bo-label" style={{ marginBottom: 0 }}>Kategori</label>
+                        <button type="button" className="pf-mini-btn" title="Kelola kategori" onClick={() => setIsCategoryModalOpen(true)} style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontWeight: 'bold' }}>
+                          <Settings size={12} /><span className="pf-mini-text"> Kelola</span>
+                        </button>
+                      </div>
+                      <select value={category} onChange={(e) => setCategory(e.target.value)} className="bo-input" style={{ backgroundColor: 'white' }} required>
+                        {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                      </select>
+                    </div>
                   </div>
                 </div>
 
                 {/* Stok */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '14px' }}>
-                  <div className="bo-form-group">
-                    <label className="bo-label">QTY</label>
-                    <input type="number" min="0" step="any" value={qty} onChange={(e) => setQty(e.target.value === '' ? '' : Number(e.target.value))} className="bo-input" style={{ backgroundColor: 'white' }} required />
-                  </div>
-                  <div className="bo-form-group">
-                    <label className="bo-label">SATUAN</label>
-                    <select value={unit} onChange={(e) => setUnit(e.target.value)} className="bo-input" style={{ backgroundColor: 'white' }} required>
-                      <option value="Pcs">Pcs</option>
-                      <option value="Kg">Kg</option>
-                      <option value="Gram">Gram</option>
-                      <option value="Liter">Liter</option>
-                      <option value="Pack">Pack</option>
-                      <option value="Dus">Dus</option>
-                    </select>
-                  </div>
-                  <div className="bo-form-group">
-                    <label className="bo-label">MIN STOK</label>
-                    <input type="number" min="0" value={minStock} onChange={(e) => setMinStock(e.target.value === '' ? '' : Number(e.target.value))} placeholder="Alert" className="bo-input" style={{ backgroundColor: 'white' }} />
+                <div className="pf-section">Stok</div>
+                <div className="pf-group">
+                  <div className="r-grid-3 pf-cols-3" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '14px' }}>
+                    <div className="bo-form-group">
+                      <label className="bo-label">Qty</label>
+                      <input type="number" inputMode="decimal" min="0" step="any" value={qty} onChange={(e) => setQty(e.target.value === '' ? '' : Number(e.target.value))} placeholder="0" className="bo-input" style={{ backgroundColor: 'white' }} required />
+                    </div>
+                    <div className="bo-form-group">
+                      <label className="bo-label">Satuan</label>
+                      <select value={unit} onChange={(e) => setUnit(e.target.value)} className="bo-input" style={{ backgroundColor: 'white' }} required>
+                        <option value="Pcs">Pcs</option>
+                        <option value="Kg">Kg</option>
+                        <option value="Gram">Gram</option>
+                        <option value="Liter">Liter</option>
+                        <option value="Pack">Pack</option>
+                        <option value="Dus">Dus</option>
+                      </select>
+                    </div>
+                    <div className="bo-form-group">
+                      <label className="bo-label">Min Stok</label>
+                      <input type="number" inputMode="numeric" min="0" value={minStock} onChange={(e) => setMinStock(e.target.value === '' ? '' : Number(e.target.value))} placeholder="Batas peringatan" className="bo-input" style={{ backgroundColor: 'white' }} />
+                    </div>
                   </div>
                 </div>
 
                 {/* Harga */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '14px' }}>
-                  <div className="bo-form-group">
-                    <label className="bo-label">HARGA BELI</label>
-                    <input type="number" min="0" value={purchasePrice} onChange={(e) => setPurchasePrice(e.target.value === '' ? '' : Number(e.target.value))} className="bo-input" style={{ backgroundColor: 'white' }} />
-                  </div>
-                  <div className="bo-form-group">
-                    <label className="bo-label">HARGA JUAL</label>
-                    <input type="number" min="0" value={sellingPrice} onChange={(e) => setSellingPrice(e.target.value === '' ? '' : Number(e.target.value))} className="bo-input" style={{ backgroundColor: 'white' }} required />
-                  </div>
-                  <div className="bo-form-group">
-                    <label className="bo-label">HARGA GROSIR</label>
-                    <input type="number" min="0" value={wholesalePrice} onChange={(e) => setWholesalePrice(e.target.value === '' ? '' : Number(e.target.value))} className="bo-input" style={{ backgroundColor: 'white' }} />
+                <div className="pf-section">Harga</div>
+                <div className="pf-group">
+                  <div className="r-grid-3 pf-cols-price" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '14px' }}>
+                    <div className="bo-form-group">
+                      <label className="bo-label">Harga Beli</label>
+                      <input type="number" inputMode="numeric" min="0" value={purchasePrice} onChange={(e) => setPurchasePrice(e.target.value === '' ? '' : Number(e.target.value))} placeholder="Rp 0" className="bo-input" style={{ backgroundColor: 'white' }} />
+                    </div>
+                    <div className="bo-form-group">
+                      <label className="bo-label">Harga Jual</label>
+                      <input type="number" inputMode="numeric" min="0" value={sellingPrice} onChange={(e) => setSellingPrice(e.target.value === '' ? '' : Number(e.target.value))} placeholder="Rp 0" className="bo-input" style={{ backgroundColor: 'white' }} required />
+                    </div>
+                    <div className="bo-form-group">
+                      <label className="bo-label">Harga Grosir</label>
+                      <input type="number" inputMode="numeric" min="0" value={wholesalePrice} onChange={(e) => setWholesalePrice(e.target.value === '' ? '' : Number(e.target.value))} placeholder="Opsional" className="bo-input" style={{ backgroundColor: 'white' }} />
+                    </div>
                   </div>
                 </div>
 
-                <div className="bo-form-group">
-                  <label className="bo-label">URL GAMBAR</label>
-                  <input type="text" value={image} onChange={(e) => setImage(e.target.value)} placeholder="https://..." className="bo-input" style={{ backgroundColor: 'white' }} />
+                <div className="pf-section">Lainnya</div>
+                <div className="pf-group">
+                  <div className="bo-form-group">
+                    <label className="bo-label">URL Gambar</label>
+                    <input type="text" inputMode="url" autoCapitalize="off" autoCorrect="off" value={image} onChange={(e) => setImage(e.target.value)} placeholder="https://..." className="bo-input" style={{ backgroundColor: 'white' }} />
+                  </div>
                 </div>
               </div>
 
               {/* Footer Actions (selalu terlihat di bawah) */}
-              <div style={{ flexShrink: 0, display: 'flex', justifyContent: 'flex-end', gap: '10px', padding: '14px 24px', borderTop: '1px solid #e5e7eb', backgroundColor: 'white' }}>
+              <div className="pf-foot" style={{ flexShrink: 0, display: 'flex', justifyContent: 'flex-end', gap: '10px', padding: '14px 24px', borderTop: '1px solid #e5e7eb', backgroundColor: 'white' }}>
                 <button type="button" className="bo-btn bo-btn-secondary" onClick={closeDrawer}>
                   Batal
                 </button>
                 <button type="submit" className="bo-btn bo-btn-primary" style={{ minWidth: '160px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
                   {editingId ? <Save size={16} /> : <Plus size={16} />}
-                  {editingId ? 'Simpan Perubahan' : '+ Tambahkan ke Daftar'}
+                  {editingId ? 'Simpan Perubahan' : 'Tambahkan ke Daftar'}
                 </button>
               </div>
             </form>

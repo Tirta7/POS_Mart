@@ -33,8 +33,8 @@ const ReceiptModal: React.FC<Props> = ({ sale, options, autoPrint = true, title 
   }, [onClose]);
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000 }}>
-      <div style={{ background: 'white', borderRadius: '16px', width: '420px', maxHeight: '94vh', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.35)', overflow: 'hidden' }}>
+    <div className="r-modal-overlay" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000 }}>
+      <div className="r-modal" style={{ background: 'white', borderRadius: '16px', width: '420px', maxHeight: '94vh', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.35)', overflow: 'hidden' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid #eee' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <CheckCircle2 size={24} color="#16a34a" />

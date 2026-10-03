@@ -164,7 +164,7 @@ const Reports: React.FC = () => {
   const initials = (name: string) => name.trim().split(/\s+/).slice(0, 2).map(s => s[0]?.toUpperCase() || '').join('') || '?';
 
   return (
-    <div className="bo-container">
+    <div className="bo-container r-kiosk">
       <style>{`
         .rpt-table th { padding: 9px 14px !important; font-size: 11px !important; letter-spacing: 0.4px; white-space: nowrap; position: sticky; top: 0; z-index: 1; background: #f9fafb; }
         .rpt-table td { padding: 8px 14px !important; font-size: 13px; line-height: 1.35; }
@@ -178,23 +178,23 @@ const Reports: React.FC = () => {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px', marginBottom: '14px', flexShrink: 0 }}>
+      <div className="r-grid-4 r-stats" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px', marginBottom: '14px', flexShrink: 0 }}>
         {summaryCards.map(c => (
-          <div key={c.label} className="bo-card" style={{ padding: '12px 16px', marginBottom: 0, display: 'flex', alignItems: 'center', gap: '12px', borderLeft: `4px solid ${c.color}` }}>
-            <div style={{ width: '38px', height: '38px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: c.bg, color: c.color, borderRadius: '10px', flexShrink: 0 }}>
+          <div key={c.label} className="bo-card r-stat" style={{ padding: '12px 16px', marginBottom: 0, display: 'flex', alignItems: 'center', gap: '12px', borderLeft: `4px solid ${c.color}` }}>
+            <div className="r-stat-icon" style={{ width: '38px', height: '38px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: c.bg, color: c.color, borderRadius: '10px', flexShrink: 0 }}>
               <c.Icon size={19} />
             </div>
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: '11px', color: '#6b7280', fontWeight: 700, letterSpacing: '0.4px' }}>{c.label}</div>
-              <div style={{ fontSize: '20px', fontWeight: 800, color: '#111', lineHeight: 1.2 }}>{c.value}</div>
-              <div style={{ fontSize: '11px', color: '#9ca3af', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.sub}</div>
+              <div className="r-stat-label" style={{ fontSize: '11px', color: '#6b7280', fontWeight: 700, letterSpacing: '0.4px' }}>{c.label}</div>
+              <div className="r-stat-value" style={{ fontSize: '20px', fontWeight: 800, color: '#111', lineHeight: 1.2 }}>{c.value}</div>
+              <div className="r-stat-sub" style={{ fontSize: '11px', color: '#9ca3af', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.sub}</div>
             </div>
           </div>
         ))}
       </div>
 
-      <div className="bo-card" style={{ marginBottom: '0', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-        <div style={{ display: 'flex', borderBottom: '1px solid #e5e7eb', flexShrink: 0 }}>
+      <div className="bo-card r-kiosk-card" style={{ marginBottom: '0', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+        <div className="r-tabs" style={{ display: 'flex', borderBottom: '1px solid #e5e7eb', flexShrink: 0 }}>
           {tabBtn('sales', 'Laporan Penjualan', filteredSales.length, 'var(--primary)')}
           {tabBtn('low-stock', 'Peringatan Stok Tipis', lowStockItems.length, '#ef4444')}
         </div>
@@ -274,10 +274,10 @@ const Reports: React.FC = () => {
                 {filteredSales.length === 0 ? (
                   emptyState('Data penjualan tidak ditemukan', 'Coba ubah rentang tanggal, metode pembayaran, atau kata kunci pencarian.', <FileText size={26} color="#9ca3af" />)
                 ) : (
-                  <table className="bo-table rpt-table">
+                  <table className="bo-table rpt-table r-sheet">
                     <thead>
                       <tr>
-                        <th>ID & WAKTU</th>
+                        <th className="r-sheet-name">ID & WAKTU</th>
                         <th>KASIR</th>
                         <th>PELANGGAN</th>
                         <th>ITEM BELANJA</th>
@@ -300,7 +300,7 @@ const Reports: React.FC = () => {
                         const positive = sale.profitMargin > 0;
                         return (
                         <tr key={sale.id}>
-                          <td style={{ whiteSpace: 'nowrap' }}>
+                          <td className="r-card-title r-sheet-name" style={{ whiteSpace: 'nowrap' }}>
                             <div style={{ fontWeight: 700, color: '#111', fontSize: '12.5px' }}>{sale.id}</div>
                             <div style={{ fontSize: '11px', color: '#9ca3af' }}>{new Date(sale.date).toLocaleString('id-ID')}</div>
                           </td>
@@ -379,7 +379,7 @@ const Reports: React.FC = () => {
               </div>
 
               {filteredSales.length > 0 && (
-                <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: '22px', flexWrap: 'wrap', padding: '10px 18px', borderTop: '1px solid #e5e7eb', background: '#f9fafb', fontSize: '12px', color: '#6b7280' }}>
+                <div className="r-summary-bar" style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: '22px', flexWrap: 'wrap', padding: '10px 18px', borderTop: '1px solid #e5e7eb', background: '#f9fafb', fontSize: '12px', color: '#6b7280' }}>
                   <span style={{ fontWeight: 700, color: '#374151' }}>Total ditampilkan</span>
                   <span>{filteredSales.length} nota • {shown.qty} item</span>
                   <span>Subtotal: <b style={{ color: '#374151' }}>{formatIDR(shown.sub)}</b></span>
@@ -397,11 +397,11 @@ const Reports: React.FC = () => {
                 {lowStockItems.length === 0 ? (
                   emptyState('Semua stok aman', 'Tidak ada produk yang berada di bawah atau sama dengan batas minimum.', <CheckCircle2 size={26} color="#10b981" />)
                 ) : (
-                  <table className="bo-table rpt-table">
+                  <table className="bo-table rpt-table r-sheet">
                     <thead>
                       <tr>
                         <th>SKU</th>
-                        <th>NAMA PRODUK</th>
+                        <th className="r-sheet-name">NAMA PRODUK</th>
                         <th>KATEGORI</th>
                         <th style={{ minWidth: '170px' }}>STOK TERSEDIA</th>
                         <th style={{ textAlign: 'center' }}>BATAS MINIMUM</th>
@@ -420,7 +420,7 @@ const Reports: React.FC = () => {
                         return (
                           <tr key={p.id}>
                             <td style={{ fontFamily: 'monospace', fontSize: '12px', color: '#6b7280', whiteSpace: 'nowrap' }}>{p.sku}</td>
-                            <td style={{ fontWeight: 600, color: '#111827' }}>{p.name}</td>
+                            <td className="r-card-title r-sheet-name" style={{ fontWeight: 600, color: '#111827' }}>{p.name}</td>
                             <td><span className="bo-badge bo-badge-gray" style={{ fontSize: '11px', padding: '2px 9px' }}>{p.category}</span></td>
                             <td>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -457,7 +457,7 @@ const Reports: React.FC = () => {
                 )}
               </div>
               {lowStockItems.length > 0 && (
-                <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: '22px', padding: '10px 18px', borderTop: '1px solid #e5e7eb', background: '#f9fafb', fontSize: '12px', color: '#6b7280' }}>
+                <div className="r-summary-bar" style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: '22px', padding: '10px 18px', borderTop: '1px solid #e5e7eb', background: '#f9fafb', fontSize: '12px', color: '#6b7280' }}>
                   <span style={{ fontWeight: 700, color: '#374151' }}>Ringkasan</span>
                   <span>Habis: <b style={{ color: '#ef4444' }}>{outOfStockCount}</b></span>
                   <span>Tipis: <b style={{ color: '#d97706' }}>{lowStockItems.length - outOfStockCount}</b></span>

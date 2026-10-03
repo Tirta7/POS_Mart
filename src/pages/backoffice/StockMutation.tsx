@@ -142,17 +142,17 @@ const StockMutation: React.FC = () => {
       </div>
 
       {/* Ringkasan */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px', marginBottom: '14px', flexShrink: 0 }}>
+      <div className="r-grid-4 r-stats" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px', marginBottom: '14px', flexShrink: 0 }}>
         {summary.map(c => (
-          <div key={c.label} style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '12px', borderLeft: `4px solid ${c.color}` }}>
-            <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: c.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <div key={c.label} className="r-stat" style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '12px', borderLeft: `4px solid ${c.color}` }}>
+            <div className="r-stat-icon" style={{ width: '38px', height: '38px', borderRadius: '10px', background: c.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
               <c.Icon size={19} color={c.color} />
             </div>
             <div style={{ minWidth: 0, flex: 1 }}>
-              <div style={{ fontSize: '11px', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.4px' }}>{c.label}</div>
+              <div className="r-stat-label" style={{ fontSize: '11px', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.4px' }}>{c.label}</div>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-                <span style={{ fontSize: '21px', fontWeight: 800, color: c.color, lineHeight: 1.2 }}>{c.value}</span>
-                <span style={{ fontSize: '11px', color: '#9ca3af', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.sub}</span>
+                <span className="r-stat-value" style={{ fontSize: '21px', fontWeight: 800, color: c.color, lineHeight: 1.2 }}>{c.value}</span>
+                <span className="r-stat-sub" style={{ fontSize: '11px', color: '#9ca3af', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.sub}</span>
               </div>
             </div>
           </div>
@@ -169,7 +169,7 @@ const StockMutation: React.FC = () => {
         </div>
 
         {/* Toolbar pencarian & periode */}
-        <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', padding: '10px 18px', borderTop: '1px solid #f1f5f9', borderBottom: '1px solid #f1f5f9', background: '#fafbfc' }}>
+        <div className="r-toolbar" style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', padding: '10px 18px', borderTop: '1px solid #f1f5f9', borderBottom: '1px solid #f1f5f9', background: '#fafbfc' }}>
           <div style={{ position: 'relative', flex: '1 1 320px', minWidth: '260px' }}>
             <Search size={15} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }} />
             <input
@@ -327,7 +327,7 @@ const StockMutation: React.FC = () => {
                                 </td>
                               </>
                             )}
-                            <td style={itemCell}>
+                            <td className="r-card-title" style={itemCell}>
                               <div style={{ fontWeight: 600, color: '#111827' }}>{getProductName(item.productId, item.productName)}</div>
                               <div style={{ fontSize: '11px', color: '#9ca3af' }}>
                                 {product?.sku || item.productId}
@@ -394,7 +394,7 @@ const StockMutation: React.FC = () => {
 
         {/* Ringkasan data yang ditampilkan */}
         {sorted.length > 0 && (
-          <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: '22px', flexWrap: 'wrap', padding: '10px 18px', borderTop: '1px solid #e5e7eb', background: '#f9fafb', fontSize: '12px', color: '#6b7280' }}>
+          <div className="r-summary-bar" style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: '22px', flexWrap: 'wrap', padding: '10px 18px', borderTop: '1px solid #e5e7eb', background: '#f9fafb', fontSize: '12px', color: '#6b7280' }}>
             <span style={{ fontWeight: 700, color: '#374151' }}>Total ditampilkan</span>
             <span>Masuk: <b style={{ color: '#059669' }}>+{shown.inQty}</b> <span style={{ color: '#9ca3af' }}>({idr(shown.inVal)})</span></span>
             <span>Keluar: <b style={{ color: '#dc2626' }}>-{shown.outQty}</b> <span style={{ color: '#9ca3af' }}>({idr(shown.outVal)})</span></span>

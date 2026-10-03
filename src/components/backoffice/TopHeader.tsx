@@ -2,9 +2,14 @@ import React from 'react';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useSettingsStore } from '../../store/useSettingsStore';
 import { Link, useNavigate } from 'react-router-dom';
-import { LogOut } from 'lucide-react';
+import { LogOut, Menu, X, ShoppingCart } from 'lucide-react';
 
-const TopHeader: React.FC = () => {
+interface TopHeaderProps {
+  onMenuToggle?: () => void;
+  menuOpen?: boolean;
+}
+
+const TopHeader: React.FC<TopHeaderProps> = ({ onMenuToggle, menuOpen }) => {
   const { currentUser, logout } = useAuthStore();
   const { appName } = useSettingsStore();
   const navigate = useNavigate();
@@ -17,10 +22,18 @@ const TopHeader: React.FC = () => {
   return (
     <div className="bo-header">
       <div className="bo-header-left">
+        <button
+          type="button"
+          className="bo-menu-toggle"
+          onClick={onMenuToggle}
+          aria-label={menuOpen ? 'Tutup menu' : 'Buka menu'}
+        >
+          {menuOpen ? <X size={22} /> : <Menu size={22} />}
+        </button>
         <div className="bo-header-logo">
           {appName.charAt(0)}
         </div>
-        <div>
+        <div className="bo-header-titles">
           <div className="bo-header-title">{appName}</div>
           <div className="bo-header-subtitle">Terminal #01 • Back-Office</div>
         </div>
@@ -35,11 +48,12 @@ const TopHeader: React.FC = () => {
       </div>
 
       <div className="bo-header-right">
-        <Link to="/" className="bo-nav-link">
-          Ke Kasir POS
+        <Link to="/" className="bo-nav-link bo-pos-link" aria-label="Ke Kasir POS" title="Ke Kasir POS">
+          <ShoppingCart size={18} className="show-mobile" />
+          <span className="hide-mobile">Ke Kasir POS</span>
         </Link>
         <div className="bo-user-profile">
-          <div>
+          <div className="bo-user-text">
             <div className="bo-user-name">{currentUser?.name}</div>
             <div className="bo-user-id">ID: #{currentUser?.id?.toUpperCase()} • {currentUser?.role}</div>
           </div>

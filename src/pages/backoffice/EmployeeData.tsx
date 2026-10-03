@@ -97,7 +97,7 @@ const EmployeeData: React.FC = () => {
               {employees.map(emp => (
                 <tr key={emp.id}>
                   <td className="bo-table-bold">{emp.id.toUpperCase()}</td>
-                  <td className="bo-table-bold">{emp.name}</td>
+                  <td className="bo-table-bold r-card-title">{emp.name}</td>
                   <td>
                     <code style={{ backgroundColor: '#f3f4f6', padding: '2px 8px', borderRadius: '4px', fontSize: '13px', color: '#374151' }}>
                       {emp.username}
@@ -137,8 +137,8 @@ const EmployeeData: React.FC = () => {
 
       {/* Modal Add/Edit */}
       {modalOpen && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
-          <div style={{ backgroundColor: 'white', borderRadius: '16px', padding: '32px', width: '480px', boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }}>
+        <div className="r-modal-overlay" style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
+          <div className="r-modal" style={{ backgroundColor: 'white', borderRadius: '16px', padding: '32px', width: '480px', boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
               <h2 style={{ margin: 0, fontSize: '18px', fontWeight: '700' }}>
                 {editTarget ? 'Edit Karyawan' : 'Tambah Karyawan Baru'}
@@ -184,7 +184,7 @@ const EmployeeData: React.FC = () => {
               </div>
 
               {/* Role & Status */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div className="r-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
                   <label style={{ fontSize: '13px', fontWeight: '600', color: '#374151', display: 'block', marginBottom: '6px' }}>Jabatan / Role</label>
                   <select

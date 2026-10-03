@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { 
   Search, Printer, ShoppingBag, Truck, Package, ShoppingCart,
   CreditCard, QrCode, Banknote, Ticket, Trash2, PauseCircle,
-  LayoutGrid, Plus, Minus, X, LogOut, Camera
+  LayoutGrid, Plus, Minus, X, LogOut, Camera, ChevronUp, Settings2
 } from 'lucide-react';
 import './index.css';
 import { useNavigate, Link } from 'react-router-dom';
@@ -62,6 +62,16 @@ function App() {
 
   const [searchQuery, setSearchQuery] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
+
+  // Mobile: keranjang tampil sebagai bottom sheet (gaya iOS)
+  const [cartSheetOpen, setCartSheetOpen] = useState(false);
+  // Perangkat sentuh (HP/tablet): jangan auto-focus search agar keyboard tidak langsung muncul
+  const isTouchDevice = typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches;
+
+  // Tutup sheet otomatis jika keranjang kosong (setelah bayar / hold / hapus semua)
+  useEffect(() => {
+    if (cart.length === 0) setCartSheetOpen(false);
+  }, [cart.length]);
 
   const CATEGORIES = [
     { id: 'all', name: cart.length > 0 ? 'PESANAN' : 'SEMUA (ALL)', icon: <LayoutGrid size={16} /> },
@@ -292,7 +302,7 @@ function App() {
         <div className="logo-section">
           <div className="logo-icon">{appName.charAt(0)}</div>
           <div>
-            <div style={{fontWeight: 800, color: 'var(--primary)', letterSpacing: '-0.5px'}}>{appName}</div>
+            <div className="logo-title" style={{fontWeight: 800, color: 'var(--primary)', letterSpacing: '-0.5px'}}>{appName}</div>
             <div className="text-xs text-muted">Terminal #01 • Counter Utama</div>
           </div>
         </div>
@@ -304,26 +314,31 @@ function App() {
         </div>
 
         <div className="nav-links">
-          <button className="nav-btn active">Register</button>
+          <button className="nav-btn active hide-mobile">Register</button>
           <button className="nav-btn" onClick={() => setHoldListOpen(true)} style={{ position: 'relative' }}>
-            Active Tickets
+            <PauseCircle size={15} className="show-mobile" />
+            <span className="btn-label"><span className="hide-mobile">Active </span>Tickets</span>
             {heldOrders.length > 0 && (
               <span style={{ position: 'absolute', top: '-6px', right: '-6px', backgroundColor: 'var(--primary)', color: 'white', borderRadius: '50%', width: '18px', height: '18px', fontSize: '10px', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 {heldOrders.length}
               </span>
             )}
           </button>
-          <button className="nav-btn">Shift & Drawer</button>
-          <Link to="/backoffice" className="nav-btn" style={{ textDecoration: 'none' }}>Back-Office</Link>
+          <button className="nav-btn hide-mobile">Shift &amp; Drawer</button>
+          <Link to="/backoffice" className="nav-btn" style={{ textDecoration: 'none' }}>
+            <Settings2 size={15} className="show-mobile" />
+            <span className="btn-label">Back-Office</span>
+          </Link>
         </div>
 
         <div className="user-profile">
-          <div>
+          <div className="user-text">
             <div className="font-bold text-sm">{currentUser?.name}</div>
             <div className="text-xs text-muted">ID: #{currentUser?.id?.toUpperCase()} • {currentUser?.role}</div>
           </div>
           <img src="https://i.pravatar.cc/100?img=5" alt="Avatar" className="avatar" />
           <button
+            className="pos-logout-btn"
             onClick={handleLogout}
             title="Logout"
             style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', padding: '4px', display: 'flex', alignItems: 'center' }}
@@ -391,17 +406,19 @@ function App() {
               }
             }}
             onKeyDown={handleSearchKeyDown}
-            autoFocus
+            autoFocus={!isTouchDevice}
             style={{ width: '100%', padding: '12px 16px 12px 40px', borderRadius: '8px', border: '1px solid #e5e7eb', outline: 'none', transition: 'all 0.2s' }}
           />
           <span className="search-shortcut" style={{ position: 'absolute', right: '12px', background: '#f3f4f6', padding: '2px 6px', borderRadius: '4px', fontSize: '11px', color: '#6b7280', fontWeight: 'bold' }}>F2</span>
           </div>
           
           <button 
+            className="camera-scan-btn"
             onClick={() => setCameraScannerOpen(true)}
+            aria-label="Kamera Scan"
             style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '0 16px', backgroundColor: '#f0fdf4', color: '#166534', border: '1px solid #bbf7d0', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px', whiteSpace: 'nowrap' }}
           >
-            <Camera size={16} /> Kamera Scan
+            <Camera size={16} /> <span className="hide-mobile">Kamera Scan</span>
           </button>
         </div>
 
@@ -480,8 +497,18 @@ function App() {
           </div>
         </div>
 
-        {/* RIGHT PANEL */}
-        <div className="right-panel">
+        {/* RIGHT PANEL (desktop: panel kanan, mobile: bottom sheet) */}
+        <div className={`right-panel ${cartSheetOpen ? 'sheet-open' : ''}`}>
+          {/* Header sheet khusus mobile (grabber gaya iOS) */}
+          <div className="sheet-header">
+            <div className="sheet-grabber" onClick={() => setCartSheetOpen(false)} />
+            <div className="sheet-title-row">
+              <span className="sheet-title">Keranjang</span>
+              <button className="sheet-close" onClick={() => setCartSheetOpen(false)} aria-label="Tutup keranjang">
+                <X size={18} />
+              </button>
+            </div>
+          </div>
           <div className="order-header">
             <div className="flex items-center">
               <div className="order-number">{orderCounter}</div>
@@ -588,6 +615,23 @@ function App() {
         </div>
       </div>
 
+      {/* MOBILE: backdrop bottom sheet + floating cart bar */}
+      <div
+        className={`sheet-backdrop ${cartSheetOpen ? 'open' : ''}`}
+        onClick={() => setCartSheetOpen(false)}
+        aria-hidden="true"
+      />
+      {cart.length > 0 && !cartSheetOpen && (
+        <button className="mobile-cart-bar" onClick={() => setCartSheetOpen(true)}>
+          <span className="mcb-count"><ShoppingCart size={16} />{cart.length}</span>
+          <span className="mcb-label">
+            <small>Pesanan #{orderCounter.toString().padStart(3, '0')}</small>
+            <strong>Lihat Keranjang</strong>
+          </span>
+          <span className="mcb-total">{formatIDR(total)} <ChevronUp size={18} /></span>
+        </button>
+      )}
+
       {/* RECEIPT PREVIEW / PRINT */}
       {receipt && (
         <ReceiptModal
@@ -600,7 +644,7 @@ function App() {
       {/* PAYMENT MODAL POPUP */}
       {paymentPopupOpen && (
         <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
-          <div className="modal-content" style={{ backgroundColor: 'white', borderRadius: '16px', padding: '32px', width: '500px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)' }}>
+          <div className="modal-content pay-modal" style={{ backgroundColor: 'white', borderRadius: '16px', padding: '32px', width: '500px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
               <h3 style={{ fontSize: '24px', fontWeight: 'bold', margin: 0 }}>Pembayaran</h3>
               <button onClick={() => setPaymentPopupOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={28} color="#666" /></button>
@@ -711,6 +755,7 @@ function App() {
                 });
 
                 setPaymentPopupOpen(false);
+                setCartSheetOpen(false);
                 setCart([]);
                 setTenderedStr('');
                 setSelectedCustomer(null);
@@ -863,7 +908,7 @@ function App() {
       {/* HOLD ORDERS LIST PANEL */}
       {holdListOpen && (
         <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-end', zIndex: 9999, padding: '0' }}>
-          <div style={{ backgroundColor: 'white', height: '100%', width: '420px', boxShadow: '-10px 0 40px rgba(0,0,0,0.15)', display: 'flex', flexDirection: 'column' }}>
+          <div className="r-drawer" style={{ backgroundColor: 'white', height: '100%', width: '420px', boxShadow: '-10px 0 40px rgba(0,0,0,0.15)', display: 'flex', flexDirection: 'column' }}>
             {/* Header */}
             <div style={{ padding: '20px 24px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)' }}>
               <div>

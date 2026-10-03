@@ -201,7 +201,7 @@ const Purchases: React.FC = () => {
           </div>
           
           <form onSubmit={handleSubmit} style={{ padding: '20px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
+            <div className="r-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
               <div className="bo-form-group">
                 <label className="bo-label">NO. DOKUMEN / FAKTUR</label>
                 <input type="text" className="bo-input" value={documentNo} onChange={e => setDocumentNo(e.target.value)} required />
@@ -404,7 +404,7 @@ const Purchases: React.FC = () => {
 
       {/* MODAL: TAMBAH PRODUK BARU */}
       {isNewProductModalOpen && (
-        <div style={{
+        <div className="pf-overlay" style={{
           position: 'fixed', inset: 0,
           backgroundColor: 'rgba(0,0,0,0.45)',
           backdropFilter: 'blur(3px)',
@@ -412,7 +412,7 @@ const Purchases: React.FC = () => {
           zIndex: 9998,
           animation: 'fadeIn 0.15s ease'
         }}>
-          <div style={{
+          <div className="pf-sheet" style={{
             backgroundColor: 'white',
             borderRadius: '16px',
             width: '96%', maxWidth: '900px',
@@ -421,32 +421,33 @@ const Purchases: React.FC = () => {
             animation: 'slideUp 0.2s cubic-bezier(0.34,1.4,0.64,1)'
           }}>
             {/* Modal Header */}
-            <div style={{
+            <div className="pf-head" style={{
               background: 'linear-gradient(135deg, #1a0505 0%, #2d0a08 50%, #1a0505 100%)',
               padding: '18px 24px',
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               borderBottom: '1px solid rgba(218,41,28,0.3)'
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <div style={{
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
+                <div className="pf-head-icon" style={{
                   width: '36px', height: '36px', borderRadius: '10px',
                   background: 'linear-gradient(135deg, #da291c, #b91c1c)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  boxShadow: '0 4px 12px rgba(218,41,28,0.4)'
+                  boxShadow: '0 4px 12px rgba(218,41,28,0.4)', flexShrink: 0
                 }}>
                   <Plus size={18} color="white" />
                 </div>
-                <div>
-                  <div style={{ color: 'white', fontWeight: 800, fontSize: '16px' }}>
+                <div style={{ minWidth: 0 }}>
+                  <div className="pf-title" style={{ color: 'white', fontWeight: 800, fontSize: '16px' }}>
                     Formulir Cepat Tambah Stok
                   </div>
-                  <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '12px' }}>
+                  <div className="pf-subtitle" style={{ color: 'rgba(255,255,255,0.4)', fontSize: '12px' }}>
                     Isi semua field yang diperlukan
                   </div>
                 </div>
               </div>
               <button
                 type="button"
+                className="pf-close"
                 onClick={() => setIsNewProductModalOpen(false)}
                 style={{
                   background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)',
@@ -461,68 +462,74 @@ const Purchases: React.FC = () => {
               </button>
             </div>
             
-            <div style={{ padding: '24px', backgroundColor: '#fafafa' }}>
+            <div className="pf-body" style={{ padding: '24px', backgroundColor: '#fafafa' }}>
               <form onSubmit={handleCreateProduct} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                 {/* Row 1: Barcode, SKU, Nama, Kategori */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1.8fr 1fr 2fr 1.3fr', gap: '16px' }}>
-                  <div className="bo-form-group">
-                    <label className="bo-label">ID PRODUK (BARCODE)</label>
-                    <input type="text" className="bo-input" style={{ backgroundColor: 'white' }} value={newProdBarcode} onChange={e => setNewProdBarcode(e.target.value)} required autoFocus placeholder="Scan Barcode..." />
-                  </div>
-                  <div className="bo-form-group">
-                    <label className="bo-label">SKU BARANG</label>
-                    <input type="text" className="bo-input" style={{ backgroundColor: 'white' }} value={newProdSku} onChange={e => setNewProdSku(e.target.value)} required placeholder="Misal: SKU-123" />
-                  </div>
-                  <div className="bo-form-group">
-                    <label className="bo-label">NAMA PRODUK</label>
-                    <input type="text" className="bo-input" style={{ backgroundColor: 'white' }} value={newProdName} onChange={e => setNewProdName(e.target.value)} required placeholder="Nama Barang Lengkap" />
-                  </div>
-                  <div className="bo-form-group">
-                    <label className="bo-label">KATEGORI</label>
-                    <select className="bo-input" style={{ backgroundColor: 'white' }} value={newProdCategory} onChange={e => setNewProdCategory(e.target.value)} required>
-                      {categories.map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
+                <div className="pf-section">Info Produk</div>
+                <div className="pf-group">
+                  <div className="r-grid-4 pf-info" style={{ display: 'grid', gridTemplateColumns: '1.8fr 1fr 2fr 1.3fr', gap: '16px' }}>
+                    <div className="bo-form-group">
+                      <label className="bo-label">ID Produk<span className="hide-mobile"> (Barcode)</span></label>
+                      <input type="text" className="bo-input" style={{ backgroundColor: 'white' }} value={newProdBarcode} onChange={e => setNewProdBarcode(e.target.value)} required autoFocus={!(typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches)} placeholder="Scan / ketik barcode" />
+                    </div>
+                    <div className="bo-form-group">
+                      <label className="bo-label">SKU<span className="hide-mobile"> Barang</span></label>
+                      <input type="text" className="bo-input" style={{ backgroundColor: 'white' }} value={newProdSku} onChange={e => setNewProdSku(e.target.value)} required placeholder="Misal: SKU-123" />
+                    </div>
+                    <div className="bo-form-group">
+                      <label className="bo-label">Nama Produk</label>
+                      <input type="text" className="bo-input" style={{ backgroundColor: 'white' }} value={newProdName} onChange={e => setNewProdName(e.target.value)} required placeholder="Nama barang lengkap" />
+                    </div>
+                    <div className="bo-form-group">
+                      <label className="bo-label">Kategori</label>
+                      <select className="bo-input" style={{ backgroundColor: 'white' }} value={newProdCategory} onChange={e => setNewProdCategory(e.target.value)} required>
+                        {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </div>
                   </div>
                 </div>
                 
                 {/* Row 2: Satuan, Min Stok, H.Beli, H.Jual, H.Grosir, URL */}
-                <div style={{ display: 'grid', gridTemplateColumns: '100px 90px 1fr 1fr 1fr 1.5fr', gap: '16px', alignItems: 'end' }}>
-                  <div className="bo-form-group">
-                    <label className="bo-label">SATUAN</label>
-                    <select className="bo-input" style={{ backgroundColor: 'white' }} value={newProdUnit} onChange={e => setNewProdUnit(e.target.value)}>
-                      <option value="Pcs">Pcs</option>
-                      <option value="Kg">Kg</option>
-                      <option value="Gram">Gram</option>
-                      <option value="Pack">Pack</option>
-                      <option value="Dus">Dus</option>
-                    </select>
-                  </div>
-                  <div className="bo-form-group">
-                    <label className="bo-label">MIN STOK</label>
-                    <input type="number" min="0" className="bo-input" style={{ backgroundColor: 'white' }} value={newProdMinStock} onChange={e => setNewProdMinStock(e.target.value)} placeholder="Alert" />
-                  </div>
-                  <div className="bo-form-group">
-                    <label className="bo-label">HARGA BELI</label>
-                    <input type="number" min="0" className="bo-input" style={{ backgroundColor: 'white' }} value={newProdPurchasePrice} onChange={e => setNewProdPurchasePrice(e.target.value)} placeholder="0" />
-                  </div>
-                  <div className="bo-form-group">
-                    <label className="bo-label">HARGA JUAL</label>
-                    <input type="number" min="0" className="bo-input" style={{ backgroundColor: 'white' }} value={newProdSellingPrice} onChange={e => setNewProdSellingPrice(e.target.value)} required placeholder="0" />
-                  </div>
-                  <div className="bo-form-group">
-                    <label className="bo-label">HARGA GROSIR</label>
-                    <input type="number" min="0" className="bo-input" style={{ backgroundColor: 'white' }} value={newProdWholesalePrice} onChange={e => setNewProdWholesalePrice(e.target.value)} placeholder="0" />
-                  </div>
-                  <div className="bo-form-group">
-                    <label className="bo-label">URL GAMBAR</label>
-                    <input type="text" className="bo-input" style={{ backgroundColor: 'white' }} value={newProdImage} onChange={e => setNewProdImage(e.target.value)} placeholder="https://..." />
+                <div className="pf-section">Stok & Harga</div>
+                <div className="pf-group">
+                  <div className="r-grid-6 pf-row2" style={{ display: 'grid', gridTemplateColumns: '100px 90px 1fr 1fr 1fr 1.5fr', gap: '16px', alignItems: 'end' }}>
+                    <div className="bo-form-group">
+                      <label className="bo-label">Satuan</label>
+                      <select className="bo-input" style={{ backgroundColor: 'white' }} value={newProdUnit} onChange={e => setNewProdUnit(e.target.value)}>
+                        <option value="Pcs">Pcs</option>
+                        <option value="Kg">Kg</option>
+                        <option value="Gram">Gram</option>
+                        <option value="Pack">Pack</option>
+                        <option value="Dus">Dus</option>
+                      </select>
+                    </div>
+                    <div className="bo-form-group">
+                      <label className="bo-label">Min Stok</label>
+                      <input type="number" inputMode="numeric" min="0" className="bo-input" style={{ backgroundColor: 'white' }} value={newProdMinStock} onChange={e => setNewProdMinStock(e.target.value)} placeholder="Alert" />
+                    </div>
+                    <div className="bo-form-group">
+                      <label className="bo-label">Harga Beli</label>
+                      <input type="number" inputMode="numeric" min="0" className="bo-input" style={{ backgroundColor: 'white' }} value={newProdPurchasePrice} onChange={e => setNewProdPurchasePrice(e.target.value)} placeholder="0" />
+                    </div>
+                    <div className="bo-form-group">
+                      <label className="bo-label">Harga Jual</label>
+                      <input type="number" inputMode="numeric" min="0" className="bo-input" style={{ backgroundColor: 'white' }} value={newProdSellingPrice} onChange={e => setNewProdSellingPrice(e.target.value)} required placeholder="0" />
+                    </div>
+                    <div className="bo-form-group">
+                      <label className="bo-label">Harga Grosir</label>
+                      <input type="number" inputMode="numeric" min="0" className="bo-input" style={{ backgroundColor: 'white' }} value={newProdWholesalePrice} onChange={e => setNewProdWholesalePrice(e.target.value)} placeholder="Opsional" />
+                    </div>
+                    <div className="bo-form-group">
+                      <label className="bo-label">URL Gambar</label>
+                      <input type="text" inputMode="url" autoCapitalize="off" autoCorrect="off" className="bo-input" style={{ backgroundColor: 'white' }} value={newProdImage} onChange={e => setNewProdImage(e.target.value)} placeholder="https://..." />
+                    </div>
                   </div>
                 </div>
                 
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', paddingTop: '8px', borderTop: '1px solid #e5e7eb' }}>
+                <div className="pf-foot" style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', paddingTop: '8px', borderTop: '1px solid #e5e7eb' }}>
                   <button type="button" className="bo-btn bo-btn-secondary" onClick={() => setIsNewProductModalOpen(false)}>Batal</button>
                   <button type="submit" className="bo-btn bo-btn-primary" style={{ minWidth: '160px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-                    <Plus size={16} /> + Tambahkan ke Daftar
+                    <Plus size={16} /> Tambahkan ke Daftar
                   </button>
                 </div>
               </form>

@@ -162,7 +162,7 @@ const SeedDummyData: React.FC = () => {
         </div>
 
         {/* Action Cards */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', flexShrink: 0 }}>
+        <div className="r-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', flexShrink: 0 }}>
           <div className="bo-card" style={{ padding: '24px' }}>
             <div style={{ fontSize: '36px', marginBottom: '12px' }}>📅</div>
             <h3 style={{ margin: '0 0 8px', fontSize: '16px', fontWeight: 'bold' }}>Transaksi Hari Ini</h3>
@@ -205,7 +205,7 @@ const SeedDummyData: React.FC = () => {
         </div>
 
         {/* Product Action Cards */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px', flexShrink: 0 }}>
+        <div className="r-grid-2" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px', flexShrink: 0 }}>
           <div className="bo-card" style={{ padding: '24px', borderLeft: '4px solid #10b981' }}>
             <div style={{ fontSize: '36px', marginBottom: '12px' }}>🛒</div>
             <h3 style={{ margin: '0 0 8px', fontSize: '16px', fontWeight: 'bold' }}>Tambah 20 Produk Dummy</h3>

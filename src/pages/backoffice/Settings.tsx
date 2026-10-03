@@ -115,10 +115,10 @@ const Settings: React.FC = () => {
       </div>
 
       <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '230px minmax(0, 1fr)', gap: '16px', alignItems: 'start' }}>
+        <div className="r-settings-grid" style={{ display: 'grid', gridTemplateColumns: '230px minmax(0, 1fr)', gap: '16px', alignItems: 'start' }}>
 
           {/* Menu kategori */}
-          <nav className="bo-card" style={{ padding: '8px', marginBottom: 0, display: 'flex', flexDirection: 'column', gap: '4px', position: 'sticky', top: 0 }}>
+          <nav className="bo-card r-settings-nav" style={{ padding: '8px', marginBottom: 0, display: 'flex', flexDirection: 'column', gap: '4px', position: 'sticky', top: 0 }}>
             {TABS.map(t => {
               const isActive = t.id === activeTab;
               return (
@@ -138,7 +138,7 @@ const Settings: React.FC = () => {
                   <t.Icon size={18} />
                   <span style={{ minWidth: 0 }}>
                     <span style={{ display: 'block', fontSize: '13px', fontWeight: 700, lineHeight: 1.2 }}>{t.label}</span>
-                    <span style={{ display: 'block', fontSize: '11px', color: isActive ? 'var(--primary)' : '#9ca3af', opacity: isActive ? 0.8 : 1 }}>{t.desc}</span>
+                    <span className="r-hide-mobile" style={{ display: 'block', fontSize: '11px', color: isActive ? 'var(--primary)' : '#9ca3af', opacity: isActive ? 0.8 : 1 }}>{t.desc}</span>
                   </span>
                 </button>
               );

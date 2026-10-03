@@ -1,9 +1,26 @@
 <!doctype html>
-<html lang="en">
+<html lang="id">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- viewport-fit=cover: konten memakai seluruh layar iPhone (Dynamic Island / notch),
+         jarak aman diatur via env(safe-area-inset-*) di src/styles/responsive.css -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+    <meta name="description" content="Aplikasi Point of Sale & Back-Office swalayan — kasir, stok, pembelian dan laporan." />
+
+    <!-- PWA / Add to Home Screen -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#f9f9fb" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <!-- black-translucent: halaman tampil penuh sampai area jam/baterai (tanpa celah putih).
+         Header kaca (frosted) mengikuti warna aplikasi + padding env(safe-area-inset-top),
+         sehingga blur popup ikut menutupi area status bar tanpa belang. -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="POS Mart" />
+    <meta name="format-detection" content="telephone=no" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
