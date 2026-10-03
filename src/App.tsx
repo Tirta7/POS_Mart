@@ -6,6 +6,8 @@ import { useAuthStore } from './store/useAuthStore';
 import Pos from './Pos';
 import BackofficeLayout from './pages/backoffice/Layout';
 import StockManagement from './pages/backoffice/StockManagement';
+import StockMutation from './pages/backoffice/StockMutation';
+import Purchases from './pages/backoffice/Purchases';
 import SupplierData from './pages/backoffice/SupplierData';
 import EmployeeData from './pages/backoffice/EmployeeData';
 import Settings from './pages/backoffice/Settings';
@@ -79,6 +81,8 @@ function App() {
         >
           <Route index element={<Navigate to="/backoffice/stock" replace />} />
           <Route path="stock" element={<StockManagement />} />
+          <Route path="stock-mutation" element={<StockMutation />} />
+          <Route path="purchases" element={<Purchases />} />
           <Route path="customers" element={<CustomerData />} />
           <Route path="suppliers" element={<SupplierData />} />
           <Route path="employees" element={<EmployeeData />} />

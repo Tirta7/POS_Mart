@@ -14,6 +14,10 @@ import { useHoldStore } from './store/useHoldStore';
 import { useSalesStore } from './store/useSalesStore';
 import { useAuthStore } from './store/useAuthStore';
 import BarcodeScannerCamera from './components/BarcodeScannerCamera';
+import { recordStockMutation } from './utils/stockMutation';
+import ReceiptModal from './components/ReceiptModal';
+import type { SalesTransaction } from './types';
+import type { ReceiptOptions } from './utils/receipt';
 
 function App() {
   const { appName, taxEnabled, taxRate, roundingUnit } = useSettingsStore();
@@ -49,6 +53,9 @@ function App() {
 
   // Payment Popup State
   const [paymentPopupOpen, setPaymentPopupOpen] = useState(false);
+
+  // Struk yang baru dicetak (pratinjau + cetak ulang)
+  const [receipt, setReceipt] = useState<{ sale: SalesTransaction; options: ReceiptOptions } | null>(null);
 
   // Camera Scanner State
   const [cameraScannerOpen, setCameraScannerOpen] = useState(false);
@@ -581,6 +588,15 @@ function App() {
         </div>
       </div>
 
+      {/* RECEIPT PREVIEW / PRINT */}
+      {receipt && (
+        <ReceiptModal
+          sale={receipt.sale}
+          options={receipt.options}
+          onClose={() => setReceipt(null)}
+        />
+      )}
+
       {/* PAYMENT MODAL POPUP */}
       {paymentPopupOpen && (
         <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
@@ -671,6 +687,27 @@ function App() {
                 // Deduct stock for all items
                 cart.forEach(item => {
                   updateProductStock(item.id, -item.qty);
+                });
+
+                // Mutasi stok: Barang Keluar (OUT) per transaksi penjualan
+                recordStockMutation(
+                  'OUT',
+                  sale.id,
+                  cart.map(item => ({ productId: item.id, qty: item.qty, name: item.name })),
+                  'Penjualan Kasir',
+                  { customerId: selectedCustomer?.id, customerName: selectedCustomer?.name }
+                );
+
+                // Tampilkan struk & buka dialog cetak
+                setReceipt({
+                  sale,
+                  options: {
+                    storeName: appName,
+                    customerName: selectedCustomer?.name,
+                    orderType,
+                    taxEnabled,
+                    taxRate,
+                  },
                 });
 
                 setPaymentPopupOpen(false);
@@ -941,13 +978,12 @@ function App() {
               p.id.toLowerCase() === decodedText.toLowerCase()
             );
             if (exactMatch) {
+              // Tambah ke keranjang, tapi JANGAN tutup kamera agar bisa scan berikutnya
               handleProductClick(exactMatch);
-              setCameraScannerOpen(false); // Tutup scanner setelah berhasil menemukan dan memasukkan produk
+              return exactMatch.name; // Kembalikan nama produk untuk ditampilkan sebagai feedback
             } else {
-              // Jika tidak ditemukan, kita bisa memilih untuk membiarkan kamera tetap aktif
-              // Atau berikan notifikasi (tapi di dalam BarcodeScannerCamera belum ada akses alert, bisa pakai alert global sementara)
-              alert(`Barcode ${decodedText} tidak ditemukan di database!`);
-              setCameraScannerOpen(false);
+              // Produk tidak ditemukan — kembalikan null agar scanner tampilkan pesan "tidak ditemukan"
+              return null;
             }
           }} 
           onClose={() => setCameraScannerOpen(false)} 

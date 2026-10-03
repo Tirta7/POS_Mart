@@ -2,12 +2,18 @@ import React, { useState, useMemo } from 'react';
 import { useSalesStore } from '../../store/useSalesStore';
 import { useInventoryStore } from '../../store/useInventoryStore';
 import { useCustomerStore } from '../../store/useCustomerStore';
-import { FileText, TrendingUp, AlertCircle, Calendar, DollarSign, Search, Filter, User, UserCheck, CreditCard } from 'lucide-react';
+import { useSettingsStore } from '../../store/useSettingsStore';
+import ReceiptModal from '../../components/ReceiptModal';
+import type { SalesTransaction } from '../../types';
+import type { ReceiptOptions } from '../../utils/receipt';
+import { FileText, TrendingUp, AlertCircle, Calendar, DollarSign, Search, Filter, CreditCard, CheckCircle2, Printer } from 'lucide-react';
 
 const Reports: React.FC = () => {
   const { sales } = useSalesStore();
   const { products } = useInventoryStore();
   const { customers } = useCustomerStore();
+  const { appName, taxEnabled, taxRate } = useSettingsStore();
+  const [reprint, setReprint] = useState<{ sale: SalesTransaction; options: ReceiptOptions } | null>(null);
   
   const [activeTab, setActiveTab] = useState<'sales' | 'low-stock'>('sales');
   
@@ -91,140 +97,145 @@ const Reports: React.FC = () => {
   const totalRevenue = sales.reduce((sum, sale) => sum + sale.total, 0);
   const totalTransactions = sales.length;
   const totalProfit = enrichedSales.reduce((sum, sale) => sum + sale.profitMargin, 0);
+  const totalSubtotal = enrichedSales.reduce((sum, sale) => sum + sale.subtotal, 0);
+  const avgPerNota = totalTransactions ? Math.round(totalRevenue / totalTransactions) : 0;
+  const marginPct = totalSubtotal ? (totalProfit / totalSubtotal) * 100 : 0;
 
-  // Low Stock Items
-  const lowStockItems = products.filter(p => {
-    const available = p.stock - (p.reserved || 0);
-    const min = p.minStock ?? 10;
-    return available <= min;
-  });
+  // Low Stock Items (stok habis di urutan teratas)
+  const lowStockItems = products
+    .filter(p => {
+      const available = p.stock - (p.reserved || 0);
+      const min = p.minStock ?? 10;
+      return available <= min;
+    })
+    .sort((a, b) => (a.stock - (a.reserved || 0)) - (b.stock - (b.reserved || 0)));
+  const outOfStockCount = lowStockItems.filter(p => p.stock - (p.reserved || 0) <= 0).length;
+
+  // Total pada data penjualan yang sedang ditampilkan
+  const shown = useMemo(() => {
+    let qty = 0, sub = 0, tax = 0, total = 0, profit = 0;
+    filteredSales.forEach(s => {
+      qty += s.items.reduce((x, i) => x + i.qty, 0);
+      sub += s.subtotal; tax += s.tax; total += s.total; profit += s.profitMargin;
+    });
+    return { qty, sub, tax, total, profit };
+  }, [filteredSales]);
+
+  const summaryCards = [
+    { label: 'TOTAL PENDAPATAN', value: formatIDR(totalRevenue), sub: `rata-rata ${formatIDR(avgPerNota)} / nota`, color: '#10b981', bg: '#ecfdf5', Icon: TrendingUp },
+    { label: 'TOTAL KEUNTUNGAN', value: formatIDR(totalProfit), sub: `margin ${marginPct.toFixed(1)}%`, color: '#f59e0b', bg: '#fffbeb', Icon: DollarSign },
+    { label: 'TOTAL TRANSAKSI', value: `${totalTransactions} Nota`, sub: `${filteredSales.length} sesuai filter`, color: '#3b82f6', bg: '#eff6ff', Icon: FileText },
+    { label: 'STOK TIPIS / HABIS', value: `${lowStockItems.length} Produk`, sub: `${outOfStockCount} habis • ${lowStockItems.length - outOfStockCount} tipis`, color: '#ef4444', bg: '#fef2f2', Icon: AlertCircle },
+  ];
+
+  const tabBtn = (id: 'sales' | 'low-stock', label: string, n: number, activeColor: string): React.ReactNode => {
+    const active = activeTab === id;
+    return (
+      <button
+        onClick={() => setActiveTab(id)}
+        style={{
+          padding: '12px 20px',
+          background: 'none',
+          border: 'none',
+          fontWeight: 'bold',
+          fontSize: '14px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          color: active ? activeColor : '#6b7280',
+          borderBottom: active ? `3px solid ${activeColor}` : '3px solid transparent',
+          cursor: 'pointer'
+        }}
+      >
+        {label}
+        <span style={{ fontSize: '11px', fontWeight: 700, padding: '1px 8px', borderRadius: '999px', background: active ? activeColor : '#e5e7eb', color: active ? 'white' : '#6b7280' }}>{n}</span>
+      </button>
+    );
+  };
+
+  const emptyState = (title: string, desc: string, icon: React.ReactNode) => (
+    <div style={{ padding: '56px 20px', textAlign: 'center', color: '#6b7280', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+      <div style={{ width: '52px', height: '52px', borderRadius: '50%', background: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{icon}</div>
+      <div style={{ fontWeight: 700, color: '#374151' }}>{title}</div>
+      <div style={{ fontSize: '12px', color: '#9ca3af', maxWidth: '360px' }}>{desc}</div>
+    </div>
+  );
+
+  const initials = (name: string) => name.trim().split(/\s+/).slice(0, 2).map(s => s[0]?.toUpperCase() || '').join('') || '?';
 
   return (
     <div className="bo-container">
-      <div className="bo-page-header" style={{ marginBottom: '16px', flexShrink: 0 }}>
+      <style>{`
+        .rpt-table th { padding: 9px 14px !important; font-size: 11px !important; letter-spacing: 0.4px; white-space: nowrap; position: sticky; top: 0; z-index: 1; background: #f9fafb; }
+        .rpt-table td { padding: 8px 14px !important; font-size: 13px; line-height: 1.35; }
+        .rpt-table tbody tr:hover td { background: #f8fafc; }
+        .rpt-filter select, .rpt-filter input[type=date], .rpt-filter button { padding: 6px 10px !important; font-size: 13px !important; }
+      `}</style>
+      <div className="bo-page-header" style={{ marginBottom: '14px', flexShrink: 0 }}>
         <div>
           <h1 className="bo-page-title">Laporan & Analitik</h1>
           <p className="bo-page-subtitle">Pantau performa penjualan, pergerakan stok, dan keuntungan toko Anda secara realtime.</p>
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px', marginBottom: '16px', flexShrink: 0 }}>
-        {/* Total Pendapatan */}
-        <div className="bo-card" style={{ padding: '20px', display: 'flex', alignItems: 'center', gap: '16px', borderLeft: '4px solid #10b981' }}>
-          <div style={{ padding: '14px', backgroundColor: '#ecfdf5', color: '#10b981', borderRadius: '12px' }}>
-            <TrendingUp size={28} />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px', marginBottom: '14px', flexShrink: 0 }}>
+        {summaryCards.map(c => (
+          <div key={c.label} className="bo-card" style={{ padding: '12px 16px', marginBottom: 0, display: 'flex', alignItems: 'center', gap: '12px', borderLeft: `4px solid ${c.color}` }}>
+            <div style={{ width: '38px', height: '38px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: c.bg, color: c.color, borderRadius: '10px', flexShrink: 0 }}>
+              <c.Icon size={19} />
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: '11px', color: '#6b7280', fontWeight: 700, letterSpacing: '0.4px' }}>{c.label}</div>
+              <div style={{ fontSize: '20px', fontWeight: 800, color: '#111', lineHeight: 1.2 }}>{c.value}</div>
+              <div style={{ fontSize: '11px', color: '#9ca3af', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.sub}</div>
+            </div>
           </div>
-          <div>
-            <div style={{ fontSize: '12px', color: '#6b7280', fontWeight: 'bold', marginBottom: '4px' }}>TOTAL PENDAPATAN</div>
-            <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#111' }}>{formatIDR(totalRevenue)}</div>
-          </div>
-        </div>
-
-        {/* Total Keuntungan */}
-        <div className="bo-card" style={{ padding: '20px', display: 'flex', alignItems: 'center', gap: '16px', borderLeft: '4px solid #f59e0b' }}>
-          <div style={{ padding: '14px', backgroundColor: '#fffbeb', color: '#f59e0b', borderRadius: '12px' }}>
-            <DollarSign size={28} />
-          </div>
-          <div>
-            <div style={{ fontSize: '12px', color: '#6b7280', fontWeight: 'bold', marginBottom: '4px' }}>TOTAL KEUNTUNGAN</div>
-            <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#111' }}>{formatIDR(totalProfit)}</div>
-          </div>
-        </div>
-
-        {/* Total Transaksi */}
-        <div className="bo-card" style={{ padding: '20px', display: 'flex', alignItems: 'center', gap: '16px', borderLeft: '4px solid #3b82f6' }}>
-          <div style={{ padding: '14px', backgroundColor: '#eff6ff', color: '#3b82f6', borderRadius: '12px' }}>
-            <FileText size={28} />
-          </div>
-          <div>
-            <div style={{ fontSize: '12px', color: '#6b7280', fontWeight: 'bold', marginBottom: '4px' }}>TOTAL TRANSAKSI</div>
-            <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#111' }}>{totalTransactions} Nota</div>
-          </div>
-        </div>
-
-        {/* Stok Tipis */}
-        <div className="bo-card" style={{ padding: '20px', display: 'flex', alignItems: 'center', gap: '16px', borderLeft: '4px solid #ef4444' }}>
-          <div style={{ padding: '14px', backgroundColor: '#fef2f2', color: '#ef4444', borderRadius: '12px' }}>
-            <AlertCircle size={28} />
-          </div>
-          <div>
-            <div style={{ fontSize: '12px', color: '#6b7280', fontWeight: 'bold', marginBottom: '4px' }}>STOK TIPIS / HABIS</div>
-            <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#111' }}>{lowStockItems.length} Produk</div>
-          </div>
-        </div>
+        ))}
       </div>
 
       <div className="bo-card" style={{ marginBottom: '0', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
         <div style={{ display: 'flex', borderBottom: '1px solid #e5e7eb', flexShrink: 0 }}>
-          <button 
-            onClick={() => setActiveTab('sales')}
-            style={{ 
-              padding: '16px 24px', 
-              background: 'none', 
-              border: 'none', 
-              fontWeight: 'bold',
-              fontSize: '15px',
-              color: activeTab === 'sales' ? 'var(--primary)' : '#6b7280',
-              borderBottom: activeTab === 'sales' ? '3px solid var(--primary)' : '3px solid transparent',
-              cursor: 'pointer'
-            }}
-          >
-            Laporan Penjualan
-          </button>
-          <button 
-            onClick={() => setActiveTab('low-stock')}
-            style={{ 
-              padding: '16px 24px', 
-              background: 'none', 
-              border: 'none', 
-              fontWeight: 'bold',
-              fontSize: '15px',
-              color: activeTab === 'low-stock' ? '#ef4444' : '#6b7280',
-              borderBottom: activeTab === 'low-stock' ? '3px solid #ef4444' : '3px solid transparent',
-              cursor: 'pointer'
-            }}
-          >
-            Peringatan Stok Tipis
-          </button>
+          {tabBtn('sales', 'Laporan Penjualan', filteredSales.length, 'var(--primary)')}
+          {tabBtn('low-stock', 'Peringatan Stok Tipis', lowStockItems.length, '#ef4444')}
         </div>
 
         <div className="bo-card-body" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, padding: 0 }}>
           {activeTab === 'sales' && (
             <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
               {/* Filter Area */}
-              <div style={{ display: 'flex', gap: '16px', padding: '16px 20px', flexShrink: 0, borderBottom: '1px solid #e5e7eb', backgroundColor: '#f9fafb' }}>
-                <div style={{ display: 'flex', alignItems: 'center', backgroundColor: '#f3f4f6', padding: '8px 12px', borderRadius: '8px', flex: 1, minWidth: '250px' }}>
-                  <Search size={18} color="#6b7280" style={{ marginRight: '8px' }} />
+              <div className="rpt-filter" style={{ display: 'flex', gap: '12px', padding: '10px 16px', flexShrink: 0, borderBottom: '1px solid #e5e7eb', backgroundColor: '#f9fafb', alignItems: 'center', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', backgroundColor: '#f3f4f6', padding: '7px 12px', borderRadius: '8px', flex: 1, minWidth: '240px' }}>
+                  <Search size={16} color="#6b7280" style={{ marginRight: '8px' }} />
                   <input 
                     type="text" 
                     placeholder="Cari nama pelanggan atau ID Transaksi..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    style={{ border: 'none', background: 'transparent', outline: 'none', width: '100%', fontSize: '14px' }}
+                    style={{ border: 'none', background: 'transparent', outline: 'none', width: '100%', fontSize: '13px' }}
                   />
                 </div>
                 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <Calendar size={18} color="#6b7280" />
+                  <Calendar size={16} color="#6b7280" />
                   <input 
                     type="date"
                     value={startDate}
                     onChange={(e) => setStartDate(e.target.value)}
-                    style={{ padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: '8px', outline: 'none', fontSize: '14px' }}
+                    style={{ border: '1px solid #d1d5db', borderRadius: '8px', outline: 'none' }}
                     title="Dari Tanggal"
                   />
-                  <span style={{ color: '#6b7280', fontSize: '14px', fontWeight: 'bold' }}>—</span>
+                  <span style={{ color: '#6b7280', fontSize: '13px', fontWeight: 'bold' }}>—</span>
                   <input 
                     type="date"
                     value={endDate}
                     onChange={(e) => setEndDate(e.target.value)}
-                    style={{ padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: '8px', outline: 'none', fontSize: '14px' }}
+                    style={{ border: '1px solid #d1d5db', borderRadius: '8px', outline: 'none' }}
                     title="Sampai Tanggal"
                   />
                   {(startDate || endDate) && (
                     <button 
                       onClick={() => { setStartDate(''); setEndDate(''); }}
-                      style={{ padding: '8px 12px', border: 'none', backgroundColor: '#fee2e2', color: '#ef4444', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 'bold' }}
+                      style={{ border: 'none', backgroundColor: '#fee2e2', color: '#ef4444', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}
                     >
                       Clear
                     </button>
@@ -232,11 +243,11 @@ const Reports: React.FC = () => {
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <CreditCard size={18} color="#6b7280" />
+                  <CreditCard size={16} color="#6b7280" />
                   <select
                     value={paymentMethod}
                     onChange={(e) => setPaymentMethod(e.target.value)}
-                    style={{ padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: '8px', outline: 'none', fontSize: '14px', backgroundColor: 'white' }}
+                    style={{ border: '1px solid #d1d5db', borderRadius: '8px', outline: 'none', backgroundColor: 'white' }}
                   >
                     <option value="ALL">Semua Metode</option>
                     <option value="TUNAI">TUNAI</option>
@@ -247,11 +258,11 @@ const Reports: React.FC = () => {
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <Filter size={18} color="#6b7280" />
+                  <Filter size={16} color="#6b7280" />
                   <select
                     value={sortBy}
                     onChange={(e) => setSortBy(e.target.value as 'latest' | 'oldest')}
-                    style={{ padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: '8px', outline: 'none', fontSize: '14px', backgroundColor: 'white' }}
+                    style={{ border: '1px solid #d1d5db', borderRadius: '8px', outline: 'none', backgroundColor: 'white' }}
                   >
                     <option value="latest">Terbaru</option>
                     <option value="oldest">Terlama</option>
@@ -261,161 +272,213 @@ const Reports: React.FC = () => {
 
               <div className="bo-table-container">
                 {filteredSales.length === 0 ? (
-                  <div style={{ padding: '40px', textAlign: 'center', color: '#6b7280' }}>
-                    Data penjualan tidak ditemukan.
-                  </div>
+                  emptyState('Data penjualan tidak ditemukan', 'Coba ubah rentang tanggal, metode pembayaran, atau kata kunci pencarian.', <FileText size={26} color="#9ca3af" />)
                 ) : (
-                  <table className="bo-table">
+                  <table className="bo-table rpt-table">
                     <thead>
                       <tr>
                         <th>ID & WAKTU</th>
                         <th>KASIR</th>
                         <th>PELANGGAN</th>
                         <th>ITEM BELANJA</th>
+                        <th style={{ textAlign: 'center' }}>QTY</th>
                         <th>METODE</th>
-                        <th>SUBTOTAL & PPN</th>
-                        <th>TOTAL BAYAR</th>
-                        <th>PROFIT MARGIN</th>
+                        <th style={{ textAlign: 'right' }}>SUBTOTAL & PPN</th>
+                        <th style={{ textAlign: 'right' }}>TOTAL BAYAR</th>
+                        <th style={{ textAlign: 'right' }}>PROFIT MARGIN</th>
+                        <th style={{ textAlign: 'center' }}>STRUK</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredSales.map((sale) => (
+                      {filteredSales.map((sale) => {
+                        const itemsText = sale.items.map(i => `${i.name} (x${i.qty})`).join(', ');
+                        const totalQty = sale.items.reduce((x, i) => x + i.qty, 0);
+                        const shownItems = sale.items.slice(0, 2);
+                        const more = sale.items.length - shownItems.length;
+                        const cashier = sale.employeeName || 'Tidak Diketahui';
+                        const pct = sale.subtotal ? (sale.profitMargin / sale.subtotal) * 100 : 0;
+                        const positive = sale.profitMargin > 0;
+                        return (
                         <tr key={sale.id}>
-                          <td>
-                            <div style={{ fontWeight: 'bold', color: '#111', marginBottom: '4px' }}>{sale.id}</div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: '#6b7280' }}>
-                              <Calendar size={12} />
-                              {new Date(sale.date).toLocaleString('id-ID')}
-                            </div>
+                          <td style={{ whiteSpace: 'nowrap' }}>
+                            <div style={{ fontWeight: 700, color: '#111', fontSize: '12.5px' }}>{sale.id}</div>
+                            <div style={{ fontSize: '11px', color: '#9ca3af' }}>{new Date(sale.date).toLocaleString('id-ID')}</div>
                           </td>
-                          <td>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                              <div style={{ width: '28px', height: '28px', borderRadius: '50%', backgroundColor: '#dbeafe', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                <UserCheck size={14} color="#2563eb" />
-                              </div>
+                          <td style={{ whiteSpace: 'nowrap' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <span style={{ width: '24px', height: '24px', borderRadius: '50%', background: '#dbeafe', color: '#1d4ed8', fontSize: '10px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{initials(cashier)}</span>
                               <div>
-                                <div style={{ fontWeight: '700', fontSize: '13px', color: '#1d4ed8' }}>
-                                  {sale.employeeName || 'Tidak Diketahui'}
-                                </div>
-                                <div style={{ fontSize: '11px', color: '#9ca3af' }}>ID: {sale.employeeId || '-'}</div>
+                                <div style={{ fontWeight: 600, color: '#1d4ed8', lineHeight: 1.2 }}>{cashier}</div>
+                                <div style={{ fontSize: '10.5px', color: '#9ca3af' }}>{sale.employeeId || '-'}</div>
                               </div>
                             </div>
                           </td>
-                          <td>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                              <div style={{ width: '28px', height: '28px', borderRadius: '50%', backgroundColor: '#e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <User size={14} color="#6b7280" />
-                              </div>
-                              <span style={{ fontWeight: '600', color: sale.customerName === 'Umum (Guest)' ? '#9ca3af' : '#1f2937' }}>
-                                {sale.customerName}
-                              </span>
-                            </div>
+                          <td style={{ whiteSpace: 'nowrap', fontWeight: 600, color: sale.customerName === 'Umum (Guest)' ? '#9ca3af' : '#1f2937' }}>
+                            {sale.customerName}
                           </td>
-                          <td>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                              {sale.items.map((item, i) => (
-                                <div key={i} style={{ fontSize: '12px', color: '#4b5563' }}>
-                                  • {item.name} <span style={{ color: '#9ca3af' }}>(x{item.qty})</span>
-                                </div>
+                          <td title={itemsText} style={{ maxWidth: '280px' }}>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center' }}>
+                              {shownItems.map((it, i) => (
+                                <span key={i} style={{ background: '#f3f4f6', color: '#374151', borderRadius: '6px', padding: '1px 7px', fontSize: '11.5px', maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {it.name} <span style={{ color: '#9ca3af' }}>×{it.qty}</span>
+                                </span>
                               ))}
+                              {more > 0 && <span style={{ fontSize: '11px', color: '#6b7280', fontWeight: 700 }}>+{more} lagi</span>}
                             </div>
                           </td>
+                          <td style={{ textAlign: 'center', fontWeight: 700, color: '#374151' }}>{totalQty}</td>
                           <td>
                             <span style={{ 
-                              padding: '4px 8px', 
-                              borderRadius: '4px', 
+                              padding: '2px 8px', 
+                              borderRadius: '5px', 
                               fontSize: '11px', 
                               fontWeight: 'bold',
+                              whiteSpace: 'nowrap',
                               backgroundColor: sale.paymentMethod === 'TUNAI' ? '#dcfce7' : '#e0e7ff',
                               color: sale.paymentMethod === 'TUNAI' ? '#166534' : '#3730a3'
                             }}>
                               {sale.paymentMethod}
                             </span>
                           </td>
-                          <td>
-                            <div style={{ fontSize: '13px', color: '#374151' }}>Sub: {formatIDR(sale.subtotal)}</div>
-                            <div style={{ fontSize: '12px', color: '#6b7280' }}>PPN: {formatIDR(sale.tax)}</div>
+                          <td style={{ whiteSpace: 'nowrap', textAlign: 'right', color: '#374151' }}>
+                            <div>{formatIDR(sale.subtotal)}</div>
+                            <div style={{ fontSize: '11px', color: '#9ca3af' }}>PPN {formatIDR(sale.tax)}</div>
                           </td>
-                          <td style={{ fontWeight: 'bold', color: 'var(--primary)', fontSize: '14px' }}>
+                          <td style={{ fontWeight: 'bold', color: 'var(--primary)', whiteSpace: 'nowrap', textAlign: 'right', fontSize: '14px' }}>
                             {formatIDR(sale.total)}
                           </td>
-                          <td>
-                            <span style={{ 
-                              padding: '6px 10px', 
-                              borderRadius: '6px',
-                              backgroundColor: sale.profitMargin > 0 ? '#ecfdf5' : '#fef2f2',
-                              color: sale.profitMargin > 0 ? '#059669' : '#dc2626',
-                              fontWeight: 'bold',
-                              fontSize: '13px',
-                              display: 'inline-block'
-                            }}>
-                              {sale.profitMargin > 0 ? '+' : ''}{formatIDR(sale.profitMargin)}
-                            </span>
+                          <td style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
+                            <div style={{ fontWeight: 'bold', color: positive ? '#059669' : '#dc2626' }}>
+                              {positive ? '+' : ''}{formatIDR(sale.profitMargin)}
+                            </div>
+                            <div style={{ fontSize: '11px', color: positive ? '#34d399' : '#f87171' }}>{pct.toFixed(1)}%</div>
+                          </td>
+                          <td style={{ textAlign: 'center' }}>
+                            <button
+                              title="Cetak ulang struk"
+                              onClick={() => setReprint({
+                                sale,
+                                options: {
+                                  storeName: appName,
+                                  customerName: sale.customerName === 'Umum (Guest)' ? undefined : sale.customerName,
+                                  taxEnabled,
+                                  taxRate,
+                                },
+                              })}
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '5px 10px', border: '1px solid #d1d5db', borderRadius: '8px', background: 'white', color: '#374151', fontSize: '12px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                            >
+                              <Printer size={14} /> Cetak
+                            </button>
                           </td>
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                 )}
               </div>
+
+              {filteredSales.length > 0 && (
+                <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: '22px', flexWrap: 'wrap', padding: '10px 18px', borderTop: '1px solid #e5e7eb', background: '#f9fafb', fontSize: '12px', color: '#6b7280' }}>
+                  <span style={{ fontWeight: 700, color: '#374151' }}>Total ditampilkan</span>
+                  <span>{filteredSales.length} nota • {shown.qty} item</span>
+                  <span>Subtotal: <b style={{ color: '#374151' }}>{formatIDR(shown.sub)}</b></span>
+                  <span>PPN: <b style={{ color: '#374151' }}>{formatIDR(shown.tax)}</b></span>
+                  <span>Total: <b style={{ color: 'var(--primary)' }}>{formatIDR(shown.total)}</b></span>
+                  <span style={{ marginLeft: 'auto' }}>Profit: <b style={{ color: shown.profit > 0 ? '#059669' : '#dc2626' }}>{shown.profit > 0 ? '+' : ''}{formatIDR(shown.profit)}</b></span>
+                </div>
+              )}
             </div>
           )}
 
           {activeTab === 'low-stock' && (
-            <div className="bo-table-container">
-              {lowStockItems.length === 0 ? (
-                <div style={{ padding: '40px', textAlign: 'center', color: '#6b7280' }}>
-                  Semua stok produk dalam kondisi aman.
+            <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+              <div className="bo-table-container">
+                {lowStockItems.length === 0 ? (
+                  emptyState('Semua stok aman', 'Tidak ada produk yang berada di bawah atau sama dengan batas minimum.', <CheckCircle2 size={26} color="#10b981" />)
+                ) : (
+                  <table className="bo-table rpt-table">
+                    <thead>
+                      <tr>
+                        <th>SKU</th>
+                        <th>NAMA PRODUK</th>
+                        <th>KATEGORI</th>
+                        <th style={{ minWidth: '170px' }}>STOK TERSEDIA</th>
+                        <th style={{ textAlign: 'center' }}>BATAS MINIMUM</th>
+                        <th style={{ textAlign: 'center' }}>KEKURANGAN</th>
+                        <th>STATUS</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {lowStockItems.map((p) => {
+                        const available = p.stock - (p.reserved || 0);
+                        const min = p.minStock ?? 10;
+                        const empty = available <= 0;
+                        const color = empty ? '#ef4444' : '#d97706';
+                        const pct = min > 0 ? Math.max(0, Math.min(100, (available / min) * 100)) : 0;
+                        const lack = Math.max(0, min - available);
+                        return (
+                          <tr key={p.id}>
+                            <td style={{ fontFamily: 'monospace', fontSize: '12px', color: '#6b7280', whiteSpace: 'nowrap' }}>{p.sku}</td>
+                            <td style={{ fontWeight: 600, color: '#111827' }}>{p.name}</td>
+                            <td><span className="bo-badge bo-badge-gray" style={{ fontSize: '11px', padding: '2px 9px' }}>{p.category}</span></td>
+                            <td>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <span style={{ fontWeight: 700, color, minWidth: '56px', whiteSpace: 'nowrap' }}>{available} {p.unit}</span>
+                                <div style={{ flex: 1, height: '6px', background: '#f3f4f6', borderRadius: '999px', overflow: 'hidden' }}>
+                                  <div style={{ width: `${pct}%`, height: '100%', background: color, borderRadius: '999px' }} />
+                                </div>
+                              </div>
+                            </td>
+                            <td style={{ textAlign: 'center', color: '#6b7280', whiteSpace: 'nowrap' }}>{min} {p.unit}</td>
+                            <td style={{ textAlign: 'center', fontWeight: 700, color, whiteSpace: 'nowrap' }}>{lack > 0 ? `-${lack} ${p.unit}` : '-'}</td>
+                            <td>
+                              <span style={{ 
+                                padding: '2px 9px', 
+                                borderRadius: '999px', 
+                                fontSize: '11px', 
+                                fontWeight: 'bold',
+                                whiteSpace: 'nowrap',
+                                backgroundColor: empty ? '#fef2f2' : '#fffbeb',
+                                color,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px'
+                              }}>
+                                <AlertCircle size={12} />
+                                {empty ? 'STOK HABIS' : 'STOK TIPIS'}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+              {lowStockItems.length > 0 && (
+                <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: '22px', padding: '10px 18px', borderTop: '1px solid #e5e7eb', background: '#f9fafb', fontSize: '12px', color: '#6b7280' }}>
+                  <span style={{ fontWeight: 700, color: '#374151' }}>Ringkasan</span>
+                  <span>Habis: <b style={{ color: '#ef4444' }}>{outOfStockCount}</b></span>
+                  <span>Tipis: <b style={{ color: '#d97706' }}>{lowStockItems.length - outOfStockCount}</b></span>
+                  <span style={{ marginLeft: 'auto' }}>{lowStockItems.length} produk perlu restock</span>
                 </div>
-              ) : (
-                <table className="bo-table">
-                  <thead>
-                    <tr>
-                      <th>SKU</th>
-                      <th>NAMA PRODUK</th>
-                      <th>KATEGORI</th>
-                      <th>STOK TERSEDIA</th>
-                      <th>BATAS MINIMUM</th>
-                      <th>STATUS</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {lowStockItems.map((p) => {
-                      const available = p.stock - (p.reserved || 0);
-                      const min = p.minStock ?? 10;
-                      return (
-                        <tr key={p.id}>
-                          <td>{p.sku}</td>
-                          <td style={{ fontWeight: 'bold' }}>{p.name}</td>
-                          <td><span className="bo-badge bo-badge-gray">{p.category}</span></td>
-                          <td style={{ fontWeight: 'bold', fontSize: '16px' }}>{available} {p.unit}</td>
-                          <td>{min} {p.unit}</td>
-                          <td>
-                            <span style={{ 
-                              padding: '6px 10px', 
-                              borderRadius: '6px', 
-                              fontSize: '12px', 
-                              fontWeight: 'bold',
-                              backgroundColor: available <= 0 ? '#fef2f2' : '#fffbeb',
-                              color: available <= 0 ? '#ef4444' : '#d97706',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '6px'
-                            }}>
-                              <AlertCircle size={14} />
-                              {available <= 0 ? 'STOK HABIS' : 'STOK TIPIS'}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
               )}
             </div>
           )}
         </div>
       </div>
+
+      {reprint && (
+        <ReceiptModal
+          sale={reprint.sale}
+          options={reprint.options}
+          autoPrint={false}
+          title="Cetak Ulang Struk"
+          printLabel="Cetak Struk"
+          onClose={() => setReprint(null)}
+        />
+      )}
     </div>
   );
 };

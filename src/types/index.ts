@@ -22,6 +22,7 @@ export interface Supplier {
   contact: string;
   phone: string;
   paymentTermDays: number;
+  totalPayable?: number;
 }
 
 export interface Employee {
@@ -43,11 +44,16 @@ export interface StockTransaction {
   employeeId: string;
   items: StockTransactionItem[];
   totalValue: number;
+  note?: string; // keterangan / sumber mutasi (mis. 'Penjualan Kasir', 'Koreksi stok')
+  customerId?: string; // pelanggan pada mutasi OUT hasil penjualan kasir
+  customerName?: string; // snapshot nama pelanggan (tetap tampil walau data pelanggan dihapus)
 }
 
 export interface StockTransactionItem {
   productId: string;
-  qty: number;
+  productName?: string;
+  unit?: string;
+  qty: number; // ADJUSTMENT: bernilai selisih (+/-)
   batchNo: string;
   expiryDate: string;
   purchasePrice: number;

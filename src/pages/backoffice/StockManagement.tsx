@@ -1,8 +1,17 @@
 import React, { useState } from 'react';
 import { useInventoryStore } from '../../store/useInventoryStore';
-import { useSupplierStore } from '../../store/useSupplierStore';
-import { Plus, Save, CheckCircle, PackageCheck, Edit2, Trash2, X, Settings, ArrowDownToLine, Camera, Search } from 'lucide-react';
+
+import { Plus, Save, CheckCircle, PackageCheck, Edit2, Trash2, X, Settings, ArrowDownToLine, Camera, Search, FileText, AlertTriangle, Printer, LayoutGrid, Package } from 'lucide-react';
 import BarcodeScannerCamera from '../../components/BarcodeScannerCamera';
+import BarcodeLabelModal from '../../components/BarcodeLabelModal';
+import DraftReviewDrawer from '../../components/DraftReviewDrawer';
+import { generateInternalBarcode, isInternalBarcode } from '../../utils/barcode';
+import { recordStockMutation, makeDocNo } from '../../utils/stockMutation';
+
+const makeGrNumber = () => {
+  const d = new Date();
+  return `GR-${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}-${String(Math.floor(Math.random()*900)+100)}`;
+};
 
 const StockManagement: React.FC = () => {
   const { products, addProduct, deleteProduct, updateProduct, categories, addCategory, deleteCategory, editCategory } = useInventoryStore();
@@ -13,6 +22,7 @@ const StockManagement: React.FC = () => {
   const [name, setName] = useState('');
   const [category, setCategory] = useState('Sembako');
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeCategory, setActiveCategory] = useState('all');
   const [qty, setQty] = useState<number | string>('');
   const [unit, setUnit] = useState('Pcs');
   const [purchasePrice, setPurchasePrice] = useState<number | string>('');
@@ -23,6 +33,18 @@ const StockManagement: React.FC = () => {
   const [newCategory, setNewCategory] = useState('');
   
   const [cameraScannerOpen, setCameraScannerOpen] = useState(false);
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [drawerClosing, setDrawerClosing] = useState(false);
+
+  // Tutup drawer dengan animasi slide keluar ke kanan
+  const closeDrawer = () => {
+    setDrawerClosing(true);
+    setTimeout(() => { resetForm(); setDrawerClosing(false); }, 250);
+  };
+
+  // Cetak label barcode (stiker thermal 40x30mm)
+  const [labelProduct, setLabelProduct] = useState<any>(null);
+  const [labelCopies, setLabelCopies] = useState(1);
   
   // Category Modal State
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
@@ -33,6 +55,28 @@ const StockManagement: React.FC = () => {
   const [restockProduct, setRestockProduct] = useState<any>(null);
   const [restockQty, setRestockQty] = useState<number | string>('');
   const [restockPrice, setRestockPrice] = useState<number | string>('');
+
+  // GR Session — item yang ditambahkan dalam sesi ini
+  const [sessionItems, setSessionItems] = useState<any[]>([]);
+
+  // Toast notifikasi Simpan Draf
+  const [draftToast, setDraftToast] = useState<string | null>(null);
+
+  // Modal Konfirmasi & Posting
+  const [showPostModal, setShowPostModal] = useState(false);
+  const [isPosted, setIsPosted] = useState(false);
+  const [grNumber, setGrNumber] = useState(makeGrNumber);
+
+  // Draf Tersimpan (disimpan di localStorage 'grDrafts')
+  const readDrafts = (): any[] => {
+    try { return JSON.parse(localStorage.getItem('grDrafts') || '[]'); } catch { return []; }
+  };
+  const [drafts, setDrafts] = useState<any[]>(readDrafts);
+  const [showDraftModal, setShowDraftModal] = useState(false);
+  // Pilihan item di daftar draf + drawer review (Lihat 1 item / Lanjutkan beberapa item)
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [reviewItems, setReviewItems] = useState<any[] | null>(null);
+  const [reviewMode, setReviewMode] = useState<'single' | 'multi'>('single');
 
   const resetForm = () => {
     setEditingId(null);
@@ -47,6 +91,7 @@ const StockManagement: React.FC = () => {
     setWholesalePrice('');
     setMinStock('');
     setImage('');
+    setIsFormOpen(false);
   };
 
   const handleIdKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -72,8 +117,9 @@ const StockManagement: React.FC = () => {
     e.preventDefault();
     if (!sku || !name || Number(qty) <= 0 || Number(sellingPrice) <= 0) return;
     
-    const finalId = productId || ('PRD-' + Date.now().toString());
-    const finalBarcode = productId || ('PRD-' + Date.now().toString());
+    // Tanpa barcode -> buat barcode internal unik (SKxxxxxx), sama untuk ID & barcode
+    const finalId = productId || generateInternalBarcode(products);
+    const finalBarcode = finalId;
 
     if (editingId) {
       // Find original to keep unmodified fields (like id, barcode, etc)
@@ -101,35 +147,211 @@ const StockManagement: React.FC = () => {
           minStock: Number(minStock),
           image: image || original.image
         });
+        // Mutasi stok: jika qty diubah lewat Edit, catat sebagai penyesuaian (selisih)
+        const stockDelta = Number(qty) - original.stock;
+        if (stockDelta !== 0) {
+          recordStockMutation(
+            'ADJUSTMENT',
+            makeDocNo('ADJ'),
+            [{ productId: finalId, qty: stockDelta, purchasePrice: Number(purchasePrice), name, unit }],
+            `Koreksi stok via Edit Master Data (${original.stock} → ${Number(qty)})`
+          );
+        }
         setEditingId(null); // Keluar dari mode edit setelah berhasil simpan
       }
     } else {
-      // Cek duplikat untuk penambahan data baru
-      const isDuplicate = products.some(p => p.id === finalId || p.barcode === finalBarcode);
+      // Cek duplikat: di stok, di sesi ini, dan di draf lain yang belum diposting
+      const pendingItems = [...sessionItems, ...readDrafts().flatMap(d => d.items || [])];
+      const isDuplicate =
+        products.some(p => p.id === finalId || p.barcode === finalBarcode) ||
+        pendingItems.some(i => i.id === finalId || i.barcode === finalBarcode);
       if (isDuplicate) {
-        alert(`Peringatan: Barcode/ID ${finalId} sudah terdaftar di database! Tidak boleh ada duplikat.`);
+        alert(`Peringatan: Barcode/ID ${finalId} sudah terdaftar (di stok atau di draf)! Tidak boleh ada duplikat.`);
         return;
       }
 
-      addProduct({
+      // Masuk ke Draf (BELUM masuk stok / Kasir POS sampai di-Posting)
+      const newItem = {
+        pending: true, // belum masuk stok; baru diterapkan saat Posting
         id: finalId,
-        sku,
         barcode: finalBarcode,
-        name,
-        category,
+        sku, name, category, unit,
         location: 'Gudang Utama',
-        unit,
-        stock: Number(qty),
-        baseUnitMultiplier: 1,
+        qty: Number(qty),
         purchasePrice: Number(purchasePrice),
         sellingPrice: Number(sellingPrice),
         wholesalePrice: Number(wholesalePrice),
         minStock: Number(minStock),
-        image: image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=300&q=80'
-      });
+        image: image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=300&q=80',
+      };
+      const nextItems = [...sessionItems, newItem];
+      setSessionItems(nextItems);
+      persistDraft(nextItems);
+      setDraftToast(`"${name}" masuk ke Draf ${grNumber}. Belum tampil di Kasir POS sebelum Posting.`);
+      setTimeout(() => setDraftToast(null), 4500);
+
+      // Barang tanpa barcode pabrikan -> langsung tawarkan cetak label stiker
+      if (isInternalBarcode(finalId)) {
+        setLabelCopies(Math.max(1, Math.ceil(Number(qty))));
+        setLabelProduct({ id: finalId, barcode: finalId, sku, name, sellingPrice: Number(sellingPrice) });
+      }
     }
     
     resetForm();
+  };
+
+  // ===== SIMPAN DRAF =====
+  // Satu No. GR = satu draf (simpan ulang = perbarui, tidak dobel). Draf kosong dihapus.
+  const persistDraft = (items: any[]) => {
+    const others = readDrafts().filter(d => d.grNumber !== grNumber);
+    const next = items.length > 0
+      ? [...others, { draftId: 'DRAFT-' + Date.now(), savedAt: new Date().toISOString(), grNumber, items }]
+      : others;
+    localStorage.setItem('grDrafts', JSON.stringify(next));
+    setDrafts(next);
+  };
+
+  const handleSaveDraft = () => {
+    persistDraft(sessionItems);
+    setDraftToast(`Draf ${grNumber} berhasil disimpan (${sessionItems.length} item) — buka lewat tombol "Draf Tersimpan"`);
+    setTimeout(() => setDraftToast(null), 4500);
+  };
+
+  // Semua item draf (datar), lengkap dengan info draf asalnya
+  const draftItems: any[] = drafts
+    .slice()
+    .sort((a, b) => b.savedAt.localeCompare(a.savedAt))
+    .flatMap(d => (d.items || []).map((it: any) => ({ ...it, grNumber: d.grNumber, draftId: d.draftId, savedAt: d.savedAt })));
+
+  const toggleSelect = (id: string) =>
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+
+  const openReviewSingle = (item: any) => { setReviewMode('single'); setReviewItems([item]); };
+  const openReviewSelected = () => {
+    setReviewMode('multi');
+    setReviewItems(draftItems.filter(i => selectedIds.includes(i.id)));
+  };
+
+  // Simpan hasil edit item draf (mis. salah input harga). ID/barcode tidak berubah.
+  const handleSaveDraftItem = (updated: any) => {
+    const fields = {
+      name: updated.name,
+      sku: updated.sku,
+      category: updated.category,
+      unit: updated.unit,
+      qty: Number(updated.qty),
+      minStock: Number(updated.minStock || 0),
+      purchasePrice: Number(updated.purchasePrice || 0),
+      sellingPrice: Number(updated.sellingPrice),
+      wholesalePrice: Number(updated.wholesalePrice || 0),
+      image: updated.image || undefined,
+    };
+    const next = readDrafts().map(d => ({
+      ...d,
+      items: (d.items || []).map((i: any) => i.id === updated.id ? { ...i, ...fields } : i),
+    }));
+    localStorage.setItem('grDrafts', JSON.stringify(next));
+    setDrafts(next);
+    const active = next.find(d => d.grNumber === grNumber);
+    setSessionItems(active ? active.items : []);
+    setReviewItems(prev => prev ? prev.map(i => i.id === updated.id ? { ...i, ...fields } : i) : prev);
+  };
+
+  // Hapus satu item dari draf (draf yang kosong ikut dihapus)
+  const handleRemoveDraftItem = (itemId: string) => {
+    if (!window.confirm('Hapus item ini dari draf? Item belum masuk stok dan akan hilang.')) return;
+    const next = readDrafts()
+      .map(d => ({ ...d, items: (d.items || []).filter((i: any) => i.id !== itemId) }))
+      .filter(d => d.items.length > 0);
+    localStorage.setItem('grDrafts', JSON.stringify(next));
+    setDrafts(next);
+    setSelectedIds(prev => prev.filter(x => x !== itemId));
+    const active = next.find(d => d.grNumber === grNumber);
+    setSessionItems(active ? active.items : []);
+  };
+
+  // Terapkan item ke stok (stok bertambah / produk baru muncul di Kasir POS)
+  const applyItemsToStock = (items: any[], docNo: string) => {
+    const mutationLines: { productId: string; qty: number; purchasePrice: number; name: string; unit: string }[] = [];
+    items.forEach(item => {
+      // Item draf lama (sebelum fitur ini) sudah pernah masuk stok -> jangan ditambah dua kali
+      if (!item.pending) return;
+      const live = useInventoryStore.getState().products;
+      const existing = live.find(p => p.id === item.id || p.barcode === item.id);
+      const qtyIn = Number(item.qty);
+      mutationLines.push({ productId: existing ? existing.id : item.id, qty: qtyIn, purchasePrice: Number(item.purchasePrice), name: item.name, unit: item.unit });
+      if (existing) {
+        // Produk sudah ada -> tambah stok, HPP Moving Average
+        const newTotal = existing.stock + qtyIn;
+        const avg = newTotal > 0
+          ? Math.round(((existing.stock * existing.purchasePrice) + (qtyIn * Number(item.purchasePrice))) / newTotal)
+          : Number(item.purchasePrice);
+        updateProduct(existing.id, { ...existing, stock: newTotal, purchasePrice: avg });
+      } else {
+        addProduct({
+          id: item.id,
+          sku: item.sku,
+          barcode: item.barcode || item.id,
+          name: item.name,
+          category: item.category,
+          location: item.location || 'Gudang Utama',
+          unit: item.unit,
+          stock: qtyIn,
+          baseUnitMultiplier: 1,
+          purchasePrice: Number(item.purchasePrice),
+          sellingPrice: Number(item.sellingPrice),
+          wholesalePrice: Number(item.wholesalePrice || 0),
+          minStock: Number(item.minStock || 0),
+          image: item.image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=300&q=80',
+        });
+      }
+    });
+    // Mutasi stok: Barang Masuk (IN) per dokumen GR
+    recordStockMutation('IN', docNo, mutationLines, 'Penerimaan Barang (GR)');
+  };
+
+  const writePostedLog = (ref: string, items: any[]) => {
+    const log = {
+      grNumber: ref,
+      postedAt: new Date().toISOString(),
+      items,
+      totalItems: items.length,
+      totalValue: items.reduce((sum, i) => sum + (Number(i.purchasePrice) * Number(i.qty)), 0),
+    };
+    const existingLogs: any[] = JSON.parse(localStorage.getItem('grPosted') || '[]');
+    existingLogs.push(log);
+    localStorage.setItem('grPosted', JSON.stringify(existingLogs));
+  };
+
+  // Posting dari drawer (item terpilih saja, bisa dari beberapa draf)
+  const handlePostFromDrawer = (items: any[]): string => {
+    const ref = makeGrNumber();
+    applyItemsToStock(items, ref);
+    writePostedLog(ref, items);
+
+    const ids = new Set(items.map(i => i.id));
+    const next = readDrafts()
+      .map(d => ({ ...d, items: (d.items || []).filter((i: any) => !ids.has(i.id)) }))
+      .filter(d => d.items.length > 0);
+    localStorage.setItem('grDrafts', JSON.stringify(next));
+    setDrafts(next);
+    setSelectedIds(prev => prev.filter(id => !ids.has(id)));
+    const active = next.find(d => d.grNumber === grNumber);
+    setSessionItems(active ? active.items : []);
+    return ref;
+  };
+
+  // ===== KONFIRMASI & POSTING (seluruh sesi aktif, tombol di header) =====
+  // Di sinilah stok benar-benar bertambah dan produk baru muncul di Kasir POS.
+  const handlePosting = () => {
+    applyItemsToStock(sessionItems, grNumber);
+
+    setIsPosted(true);
+    writePostedLog(grNumber, sessionItems);
+    // Draf dengan No. GR ini sudah diposting -> hapus dari daftar draf
+    const remaining = readDrafts().filter(d => d.grNumber !== grNumber);
+    localStorage.setItem('grDrafts', JSON.stringify(remaining));
+    setDrafts(remaining);
   };
 
   const handleEditClick = (p: any) => {
@@ -145,8 +367,7 @@ const StockManagement: React.FC = () => {
     setWholesalePrice(p.wholesalePrice || 0);
     setMinStock(p.minStock || 0);
     setImage(p.image || '');
-    // Scroll to top
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    setIsFormOpen(true); // Buka popup
   };
 
   const formatIDR = (num: number) => {
@@ -179,8 +400,26 @@ const StockManagement: React.FC = () => {
       // Harga jual tidak diubah otomatis
     });
 
+    // Mutasi stok: Barang Masuk (IN) dari restock
+    recordStockMutation(
+      'IN',
+      makeDocNo('RST'),
+      [{ productId: restockProduct.id, qty: addedQty, purchasePrice: newPrice, name: restockProduct.name, unit: restockProduct.unit }],
+      'Restock / Barang Masuk'
+    );
+
     setRestockProduct(null);
   };
+
+  // Jika kategori aktif sudah dihapus/diganti nama, kembali ke 'Semua'
+  const currentCategory = activeCategory === 'all' || categories.includes(activeCategory) ? activeCategory : 'all';
+
+  const filteredProducts = products.filter(p =>
+    (currentCategory === 'all' || p.category === currentCategory) &&
+    (p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+     p.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
+     p.id.toLowerCase().includes(searchQuery.toLowerCase()))
+  );
 
   return (
     <div className="bo-container">
@@ -192,149 +431,36 @@ const StockManagement: React.FC = () => {
           <p className="bo-page-subtitle">Input form cepat untuk penambahan stok masuk.</p>
         </div>
         <div className="bo-header-actions">
-          <button className="bo-btn bo-btn-secondary">
+          <button className="bo-btn bo-btn-secondary" onClick={() => { setDrafts(readDrafts()); setSelectedIds([]); setShowDraftModal(true); }}>
+            <FileText size={16} /> Draf Tersimpan
+            {draftItems.length > 0 && <span style={{ marginLeft: '4px', background: '#6b7280', color: 'white', borderRadius: '10px', padding: '1px 6px', fontSize: '11px' }}>{draftItems.length}</span>}
+          </button>
+          <button className="bo-btn bo-btn-secondary" onClick={handleSaveDraft} disabled={sessionItems.length === 0} style={{ opacity: sessionItems.length === 0 ? 0.5 : 1 }}>
             <Save size={16} /> Simpan Draf
           </button>
-          <button className="bo-btn bo-btn-primary">
-            <CheckCircle size={16} /> Konfirmasi & Posting
+          <button className="bo-btn bo-btn-primary" onClick={() => { setShowPostModal(true); setIsPosted(false); }} disabled={sessionItems.length === 0} style={{ opacity: sessionItems.length === 0 ? 0.5 : 1 }}>
+            <CheckCircle size={16} /> Konfirmasi &amp; Posting
           </button>
         </div>
       </div>
 
-      {/* Input Form */}
-      <div className="bo-card" style={{ flexShrink: 0 }}>
-        <div className="bo-card-header">
-          <h2 className="bo-card-title">
-            <div className="bo-card-title-indicator"></div>
-            Formulir Cepat Tambah Stok
-          </h2>
+      {/* Toast Simpan Draf */}
+      {draftToast && (
+        <div style={{
+          position: 'fixed', bottom: '24px', left: '50%', transform: 'translateX(-50%)',
+          backgroundColor: '#1a1a2e', color: 'white',
+          padding: '12px 24px', borderRadius: '999px',
+          display: 'flex', alignItems: 'center', gap: '10px',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
+          zIndex: 99999, animation: 'fadeInUp 0.25s ease',
+          fontSize: '14px', fontWeight: 600
+        }}>
+          <Save size={16} color="#4ade80" />
+          {draftToast}
         </div>
-        
-        <div className="bo-card-body bg-[#fafafa]">
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            <div className="bo-form-grid" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
-              <div className="bo-form-group" style={{ position: 'relative' }}>
-                <label className="bo-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  ID PRODUK (BARCODE)
-                  <button 
-                    type="button"
-                    onClick={() => setCameraScannerOpen(true)}
-                    style={{ background: 'none', border: 'none', color: '#10b981', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontWeight: 'bold' }}
-                  >
-                    <Camera size={14} /> Scan
-                  </button>
-                </label>
-                <input 
-                  type="text" 
-                  value={productId} 
-                  onChange={(e) => setProductId(e.target.value)} 
-                  onKeyDown={handleIdKeyDown}
-                  placeholder="Scan Barcode..." 
-                  className="bo-input" 
-                  style={{ backgroundColor: 'white' }} 
-                  autoFocus
-                />
-              </div>
-              <div className="bo-form-group">
-                <label className="bo-label">SKU BARANG</label>
-                <input type="text" value={sku} onChange={(e) => setSku(e.target.value)} placeholder="Misal: SKU-123" className="bo-input" required />
-              </div>
-              <div className="bo-form-group" style={{ gridColumn: 'span 2' }}>
-                <label className="bo-label">NAMA PRODUK</label>
-                <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Nama Barang Lengkap" className="bo-input" required />
-              </div>
-              <div className="bo-form-group">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                  <label className="bo-label" style={{ marginBottom: 0 }}>KATEGORI</label>
-                  <button type="button" onClick={() => setIsCategoryModalOpen(true)} style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontWeight: 'bold' }}>
-                    <Settings size={12} /> Kelola
-                  </button>
-                </div>
-                <select value={category} onChange={(e) => setCategory(e.target.value)} className="bo-input" required>
-                  {categories.map(cat => (
-                    <option key={cat} value={cat}>{cat}</option>
-                  ))}
-                </select>
-                <div style={{ display: 'flex', gap: '4px', marginTop: '6px' }}>
-                  <input 
-                    type="text" 
-                    value={newCategory} 
-                    onChange={(e) => setNewCategory(e.target.value)} 
-                    placeholder="+ Kategori Baru" 
-                    className="bo-input" 
-                    style={{ padding: '4px 8px', fontSize: '12px', height: '28px' }} 
-                  />
-                  <button 
-                    type="button" 
-                    onClick={() => { 
-                      if(newCategory.trim()) { 
-                        addCategory(newCategory.trim()); 
-                        setCategory(newCategory.trim()); 
-                        setNewCategory(''); 
-                      } 
-                    }} 
-                    className="bo-btn bo-btn-primary" 
-                    style={{ padding: '4px 8px', fontSize: '12px', height: '28px' }}
-                  >
-                    Tambah
-                  </button>
-                </div>
-              </div>
-            </div>
-            
-            <div className="bo-form-grid" style={{ gridTemplateColumns: 'repeat(8, 1fr)' }}>
-              <div className="bo-form-group" style={{ gridColumn: 'span 1' }}>
-                <label className="bo-label">QTY</label>
-                <input type="number" min="0" step="any" value={qty} onChange={(e) => setQty(e.target.value === '' ? '' : Number(e.target.value))} className="bo-input" required />
-              </div>
-              <div className="bo-form-group" style={{ gridColumn: 'span 1' }}>
-                <label className="bo-label">SATUAN</label>
-                <select value={unit} onChange={(e) => setUnit(e.target.value)} className="bo-input" required>
-                  <option value="Pcs">Pcs</option>
-                  <option value="Kg">Kg</option>
-                  <option value="Gram">Gram</option>
-                  <option value="Liter">Liter</option>
-                  <option value="Pack">Pack</option>
-                  <option value="Dus">Dus</option>
-                </select>
-              </div>
-              <div className="bo-form-group" style={{ gridColumn: 'span 1' }}>
-                <label className="bo-label">MIN STOK</label>
-                <input type="number" min="0" value={minStock} onChange={(e) => setMinStock(e.target.value === '' ? '' : Number(e.target.value))} placeholder="Peringatan" className="bo-input" />
-              </div>
-              <div className="bo-form-group" style={{ gridColumn: 'span 1' }}>
-                <label className="bo-label">HARGA BELI</label>
-                <input type="number" min="0" value={purchasePrice} onChange={(e) => setPurchasePrice(e.target.value === '' ? '' : Number(e.target.value))} className="bo-input" />
-              </div>
-              <div className="bo-form-group" style={{ gridColumn: 'span 1' }}>
-                <label className="bo-label">HARGA JUAL</label>
-                <input type="number" min="0" value={sellingPrice} onChange={(e) => setSellingPrice(e.target.value === '' ? '' : Number(e.target.value))} className="bo-input" required />
-              </div>
-              <div className="bo-form-group" style={{ gridColumn: 'span 1' }}>
-                <label className="bo-label">HARGA GROSIR</label>
-                <input type="number" min="0" value={wholesalePrice} onChange={(e) => setWholesalePrice(e.target.value === '' ? '' : Number(e.target.value))} className="bo-input" />
-              </div>
-              <div className="bo-form-group" style={{ gridColumn: 'span 2' }}>
-                <label className="bo-label">URL GAMBAR</label>
-                <input type="text" value={image} onChange={(e) => setImage(e.target.value)} placeholder="https://..." className="bo-input" />
-              </div>
-            </div>
+      )}
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '8px', gap: '8px' }}>
-              {editingId && (
-                <button type="button" className="bo-btn bo-btn-secondary" onClick={resetForm}>
-                  Batal
-                </button>
-              )}
-              <button type="submit" className="bo-btn bo-btn-primary">
-                {editingId ? <Save size={18} /> : <Plus size={18} />} 
-                {editingId ? 'Simpan Perubahan' : 'Tambahkan ke Daftar'}
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-
+      {/* Tabel sekarang langsung muncul di bawah header - form dipindah ke popup */}
       {/* Data Table */}
       <div className="bo-card" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, marginBottom: 0 }}>
         <div className="bo-card-header" style={{ flexShrink: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
@@ -344,21 +470,51 @@ const StockManagement: React.FC = () => {
               Rincian Barang Diterima
             </h3>
             <span className="bo-badge bo-badge-red" style={{ backgroundColor: 'var(--primary)', color: 'white' }}>
-              {products.length} Item
+              {filteredProducts.length} Item
             </span>
           </div>
           
-          <div style={{ position: 'relative', width: '250px', maxWidth: '100%' }}>
-            <Search size={16} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }} />
-            <input
-              type="text"
-              placeholder="Cari nama, SKU, atau ID..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="bo-input"
-              style={{ paddingLeft: '32px', backgroundColor: '#f9fafb', border: '1px solid #e5e7eb', height: '36px' }}
-            />
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <div style={{ position: 'relative', width: '220px' }}>
+              <Search size={16} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }} />
+              <input
+                type="text"
+                placeholder="Cari nama, SKU, atau ID..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="bo-input"
+                style={{ paddingLeft: '32px', backgroundColor: '#f9fafb', border: '1px solid #e5e7eb', height: '36px' }}
+              />
+            </div>
+            <button
+              className="bo-btn bo-btn-primary"
+              onClick={() => { resetForm(); setIsFormOpen(true); }}
+              style={{ whiteSpace: 'nowrap', height: '36px', display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              <Plus size={16} /> Tambah Produk Baru
+            </button>
           </div>
+        </div>
+
+        {/* Filter Kategori (dinamis) */}
+        <div className="categories-bar" style={{ flexShrink: 0 }}>
+          <button
+            className={`cat-btn ${currentCategory === 'all' ? 'active' : ''}`}
+            onClick={() => setActiveCategory('all')}
+          >
+            <LayoutGrid size={16} /> SEMUA (ALL)
+            <span style={{ opacity: 0.75, fontSize: '0.75rem' }}>{products.length}</span>
+          </button>
+          {categories.map(cat => (
+            <button
+              key={cat}
+              className={`cat-btn ${currentCategory === cat ? 'active' : ''}`}
+              onClick={() => setActiveCategory(cat)}
+            >
+              <Package size={16} /> {cat.toUpperCase()}
+              <span style={{ opacity: 0.75, fontSize: '0.75rem' }}>{products.filter(p => p.category === cat).length}</span>
+            </button>
+          ))}
         </div>
         <div className="bo-table-container">
           <table className="bo-table">
@@ -377,13 +533,7 @@ const StockManagement: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {products
-                .filter(p => 
-                  p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                  p.sku.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                  p.id.toLowerCase().includes(searchQuery.toLowerCase())
-                )
-                .map(p => (
+              {filteredProducts.map(p => (
                 <tr key={p.id}>
                   <td className="bo-table-sku" style={{ color: '#6b7280' }}>{p.id}</td>
                   <td className="bo-table-sku">{p.sku}</td>
@@ -422,6 +572,7 @@ const StockManagement: React.FC = () => {
                   </td>
                   <td style={{ textAlign: 'center', display: 'flex', gap: '8px', justifyContent: 'center' }}>
                     <button className="bo-action-btn" title="Restock / Barang Masuk" onClick={() => openRestockModal(p)} style={{ color: '#10b981' }}><ArrowDownToLine size={16} /></button>
+                    <button className="bo-action-btn" title="Cetak Label Barcode" onClick={() => { setLabelCopies(1); setLabelProduct(p); }} style={{ color: '#2563eb' }}><Printer size={16} /></button>
                     <button className="bo-action-btn" title="Edit Master Data" onClick={() => handleEditClick(p)}><Edit2 size={16} /></button>
                     <button className="bo-action-btn" title="Hapus Produk" onClick={() => deleteProduct(p.id)}><Trash2 size={16} /></button>
                   </td>
@@ -656,31 +807,479 @@ const StockManagement: React.FC = () => {
         </div>
       )}
 
+      {/* ===== DAFTAR DRAF TERSIMPAN (per item, dengan ceklist) ===== */}
+      {showDraftModal && (() => {
+        const selectable = draftItems.filter(i => i.pending);
+        const allSelected = selectable.length > 0 && selectable.every(i => selectedIds.includes(i.id));
+        return (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10001 }}>
+          <div style={{ backgroundColor: 'white', borderRadius: '14px', padding: '22px', width: '680px', maxWidth: '94%', maxHeight: '85vh', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 40px rgba(0,0,0,0.25)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+              <h3 style={{ margin: 0, fontSize: '17px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <FileText size={18} color="var(--primary)" /> Draf Tersimpan
+                <span style={{ fontSize: '12px', color: '#6b7280', fontWeight: 500 }}>({draftItems.length} item)</span>
+              </h3>
+              <button onClick={() => setShowDraftModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+                <X size={20} color="#6b7280" />
+              </button>
+            </div>
+
+            {/* Bar pilih / aksi */}
+            {selectable.length > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', padding: '8px 12px', background: selectedIds.length > 0 ? '#fff1f0' : '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '10px', marginBottom: '10px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={() => setSelectedIds(allSelected ? [] : selectable.map(i => i.id))}
+                  />
+                  {selectedIds.length > 0 ? `${selectedIds.length} item dipilih` : 'Pilih semua'}
+                </label>
+                {selectedIds.length > 0 && (
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    <button className="bo-btn bo-btn-secondary" style={{ padding: '4px 10px', fontSize: '12px' }} onClick={() => setSelectedIds([])}>Batal pilih</button>
+                    <button className="bo-btn bo-btn-primary" style={{ padding: '4px 12px', fontSize: '12px' }} onClick={openReviewSelected}>
+                      Lanjutkan ({selectedIds.length})
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div style={{ overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {draftItems.length === 0 && (
+                <div style={{ textAlign: 'center', color: '#9ca3af', padding: '30px 0', fontSize: '14px' }}>
+                  Belum ada draf. Tambahkan produk lewat "Tambah Produk Baru".
+                </div>
+              )}
+              {draftItems.map(item => {
+                const checked = selectedIds.includes(item.id);
+                return (
+                  <div key={item.draftId + ':' + item.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', border: '1px solid ' + (checked ? 'var(--primary)' : '#e5e7eb'), borderRadius: '10px', padding: '10px 12px', background: checked ? '#fff7f6' : 'white' }}>
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      disabled={!item.pending}
+                      title={item.pending ? 'Pilih item' : 'Item lama: sudah masuk stok'}
+                      onChange={() => toggleSelect(item.id)}
+                    />
+                    <div style={{ width: '44px', height: '44px', flexShrink: 0, borderRadius: '8px', overflow: 'hidden', background: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {item.image
+                        ? <img src={item.image} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                        : <Package size={20} color="#9ca3af" />}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 800, fontSize: '14px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.name}</div>
+                      <div style={{ fontSize: '12px', color: '#6b7280' }}>
+                        {item.sku} &bull; {item.qty} {item.unit} &bull; Rp {(Number(item.purchasePrice || 0) * Number(item.qty || 0)).toLocaleString('id-ID')}
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#9ca3af' }}>
+                        {item.grNumber}{item.grNumber === grNumber && <span style={{ marginLeft: '6px', color: 'var(--primary)', fontWeight: 700 }}>SESI AKTIF</span>} &bull; {new Date(item.savedAt).toLocaleString('id-ID')}
+                        {!item.pending && <span style={{ marginLeft: '6px', color: '#92400e', fontWeight: 700 }}>Sudah masuk stok</span>}
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                      <button className="bo-btn bo-btn-secondary" style={{ padding: '4px 12px', fontSize: '12px' }} onClick={() => openReviewSingle(item)}>
+                        Lihat
+                      </button>
+                      <button className="bo-action-btn" title="Hapus item dari draf" style={{ color: '#ef4444' }} onClick={() => handleRemoveDraftItem(item.id)}>
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+        );
+      })()}
+
+      {/* ===== DRAWER KANAN: DETAIL / REVIEW ITEM DRAF ===== */}
+      {reviewItems && (
+        <DraftReviewDrawer
+          items={reviewItems}
+          mode={reviewMode}
+          categories={categories}
+          onSaveItem={handleSaveDraftItem}
+          onClose={() => setReviewItems(null)}
+          onRemoveItem={(id) => {
+            const next = reviewItems.filter(i => i.id !== id);
+            setSelectedIds(prev => prev.filter(x => x !== id));
+            setReviewItems(next.length > 0 ? next : null);
+          }}
+          onPost={handlePostFromDrawer}
+        />
+      )}
+
+      {/* CETAK LABEL BARCODE */}
+      {labelProduct && (
+        <BarcodeLabelModal
+          product={labelProduct}
+          initialCopies={labelCopies}
+          onClose={() => setLabelProduct(null)}
+        />
+      )}
+
       {/* CAMERA SCANNER MODAL */}
       {cameraScannerOpen && (
         <BarcodeScannerCamera 
           onScan={(decodedText) => {
-            // Simulasi user mengetikkan text ke ID Produk lalu menekan Enter
             setProductId(decodedText);
-            
             const foundProduct = products.find(p => p.id === decodedText || p.barcode === decodedText);
             if (foundProduct) {
-              // Otomatis buka modal Restock
               openRestockModal(foundProduct);
-              setProductId(''); // Reset
+              setProductId('');
+              setCameraScannerOpen(false);
+              return foundProduct.name;
             } else {
-              // Not found, treat as new item
               setEditingId(null);
               setSku('');
               setName('');
               setQty(1);
+              setCameraScannerOpen(false);
+              return null;
             }
-            setCameraScannerOpen(false);
           }} 
           onClose={() => setCameraScannerOpen(false)} 
         />
       )}
+      {/* ===== DRAWER KANAN: FORM TAMBAH / EDIT PRODUK ===== */}
+      {isFormOpen && (
+        <div style={{
+          position: 'fixed', inset: 0,
+          backgroundColor: 'rgba(0,0,0,0.15)',
+          backdropFilter: 'blur(1px)',
+          display: 'flex', justifyContent: 'flex-end',
+          zIndex: 9998,
+          animation: `${drawerClosing ? 'fadeOut' : 'fadeIn'} 0.25s ease forwards`
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            width: '100%', maxWidth: '480px', height: '100%',
+            boxShadow: '-12px 0 40px rgba(0,0,0,0.25)',
+            display: 'flex', flexDirection: 'column',
+            animation: `${drawerClosing ? 'slideOutRight' : 'slideInRight'} 0.3s cubic-bezier(0.22,1,0.36,1) forwards`
+          }}>
+            {/* Drawer Header */}
+            <div style={{
+              background: 'linear-gradient(135deg, #1a0505 0%, #2d0a08 50%, #1a0505 100%)',
+              padding: '18px 24px',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              borderBottom: '1px solid rgba(218,41,28,0.3)',
+              flexShrink: 0
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{
+                  width: '36px', height: '36px', borderRadius: '10px',
+                  background: 'linear-gradient(135deg, #da291c, #b91c1c)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  boxShadow: '0 4px 12px rgba(218,41,28,0.4)'
+                }}>
+                  {editingId ? <Save size={18} color="white" /> : <Plus size={18} color="white" />}
+                </div>
+                <div>
+                  <div style={{ color: 'white', fontWeight: 800, fontSize: '16px' }}>
+                    {editingId ? 'Edit Data Produk' : 'Formulir Cepat Tambah Stok'}
+                  </div>
+                  <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '12px' }}>
+                    {editingId ? `ID: ${productId}` : 'Isi semua field yang diperlukan'}
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={closeDrawer}
+                style={{
+                  background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)',
+                  borderRadius: '8px', width: '34px', height: '34px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'pointer', color: 'rgba(255,255,255,0.7)', transition: 'all 0.15s'
+                }}
+                onMouseOver={e => { e.currentTarget.style.background = 'rgba(218,41,28,0.3)'; e.currentTarget.style.color = 'white'; }}
+                onMouseOut={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; e.currentTarget.style.color = 'rgba(255,255,255,0.7)'; }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit} style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+              {/* Drawer Body (scrollable) */}
+              <div style={{ flex: 1, overflowY: 'auto', padding: '22px 24px', backgroundColor: '#fafafa', display: 'flex', flexDirection: 'column', gap: '18px' }}>
+
+                {/* Info Produk */}
+                <div className="bo-form-group" style={{ position: 'relative' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                    <label className="bo-label" style={{ marginBottom: 0 }}>ID PRODUK (BARCODE)</label>
+                    {!editingId && (
+                      <button
+                        type="button"
+                        onClick={() => setProductId(generateInternalBarcode(products))}
+                        title="Barang tidak punya barcode? Buat kode unik otomatis"
+                        style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}
+                      >
+                        ⚡ Buat Otomatis
+                      </button>
+                    )}
+                  </div>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type="text" value={productId}
+                      onChange={(e) => setProductId(e.target.value)}
+                      onKeyDown={handleIdKeyDown}
+                      placeholder="Scan Barcode..."
+                      className="bo-input"
+                      style={{ backgroundColor: 'white', paddingRight: '40px', fontFamily: 'monospace', fontSize: '13px', letterSpacing: '0.5px' }}
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setCameraScannerOpen(true)}
+                      title="Buka Kamera Scanner"
+                      style={{
+                        position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)',
+                        background: 'none', border: 'none', cursor: 'pointer',
+                        color: '#10b981', display: 'flex', alignItems: 'center', padding: '4px'
+                      }}
+                    >
+                      <Camera size={16} />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="bo-form-group">
+                  <label className="bo-label">NAMA PRODUK</label>
+                  <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Nama Barang Lengkap" className="bo-input" style={{ backgroundColor: 'white' }} required />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                  <div className="bo-form-group">
+                    <label className="bo-label">SKU BARANG</label>
+                    <input type="text" value={sku} onChange={(e) => setSku(e.target.value)} placeholder="Misal: SKU-123" className="bo-input" style={{ backgroundColor: 'white' }} required />
+                  </div>
+                  <div className="bo-form-group">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                      <label className="bo-label" style={{ marginBottom: 0 }}>KATEGORI</label>
+                      <button type="button" onClick={() => setIsCategoryModalOpen(true)} style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontWeight: 'bold' }}>
+                        <Settings size={12} /> Kelola
+                      </button>
+                    </div>
+                    <select value={category} onChange={(e) => setCategory(e.target.value)} className="bo-input" style={{ backgroundColor: 'white' }} required>
+                      {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Stok */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '14px' }}>
+                  <div className="bo-form-group">
+                    <label className="bo-label">QTY</label>
+                    <input type="number" min="0" step="any" value={qty} onChange={(e) => setQty(e.target.value === '' ? '' : Number(e.target.value))} className="bo-input" style={{ backgroundColor: 'white' }} required />
+                  </div>
+                  <div className="bo-form-group">
+                    <label className="bo-label">SATUAN</label>
+                    <select value={unit} onChange={(e) => setUnit(e.target.value)} className="bo-input" style={{ backgroundColor: 'white' }} required>
+                      <option value="Pcs">Pcs</option>
+                      <option value="Kg">Kg</option>
+                      <option value="Gram">Gram</option>
+                      <option value="Liter">Liter</option>
+                      <option value="Pack">Pack</option>
+                      <option value="Dus">Dus</option>
+                    </select>
+                  </div>
+                  <div className="bo-form-group">
+                    <label className="bo-label">MIN STOK</label>
+                    <input type="number" min="0" value={minStock} onChange={(e) => setMinStock(e.target.value === '' ? '' : Number(e.target.value))} placeholder="Alert" className="bo-input" style={{ backgroundColor: 'white' }} />
+                  </div>
+                </div>
+
+                {/* Harga */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '14px' }}>
+                  <div className="bo-form-group">
+                    <label className="bo-label">HARGA BELI</label>
+                    <input type="number" min="0" value={purchasePrice} onChange={(e) => setPurchasePrice(e.target.value === '' ? '' : Number(e.target.value))} className="bo-input" style={{ backgroundColor: 'white' }} />
+                  </div>
+                  <div className="bo-form-group">
+                    <label className="bo-label">HARGA JUAL</label>
+                    <input type="number" min="0" value={sellingPrice} onChange={(e) => setSellingPrice(e.target.value === '' ? '' : Number(e.target.value))} className="bo-input" style={{ backgroundColor: 'white' }} required />
+                  </div>
+                  <div className="bo-form-group">
+                    <label className="bo-label">HARGA GROSIR</label>
+                    <input type="number" min="0" value={wholesalePrice} onChange={(e) => setWholesalePrice(e.target.value === '' ? '' : Number(e.target.value))} className="bo-input" style={{ backgroundColor: 'white' }} />
+                  </div>
+                </div>
+
+                <div className="bo-form-group">
+                  <label className="bo-label">URL GAMBAR</label>
+                  <input type="text" value={image} onChange={(e) => setImage(e.target.value)} placeholder="https://..." className="bo-input" style={{ backgroundColor: 'white' }} />
+                </div>
+              </div>
+
+              {/* Footer Actions (selalu terlihat di bawah) */}
+              <div style={{ flexShrink: 0, display: 'flex', justifyContent: 'flex-end', gap: '10px', padding: '14px 24px', borderTop: '1px solid #e5e7eb', backgroundColor: 'white' }}>
+                <button type="button" className="bo-btn bo-btn-secondary" onClick={closeDrawer}>
+                  Batal
+                </button>
+                <button type="submit" className="bo-btn bo-btn-primary" style={{ minWidth: '160px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                  {editingId ? <Save size={16} /> : <Plus size={16} />}
+                  {editingId ? 'Simpan Perubahan' : '+ Tambahkan ke Daftar'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      <style>{`
+        @keyframes fadeIn { from { opacity:0 } to { opacity:1 } }
+        @keyframes fadeOut { from { opacity:1 } to { opacity:0 } }
+        @keyframes slideInRight {
+          from { transform: translateX(100%); }
+          to   { transform: translateX(0); }
+        }
+        @keyframes slideOutRight {
+          from { transform: translateX(0); }
+          to   { transform: translateX(100%); }
+        }
+        @keyframes slideUp {
+          from { opacity:0; transform: translateY(20px) scale(0.98); }
+          to   { opacity:1; transform: translateY(0) scale(1); }
+        }
+        @keyframes fadeInUp {
+          from { opacity:0; transform: translate(-50%, 12px); }
+          to   { opacity:1; transform: translate(-50%, 0); }
+        }
+        @keyframes scaleIn {
+          from { opacity:0; transform: scale(0.5); }
+          to   { opacity:1; transform: scale(1); }
+        }
+      `}</style>
+
+      {/* ===== MODAL: KONFIRMASI & POSTING ===== */}
+      {showPostModal && (
+        <div style={{
+          position: 'fixed', inset: 0,
+          backgroundColor: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 9997, animation: 'fadeIn 0.2s ease'
+        }}>
+          <div style={{
+            backgroundColor: 'white', borderRadius: '16px',
+            width: '96%', maxWidth: '680px',
+            boxShadow: '0 24px 60px rgba(0,0,0,0.25)',
+            overflow: 'hidden', animation: 'slideUp 0.25s cubic-bezier(0.34,1.4,0.64,1)'
+          }}>
+            {/* Header */}
+            <div style={{
+              background: 'linear-gradient(135deg, #1a0505, #2d0a08)',
+              padding: '18px 24px',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              borderBottom: '1px solid rgba(218,41,28,0.3)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'linear-gradient(135deg, #da291c, #b91c1c)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <FileText size={18} color="white" />
+                </div>
+                <div>
+                  <div style={{ color: 'white', fontWeight: 800, fontSize: '15px' }}>Konfirmasi Penerimaan Stok</div>
+                  <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: '12px' }}>Ref: <strong style={{ color: 'rgba(255,255,255,0.7)' }}>{grNumber}</strong></div>
+                </div>
+              </div>
+              {!isPosted && (
+                <button onClick={() => setShowPostModal(false)} style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '8px', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'rgba(255,255,255,0.7)' }}>
+                  <X size={16} />
+                </button>
+              )}
+            </div>
+
+            {/* Body */}
+            <div style={{ padding: '24px' }}>
+              {!isPosted ? (
+                <>
+                  {/* Info bar */}
+                  <div style={{ display: 'flex', gap: '12px', marginBottom: '20px' }}>
+                    {[
+                      { label: 'Total Item', value: sessionItems.length + ' produk', color: '#1e40af', bg: '#eff6ff' },
+                      { label: 'Total Qty Masuk', value: sessionItems.reduce((s,i) => s + Number(i.qty), 0) + ' unit', color: '#065f46', bg: '#ecfdf5' },
+                      { label: 'Total Nilai Beli', value: 'Rp ' + sessionItems.reduce((s,i) => s + Number(i.purchasePrice) * Number(i.qty), 0).toLocaleString('id-ID'), color: '#92400e', bg: '#fffbeb' },
+                    ].map(card => (
+                      <div key={card.label} style={{ flex: 1, padding: '12px 16px', backgroundColor: card.bg, borderRadius: '10px', textAlign: 'center' }}>
+                        <div style={{ fontSize: '11px', color: '#6b7280', marginBottom: '4px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{card.label}</div>
+                        <div style={{ fontSize: '18px', fontWeight: 800, color: card.color }}>{card.value}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Item list */}
+                  <div style={{ maxHeight: '240px', overflowY: 'auto', border: '1px solid #e5e7eb', borderRadius: '10px', marginBottom: '20px' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                      <thead>
+                        <tr style={{ backgroundColor: '#f9fafb' }}>
+                          {['Nama Produk', 'Kategori', 'Qty', 'Harga Beli', 'Subtotal'].map(h => (
+                            <th key={h} style={{ padding: '10px 12px', textAlign: h === 'Nama Produk' ? 'left' : 'right', fontWeight: 700, color: '#374151', borderBottom: '1px solid #e5e7eb', whiteSpace: 'nowrap' }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sessionItems.map((item, i) => (
+                          <tr key={i} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                            <td style={{ padding: '10px 12px', fontWeight: 600 }}>{item.name}</td>
+                            <td style={{ padding: '10px 12px', textAlign: 'right', color: '#6b7280' }}>{item.category}</td>
+                            <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700 }}>{item.qty} {item.unit}</td>
+                            <td style={{ padding: '10px 12px', textAlign: 'right', color: '#374151' }}>Rp {Number(item.purchasePrice).toLocaleString('id-ID')}</td>
+                            <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 800, color: 'var(--primary)' }}>Rp {(Number(item.purchasePrice) * Number(item.qty)).toLocaleString('id-ID')}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Warning */}
+                  <div style={{ display: 'flex', gap: '8px', padding: '12px 16px', backgroundColor: '#fef3c7', borderRadius: '8px', marginBottom: '20px', border: '1px solid #fde68a' }}>
+                    <AlertTriangle size={16} color="#92400e" style={{ flexShrink: 0, marginTop: '1px' }} />
+                    <span style={{ fontSize: '13px', color: '#92400e' }}>
+                      Setelah posting, stok bertambah dan produk baru langsung tampil di Kasir POS. Pastikan semua item sudah sesuai sebelum melanjutkan.
+                    </span>
+                  </div>
+
+                  {/* Actions */}
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                    <button className="bo-btn bo-btn-secondary" onClick={() => setShowPostModal(false)}>Batal</button>
+                    <button
+                      className="bo-btn bo-btn-primary"
+                      style={{ minWidth: '180px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                      onClick={handlePosting}
+                    >
+                      <CheckCircle size={16} /> Posting Sekarang
+                    </button>
+                  </div>
+                </>
+              ) : (
+                /* SUCCESS SCREEN */
+                <div style={{ textAlign: 'center', padding: '32px 24px' }}>
+                  <div style={{ width: '72px', height: '72px', borderRadius: '50%', background: 'linear-gradient(135deg, #22c55e, #16a34a)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', boxShadow: '0 8px 24px rgba(34,197,94,0.4)', animation: 'scaleIn 0.4s cubic-bezier(0.34,1.56,0.64,1)' }}>
+                    <CheckCircle size={36} color="white" />
+                  </div>
+                  <div style={{ fontSize: '22px', fontWeight: 800, color: '#111827', marginBottom: '6px' }}>Posting Berhasil!</div>
+                  <div style={{ fontSize: '14px', color: '#6b7280', marginBottom: '4px' }}>Nomor GR: <strong style={{ color: '#1e40af' }}>{grNumber}</strong></div>
+                  <div style={{ fontSize: '13px', color: '#9ca3af', marginBottom: '24px' }}>
+                    {sessionItems.length} produk • {new Date().toLocaleString('id-ID')}
+                  </div>
+                  <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+                    <button className="bo-btn bo-btn-secondary" onClick={() => { setShowPostModal(false); setSessionItems([]); setGrNumber(makeGrNumber()); }}>
+                      <X size={16} /> Tutup &amp; Bersihkan Sesi
+                    </button>
+                    <button className="bo-btn bo-btn-primary" onClick={() => window.print()} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Printer size={16} /> Cetak GR
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
+
   );
 };
 
