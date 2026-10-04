@@ -55,6 +55,12 @@ async function verifikasiAplikasi() {
   
   // Atur jadwal pengecekan berikutnya (Smart Polling)
   if (checkTimer) clearTimeout(checkTimer);
+  
+  // JANGAN jalankan interval jika sedang di dalam proses Vite Build
+  if (process.argv.some(arg => arg.includes('vite') && arg.includes('build'))) {
+    return;
+  }
+
   if (!lisensi.allowed) {
     // Jika masih dikunci/pending, cek setiap 5 detik agar bisa otomatis terbuka saat diaktivasi
     checkTimer = setTimeout(verifikasiAplikasi, 5000);
@@ -62,10 +68,15 @@ async function verifikasiAplikasi() {
     // Jika sudah aktif, cukup cek ulang 3 jam sekali
     checkTimer = setTimeout(verifikasiAplikasi, 3 * 60 * 60 * 1000);
   }
+  
+  // Cegah timer ini menahan proses Node.js agar bisa exit (penting untuk vite build)
+  if (checkTimer && checkTimer.unref) checkTimer.unref();
 }
 
-// Panggil fungsi saat aplikasi mulai
-verifikasiAplikasi(); 
+// Panggil fungsi saat aplikasi mulai, KECUALI jika sedang proses build
+if (!process.argv.some(arg => arg.includes('vite') && arg.includes('build'))) {
+  verifikasiAplikasi(); 
+}
 
 export function licenseMiddleware() {
   return (req, res, next) => {
