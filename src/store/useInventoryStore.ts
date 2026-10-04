@@ -4,6 +4,9 @@ import type { Product, StockTransaction } from '../types';
 
 interface InventoryState {
   products: Product[];
+  isLoading: boolean;
+  error: string | null;
+  fetchProducts: () => Promise<void>;
   transactions: StockTransaction[];
   categories: string[];
   addProduct: (product: Product) => void;
@@ -21,38 +24,37 @@ interface InventoryState {
 export const useInventoryStore = create<InventoryState>()(
   persist(
     (set) => ({
-      products: [
-        {
-          id: 'p1',
-          sku: 'SKU-PTY-100G',
-          barcode: '899277531002',
-          name: 'Patty Daging Sapi Premium 100gr',
-          category: 'Frozen Meat',
-          location: 'Chiller #2',
-          unit: 'Dus',
-          stock: 50,
-          minStock: 10,
-          baseUnitMultiplier: 40,
-          purchasePrice: 350000,
-          sellingPrice: 12152,
-          image: 'https://images.unsplash.com/photo-1607623814075-e51df1bdc82f?auto=format&fit=crop&w=300&q=80',
-        },
-        {
-          id: 'p2',
-          sku: 'SKU-CHX-MRN',
-          barcode: '899452109823',
-          name: 'Ayam Potong Marinasi Crispy',
-          category: 'Poultry',
-          location: 'Chiller Utama',
-          unit: 'Pack',
-          stock: 120,
-          minStock: 20,
-          baseUnitMultiplier: 10,
-          purchasePrice: 125000,
-          sellingPrice: 15000,
-          image: 'https://images.unsplash.com/photo-1604908176997-125f25cc6f3d?auto=format&fit=crop&w=300&q=80',
+      products: [],
+      isLoading: false,
+      error: null,
+      fetchProducts: async () => {
+        set({ isLoading: true, error: null });
+        try {
+          const res = await fetch('/api/saas/products', {
+            headers: { 'x-tenant-id': 'TID-DEMO-123' } // Hardcode for now, later get from auth store
+          });
+          if (!res.ok) throw new Error('Gagal mengambil data produk dari server');
+          const data = await res.json();
+          // Map schema from Prisma to Frontend types
+          const mapped = data.map((p: any) => ({
+            id: p.id,
+            sku: p.sku || '',
+            barcode: p.barcode || '',
+            name: p.name,
+            category: p.category?.name || 'Uncategorized',
+            location: '',
+            unit: 'Pcs',
+            stock: p.stock,
+            minStock: p.min_stock,
+            purchasePrice: p.purchase_price,
+            sellingPrice: p.selling_price,
+            image: p.image_url || 'https://via.placeholder.com/150',
+          }));
+          set({ products: mapped, isLoading: false });
+        } catch (err: any) {
+          set({ error: err.message, isLoading: false });
         }
-      ],
+      },
       transactions: [],
       categories: ['Sembako', 'Combo', 'Rokok', 'Minuman'],
       addProduct: (product) => set((state) => ({ products: [...state.products, product] })),

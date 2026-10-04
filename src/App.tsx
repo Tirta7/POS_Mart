@@ -23,9 +23,18 @@ function App() {
   const { appName } = useSettingsStore();
   const { currentUser } = useAuthStore();
 
+  const { fetchProducts } = useInventoryStore();
+
   useEffect(() => {
     document.title = appName;
   }, [appName]);
+
+  // Fetch data dari API ketika user sudah login (Fase SaaS)
+  useEffect(() => {
+    if (currentUser) {
+      fetchProducts();
+    }
+  }, [currentUser]);
 
   // Real-time cross-tab synchronization
   useEffect(() => {

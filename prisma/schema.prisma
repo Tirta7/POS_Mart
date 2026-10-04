@@ -1,0 +1,95 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Tenant {
+  id                 String    @id @default(uuid())
+  name               String
+  vocml_license_key  String?
+  license_expired_at DateTime?
+  created_at         DateTime  @default(now())
+
+  users        User[]
+  products     Product[]
+  categories   Category[]
+  transactions Transaction[]
+
+  @@map("tenants")
+}
+
+model User {
+  id            String   @id @default(uuid())
+  tenant_id     String
+  username      String
+  password_hash String
+  role          String   @default("cashier")
+  created_at    DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenant_id], references: [id])
+
+  @@map("users")
+}
+
+model Category {
+  id        String @id @default(uuid())
+  tenant_id String
+  name      String
+
+  tenant   Tenant    @relation(fields: [tenant_id], references: [id])
+  products Product[]
+
+  @@map("categories")
+}
+
+model Product {
+  id             String  @id @default(uuid())
+  tenant_id      String
+  sku            String?
+  barcode        String?
+  name           String
+  category_id    String?
+  purchase_price Float   @default(0)
+  selling_price  Float   @default(0)
+  stock          Int     @default(0)
+  min_stock      Int     @default(0)
+  image_url      String?
+
+  tenant           Tenant            @relation(fields: [tenant_id], references: [id])
+  category         Category?         @relation(fields: [category_id], references: [id])
+  transactionItems TransactionItem[]
+
+  @@map("products")
+}
+
+model Transaction {
+  id             String   @id @default(uuid())
+  tenant_id      String
+  cashier_id     String
+  receipt_number String
+  total_amount   Float
+  payment_method String
+  created_at     DateTime @default(now())
+
+  tenant Tenant            @relation(fields: [tenant_id], references: [id])
+  items  TransactionItem[]
+
+  @@map("transactions")
+}
+
+model TransactionItem {
+  id             String @id @default(uuid())
+  transaction_id String
+  product_id     String
+  quantity       Int
+  price_at_time  Float
+  subtotal       Float
+
+  transaction Transaction @relation(fields: [transaction_id], references: [id])
+  product     Product     @relation(fields: [product_id], references: [id])
+
+  @@map("transaction_items")
+}

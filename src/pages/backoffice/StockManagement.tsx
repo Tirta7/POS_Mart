@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useInventoryStore } from '../../store/useInventoryStore';
+import { useSettingsStore } from '../../store/useSettingsStore';
 
 import { Plus, Save, CheckCircle, PackageCheck, Edit2, Trash2, X, Settings, ArrowDownToLine, Camera, Search, FileText, AlertTriangle, Printer, LayoutGrid, Package } from 'lucide-react';
 import BarcodeScannerCamera from '../../components/BarcodeScannerCamera';
@@ -14,6 +15,7 @@ const makeGrNumber = () => {
 };
 
 const StockManagement: React.FC = () => {
+  const { appName } = useSettingsStore();
   const { products, addProduct, deleteProduct, updateProduct, categories, addCategory, deleteCategory, editCategory } = useInventoryStore();
   
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -944,198 +946,211 @@ const StockManagement: React.FC = () => {
           onClose={() => setCameraScannerOpen(false)} 
         />
       )}
-      {/* ===== DRAWER KANAN: FORM TAMBAH / EDIT PRODUK ===== */}
+      {/* ===== IOS STYLE DRAWER: FORM TAMBAH / EDIT PRODUK ===== */}
       {isFormOpen && (
-        <div className="pf-overlay" style={{
+        <div className="ios-modal-overlay" style={{
           position: 'fixed', inset: 0,
-          backgroundColor: 'rgba(0,0,0,0.15)',
-          backdropFilter: 'blur(1px)',
-          display: 'flex', justifyContent: 'flex-end',
+          backgroundColor: 'rgba(0,0,0,0.4)',
+          display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
           zIndex: 9998,
           animation: `${drawerClosing ? 'fadeOut' : 'fadeIn'} 0.25s ease forwards`
         }}>
-          <div className={`pf-sheet${drawerClosing ? ' is-closing' : ''}`} style={{
-            backgroundColor: 'white',
-            width: '100%', maxWidth: '480px', height: '100%',
-            boxShadow: '-12px 0 40px rgba(0,0,0,0.25)',
-            display: 'flex', flexDirection: 'column',
-            animation: `${drawerClosing ? 'slideOutRight' : 'slideInRight'} 0.3s cubic-bezier(0.22,1,0.36,1) forwards`
-          }}>
-            {/* Drawer Header */}
-            <div className="pf-head" style={{
-              background: 'linear-gradient(135deg, #1a0505 0%, #2d0a08 50%, #1a0505 100%)',
-              padding: '18px 24px',
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              borderBottom: '1px solid rgba(218,41,28,0.3)',
-              flexShrink: 0
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
-                <div className="pf-head-icon" style={{
-                  width: '36px', height: '36px', borderRadius: '10px',
-                  background: 'linear-gradient(135deg, #da291c, #b91c1c)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  boxShadow: '0 4px 12px rgba(218,41,28,0.4)', flexShrink: 0
-                }}>
-                  {editingId ? <Save size={18} color="white" /> : <Plus size={18} color="white" />}
+          <div className={`ios-sheet${drawerClosing ? ' is-closing' : ''}`}>
+            {/* Grabber */}
+            <div style={{ display: 'flex', justifyContent: 'center', padding: '8px 0 4px' }}>
+              <div style={{ width: '40px', height: '5px', backgroundColor: '#d1d5db', borderRadius: '999px' }} />
+            </div>
+            
+            {/* Header */}
+            <div className="ios-sheet-header">
+              <div>
+                <div style={{ fontSize: '11px', fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  <span style={{ color: 'var(--primary)' }}>{appName}</span> &bull; Inventaris
                 </div>
-                <div style={{ minWidth: 0 }}>
-                  <div className="pf-title" style={{ color: 'white', fontWeight: 800, fontSize: '16px' }}>
-                    {editingId ? 'Edit Data Produk' : 'Formulir Cepat Tambah Stok'}
-                  </div>
-                  <div className="pf-subtitle" style={{ color: 'rgba(255,255,255,0.4)', fontSize: '12px' }}>
-                    {editingId ? `ID: ${productId}` : 'Isi semua field yang diperlukan'}
-                  </div>
+                <div style={{ fontSize: '20px', fontWeight: 800, color: '#111827', marginTop: '2px', letterSpacing: '-0.5px' }}>
+                  {editingId ? 'Edit Stok Barang' : 'Formulir Tambah Stok'}
                 </div>
               </div>
-              <button
-                type="button"
-                className="pf-close"
-                onClick={closeDrawer}
-                style={{
-                  background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)',
-                  borderRadius: '8px', width: '34px', height: '34px',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  cursor: 'pointer', color: 'rgba(255,255,255,0.7)', transition: 'all 0.15s'
-                }}
-                onMouseOver={e => { e.currentTarget.style.background = 'rgba(218,41,28,0.3)'; e.currentTarget.style.color = 'white'; }}
-                onMouseOut={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; e.currentTarget.style.color = 'rgba(255,255,255,0.7)'; }}
-              >
-                <X size={16} />
+              <button className="ios-close-btn" onClick={closeDrawer}>
+                <X size={18} />
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-              {/* Drawer Body (scrollable) */}
-              <div className="pf-body" style={{ flex: 1, overflowY: 'auto', padding: '22px 24px', backgroundColor: '#fafafa', display: 'flex', flexDirection: 'column', gap: '18px' }}>
-
-                {/* Info Produk */}
-                <div className="pf-section">Info Produk</div>
-                <div className="pf-group">
-                  <div className="bo-form-group" style={{ position: 'relative' }}>
-                    <div className="pf-labelbar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                      <label className="bo-label" style={{ marginBottom: 0 }}>ID Produk<span className="hide-mobile"> (Barcode)</span></label>
-                      {!editingId && (
-                        <button
-                          type="button"
-                          className="pf-mini-btn"
-                          onClick={() => setProductId(generateInternalBarcode(products))}
-                          title="Barang tidak punya barcode? Buat kode unik otomatis"
-                          style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}
-                        >
-                          ⚡<span className="pf-mini-text"> Buat Otomatis</span>
-                        </button>
-                      )}
-                    </div>
-                    <div className="pf-field" style={{ position: 'relative' }}>
-                      <input
-                        type="text" value={productId}
-                        onChange={(e) => setProductId(e.target.value)}
-                        onKeyDown={handleIdKeyDown}
-                        placeholder="Scan / ketik barcode"
-                        className="bo-input"
-                        style={{ backgroundColor: 'white', paddingRight: '40px', fontFamily: 'monospace', fontSize: '13px', letterSpacing: '0.5px' }}
-                        autoFocus={!(typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches)}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setCameraScannerOpen(true)}
-                        title="Buka Kamera Scanner"
-                        style={{
-                          position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)',
-                          background: 'none', border: 'none', cursor: 'pointer',
-                          color: '#10b981', display: 'flex', alignItems: 'center', padding: '4px'
-                        }}
-                      >
-                        <Camera size={16} />
+            <form onSubmit={handleSubmit} className="ios-sheet-body">
+              {/* SECTION: INFORMASI PRODUK */}
+              <div className="ios-section-header">
+                <span>INFORMASI PRODUK</span>
+                <span className="ios-req">* Wajib diisi</span>
+              </div>
+              <div className="ios-group">
+                <div className="ios-row-vert">
+                  <div className="ios-label-row">
+                    <label>ID Produk / Barcode</label>
+                    <span className="ios-hint">Ketik atau Pindai</span>
+                  </div>
+                  <div className="ios-input-wrap">
+                    <input
+                      type="text" value={productId}
+                      onChange={(e) => setProductId(e.target.value)}
+                      onKeyDown={handleIdKeyDown}
+                      className="ios-input-gray"
+                      placeholder="899..."
+                      autoFocus={!(typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches)}
+                    />
+                    {productId && (
+                      <button type="button" className="ios-inside-btn" onClick={() => setProductId('')}>
+                        <X size={14} color="#9ca3af" />
                       </button>
-                    </div>
-                  </div>
-
-                  <div className="bo-form-group">
-                    <label className="bo-label">Nama Produk</label>
-                    <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Nama barang lengkap" className="bo-input" style={{ backgroundColor: 'white' }} required />
-                  </div>
-
-                  <div className="r-grid-2 pf-cols-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-                    <div className="bo-form-group">
-                      <label className="bo-label">SKU<span className="hide-mobile"> Barang</span></label>
-                      <input type="text" value={sku} onChange={(e) => setSku(e.target.value)} placeholder="Misal: SKU-123" className="bo-input" style={{ backgroundColor: 'white' }} required />
-                    </div>
-                    <div className="bo-form-group">
-                      <div className="pf-labelbar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                        <label className="bo-label" style={{ marginBottom: 0 }}>Kategori</label>
-                        <button type="button" className="pf-mini-btn" title="Kelola kategori" onClick={() => setIsCategoryModalOpen(true)} style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontWeight: 'bold' }}>
-                          <Settings size={12} /><span className="pf-mini-text"> Kelola</span>
-                        </button>
-                      </div>
-                      <select value={category} onChange={(e) => setCategory(e.target.value)} className="bo-input" style={{ backgroundColor: 'white' }} required>
-                        {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                      </select>
-                    </div>
+                    )}
+                    <button type="button" className="ios-btn-pindai" onClick={() => setCameraScannerOpen(true)}>
+                      <Camera size={14} /> Pindai
+                    </button>
+                    {!editingId && (
+                      <button type="button" className="ios-btn-zap" onClick={() => setProductId(generateInternalBarcode(products))}>
+                        ⚡
+                      </button>
+                    )}
                   </div>
                 </div>
 
-                {/* Stok */}
-                <div className="pf-section">Stok</div>
-                <div className="pf-group">
-                  <div className="r-grid-3 pf-cols-3" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '14px' }}>
-                    <div className="bo-form-group">
-                      <label className="bo-label">Qty</label>
-                      <input type="number" inputMode="decimal" min="0" step="any" value={qty} onChange={(e) => setQty(e.target.value === '' ? '' : Number(e.target.value))} placeholder="0" className="bo-input" style={{ backgroundColor: 'white' }} required />
-                    </div>
-                    <div className="bo-form-group">
-                      <label className="bo-label">Satuan</label>
-                      <select value={unit} onChange={(e) => setUnit(e.target.value)} className="bo-input" style={{ backgroundColor: 'white' }} required>
-                        <option value="Pcs">Pcs</option>
-                        <option value="Kg">Kg</option>
-                        <option value="Gram">Gram</option>
-                        <option value="Liter">Liter</option>
-                        <option value="Pack">Pack</option>
-                        <option value="Dus">Dus</option>
-                      </select>
-                    </div>
-                    <div className="bo-form-group">
-                      <label className="bo-label">Min Stok</label>
-                      <input type="number" inputMode="numeric" min="0" value={minStock} onChange={(e) => setMinStock(e.target.value === '' ? '' : Number(e.target.value))} placeholder="Batas peringatan" className="bo-input" style={{ backgroundColor: 'white' }} />
-                    </div>
-                  </div>
+                <div className="ios-row-vert">
+                  <div className="ios-label-row"><label>Nama Produk &amp; Varian</label></div>
+                  <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="ios-input-gray" required />
                 </div>
 
-                {/* Harga */}
-                <div className="pf-section">Harga</div>
-                <div className="pf-group">
-                  <div className="r-grid-3 pf-cols-price" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '14px' }}>
-                    <div className="bo-form-group">
-                      <label className="bo-label">Harga Beli</label>
-                      <input type="number" inputMode="numeric" min="0" value={purchasePrice} onChange={(e) => setPurchasePrice(e.target.value === '' ? '' : Number(e.target.value))} placeholder="Rp 0" className="bo-input" style={{ backgroundColor: 'white' }} />
-                    </div>
-                    <div className="bo-form-group">
-                      <label className="bo-label">Harga Jual</label>
-                      <input type="number" inputMode="numeric" min="0" value={sellingPrice} onChange={(e) => setSellingPrice(e.target.value === '' ? '' : Number(e.target.value))} placeholder="Rp 0" className="bo-input" style={{ backgroundColor: 'white' }} required />
-                    </div>
-                    <div className="bo-form-group">
-                      <label className="bo-label">Harga Grosir</label>
-                      <input type="number" inputMode="numeric" min="0" value={wholesalePrice} onChange={(e) => setWholesalePrice(e.target.value === '' ? '' : Number(e.target.value))} placeholder="Opsional" className="bo-input" style={{ backgroundColor: 'white' }} />
-                    </div>
+                <div className="ios-row-split">
+                  <div className="ios-col">
+                    <div className="ios-label-row"><label>SKU Internal Toko</label></div>
+                    <input type="text" value={sku} onChange={(e) => setSku(e.target.value)} className="ios-input-gray" required />
                   </div>
-                </div>
-
-                <div className="pf-section">Lainnya</div>
-                <div className="pf-group">
-                  <div className="bo-form-group">
-                    <label className="bo-label">URL Gambar</label>
-                    <input type="text" inputMode="url" autoCapitalize="off" autoCorrect="off" value={image} onChange={(e) => setImage(e.target.value)} placeholder="https://..." className="bo-input" style={{ backgroundColor: 'white' }} />
+                  <div className="ios-col">
+                    <div className="ios-label-row">
+                      <label>Kategori</label>
+                      <button type="button" className="ios-link-red" onClick={() => setIsCategoryModalOpen(true)}>+ Baru</button>
+                    </div>
+                    <select value={category} onChange={(e) => setCategory(e.target.value)} className="ios-input-gray" required>
+                      {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                    </select>
                   </div>
                 </div>
               </div>
 
-              {/* Footer Actions (selalu terlihat di bawah) */}
-              <div className="pf-foot" style={{ flexShrink: 0, display: 'flex', justifyContent: 'flex-end', gap: '10px', padding: '14px 24px', borderTop: '1px solid #e5e7eb', backgroundColor: 'white' }}>
-                <button type="button" className="bo-btn bo-btn-secondary" onClick={closeDrawer}>
-                  Batal
-                </button>
-                <button type="submit" className="bo-btn bo-btn-primary" style={{ minWidth: '160px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-                  {editingId ? <Save size={16} /> : <Plus size={16} />}
+              {/* SECTION: MANAJEMEN STOK & SATUAN */}
+              <div className="ios-section-header" style={{ marginTop: '20px' }}>
+                <span>MANAJEMEN STOK &amp; SATUAN</span>
+                <span className="ios-hint-gray">Gudang Utama (POS 01)</span>
+              </div>
+              <div className="ios-group">
+                <div className="ios-row-horiz">
+                  <div>
+                    <label>Jumlah Masuk (Stok Awal)</label>
+                    <div className="ios-sublabel">Kuantitas fisik yang diterima</div>
+                  </div>
+                  <div className="ios-stepper">
+                    <button type="button" onClick={() => setQty(Math.max(0, Number(qty) - 1))}>-</button>
+                    <input type="number" inputMode="decimal" value={qty} onChange={(e) => setQty(e.target.value === '' ? '' : Number(e.target.value))} required />
+                    <button type="button" onClick={() => setQty(Number(qty) + 1)}>+</button>
+                  </div>
+                </div>
+                
+                <div className="ios-row-vert" style={{ padding: '12px 16px' }}>
+                  <label style={{ marginBottom: '8px', display: 'block', fontSize: '13px', fontWeight: 600 }}>Satuan Unit</label>
+                  <div className="ios-segmented">
+                    {['Pcs', 'Box', 'Pack', 'Lusin'].map(u => (
+                      <button type="button" key={u} className={unit === u ? 'active' : ''} onClick={() => setUnit(u)}>{u}</button>
+                    ))}
+                  </div>
+                  {/* Cadangan satuan lain jika tidak ada di segment */}
+                  {['Pcs', 'Box', 'Pack', 'Lusin'].indexOf(unit) === -1 && (
+                    <select value={unit} onChange={(e) => setUnit(e.target.value)} className="ios-input-gray" style={{ marginTop: '8px' }}>
+                      <option value="Kg">Kg</option>
+                      <option value="Gram">Gram</option>
+                      <option value="Liter">Liter</option>
+                      <option value="Dus">Dus</option>
+                    </select>
+                  )}
+                </div>
+
+                <div className="ios-row-horiz">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>Peringatan Stok Tipis (Min) <AlertTriangle size={14} color="#f59e0b" /></label>
+                      <div className="ios-sublabel">Peringatan saat stok di bawah nilai ini</div>
+                    </div>
+                  </div>
+                  <input type="number" inputMode="numeric" value={minStock} onChange={(e) => setMinStock(e.target.value === '' ? '' : Number(e.target.value))} className="ios-input-gray ios-input-small" style={{ width: '60px', textAlign: 'center' }} />
+                </div>
+              </div>
+
+              {/* SECTION: STRUKTUR HARGA */}
+              <div className="ios-section-header" style={{ marginTop: '20px' }}>
+                <span>STRUKTUR HARGA (IDR)</span>
+                {(() => {
+                  const m = (Number(sellingPrice) - Number(purchasePrice));
+                  const pct = Number(sellingPrice) > 0 ? (m / Number(sellingPrice)) * 100 : 0;
+                  const color = pct >= 0 ? '#10b981' : '#ef4444';
+                  const bg = pct >= 0 ? '#dcfce7' : '#fee2e2';
+                  return (
+                    <span style={{ backgroundColor: bg, color, padding: '2px 8px', borderRadius: '999px', fontSize: '11px', fontWeight: 700 }}>
+                      Margin: {pct > 0 ? '+' : ''}{pct.toFixed(1)}%
+                    </span>
+                  );
+                })()}
+              </div>
+              <div className="ios-group">
+                <div className="ios-row-horiz">
+                  <div>
+                    <label>Harga Modal (Beli)</label>
+                    <div className="ios-sublabel">Biaya pokok per item</div>
+                  </div>
+                  <div className="ios-input-prefix">
+                    <span>Rp</span>
+                    <input type="number" inputMode="numeric" value={purchasePrice} onChange={(e) => setPurchasePrice(e.target.value === '' ? '' : Number(e.target.value))} className="ios-input-gray" style={{ textAlign: 'right', width: '100px', fontWeight: 700 }} />
+                  </div>
+                </div>
+                
+                <div className="ios-row-horiz">
+                  <div>
+                    <label style={{ color: 'var(--primary)' }}>Harga Jual (Kasir)</label>
+                    <div className="ios-sublabel">Harga eceran reguler</div>
+                  </div>
+                  <div className="ios-input-prefix is-red">
+                    <span>Rp</span>
+                    <input type="number" inputMode="numeric" value={sellingPrice} onChange={(e) => setSellingPrice(e.target.value === '' ? '' : Number(e.target.value))} className="ios-input-gray" style={{ textAlign: 'right', width: '100px', color: 'var(--primary)', fontWeight: 700 }} required />
+                  </div>
+                </div>
+
+                <div className="ios-row-horiz">
+                  <div>
+                    <label>Harga Grosir</label>
+                    <div className="ios-sublabel">Opsional</div>
+                  </div>
+                  <div className="ios-input-prefix">
+                    <span>Rp</span>
+                    <input type="number" inputMode="numeric" value={wholesalePrice} onChange={(e) => setWholesalePrice(e.target.value === '' ? '' : Number(e.target.value))} className="ios-input-gray" style={{ textAlign: 'right', width: '100px', fontWeight: 700 }} />
+                  </div>
+                </div>
+              </div>
+
+              {/* SECTION: GAMBAR PRODUK */}
+              <div className="ios-section-header" style={{ marginTop: '20px' }}>
+                <span>GAMBAR PRODUK (OPSIONAL)</span>
+              </div>
+              <div className="ios-group">
+                <div className="ios-row-vert">
+                  <div className="ios-label-row"><label>Tautan (URL) Gambar</label></div>
+                  <input type="text" inputMode="url" autoCapitalize="off" autoCorrect="off" value={image} onChange={(e) => setImage(e.target.value)} className="ios-input-gray" placeholder="https://..." />
+                </div>
+              </div>
+
+              {/* Spacer so we can scroll past keyboard */}
+              <div style={{ height: '40px' }} />
+
+              {/* FOOTER ACTIONS */}
+              <div className="ios-sheet-footer">
+                <button type="button" className="ios-btn-batal" onClick={closeDrawer}>Batal</button>
+                <button type="submit" className="ios-btn-simpan">
+                  {editingId ? <Save size={18} /> : <Plus size={18} />}
                   {editingId ? 'Simpan Perubahan' : 'Tambahkan ke Daftar'}
                 </button>
               </div>
@@ -1144,28 +1159,107 @@ const StockManagement: React.FC = () => {
         </div>
       )}
       <style>{`
+        /* iOS Bottom Sheet Styles */
+        .ios-modal-overlay { padding: 20px 0 0 0; }
+        .ios-sheet {
+          background-color: #f2f2f7; width: 100%; max-width: 480px; height: 100%;
+          border-radius: 20px 20px 0 0; display: flex; flex-direction: column;
+          box-shadow: 0 -10px 40px rgba(0,0,0,0.15); overflow: hidden; position: relative;
+          animation: slideUp 0.35s cubic-bezier(0.32,0.72,0,1) forwards;
+        }
+        .ios-sheet.is-closing { animation: slideDown 0.25s ease-in forwards; }
+        
+        .ios-sheet-header {
+          display: flex; justify-content: space-between; align-items: flex-start;
+          padding: 8px 20px 16px; flex-shrink: 0;
+        }
+        .ios-close-btn {
+          width: 32px; height: 32px; border-radius: 50%; background: #e5e7eb;
+          border: none; color: #4b5563; display: flex; align-items: center; justify-content: center; cursor: pointer;
+        }
+        .ios-sheet-body { flex: 1; overflow-y: auto; padding: 0 16px; padding-bottom: 80px; }
+        
+        .ios-section-header {
+          display: flex; justify-content: space-between; align-items: flex-end;
+          padding: 0 4px 6px; font-size: 11.5px; font-weight: 700; color: #6b7280; letter-spacing: 0.2px;
+        }
+        .ios-req { color: var(--primary); }
+        .ios-hint-gray { font-weight: 500; }
+        
+        .ios-group {
+          background: #ffffff; border-radius: 12px; overflow: hidden;
+          box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+        .ios-row-vert { padding: 12px 16px; position: relative; border-bottom: 0.5px solid #e5e7eb; }
+        .ios-row-vert:last-child { border-bottom: none; }
+        .ios-label-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 13px; font-weight: 600; color: #374151; }
+        .ios-hint { color: #9ca3af; font-weight: 400; font-size: 12px; }
+        .ios-input-gray {
+          width: 100%; background: #f3f4f6; border: 1px solid transparent; border-radius: 8px;
+          padding: 10px 12px; font-size: 15px; color: #111827; outline: none; transition: border 0.2s;
+        }
+        .ios-input-gray:focus { border-color: #d1d5db; background: #fff; }
+        .ios-input-small { padding: 8px; }
+        
+        .ios-input-wrap { display: flex; gap: 8px; align-items: center; }
+        .ios-inside-btn { display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; }
+        .ios-btn-pindai {
+          display: flex; align-items: center; gap: 6px; background: white; border: 1px solid #d1d5db;
+          padding: 0 12px; height: 38px; border-radius: 8px; font-weight: 600; font-size: 13px; color: #374151; cursor: pointer;
+        }
+        .ios-btn-zap {
+          display: flex; align-items: center; justify-content: center; background: #fee2e2; border: none;
+          width: 38px; height: 38px; border-radius: 8px; color: var(--primary); font-size: 16px; cursor: pointer;
+        }
+
+        .ios-row-split { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px 16px; }
+        .ios-col { display: flex; flex-direction: column; }
+        .ios-link-red { background: none; border: none; color: var(--primary); font-weight: 700; font-size: 12px; cursor: pointer; padding: 0; }
+
+        .ios-row-horiz {
+          display: flex; justify-content: space-between; align-items: center;
+          padding: 14px 16px; border-bottom: 0.5px solid #e5e7eb;
+        }
+        .ios-row-horiz:last-child { border-bottom: none; }
+        .ios-row-horiz label { font-size: 14px; font-weight: 600; color: #111827; }
+        .ios-sublabel { font-size: 12px; color: #9ca3af; margin-top: 2px; }
+        
+        .ios-stepper { display: flex; align-items: center; background: #f3f4f6; border-radius: 8px; padding: 2px; border: 1px solid #e5e7eb; }
+        .ios-stepper button { width: 32px; height: 32px; border: none; background: transparent; font-size: 18px; font-weight: 600; color: #4b5563; cursor: pointer; }
+        .ios-stepper input { width: 44px; text-align: center; border: none; background: transparent; font-size: 16px; font-weight: 800; }
+        
+        .ios-segmented { display: flex; background: #f3f4f6; border-radius: 8px; padding: 2px; gap: 2px; }
+        .ios-segmented button { flex: 1; padding: 8px 0; border: none; background: transparent; border-radius: 6px; font-size: 13px; font-weight: 600; color: #6b7280; transition: all 0.2s; cursor: pointer; }
+        .ios-segmented button.active { background: white; color: #111827; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        
+        .ios-input-prefix { display: flex; align-items: center; gap: 8px; background: #f3f4f6; padding: 0 12px; border-radius: 8px; }
+        .ios-input-prefix span { font-size: 13px; font-weight: 700; color: #9ca3af; }
+        .ios-input-prefix .ios-input-gray { background: transparent; padding: 10px 0; border: none; }
+        .ios-input-prefix.is-red { background: #fff1f2; }
+        .ios-input-prefix.is-red span { color: var(--primary); }
+        
+        .ios-sheet-footer {
+          position: absolute; bottom: 0; left: 0; right: 0;
+          background: rgba(255,255,255,0.9); backdrop-filter: blur(10px); border-top: 1px solid #e5e7eb;
+          padding: 12px 16px 24px; display: flex; gap: 12px;
+        }
+        .ios-btn-batal { flex: 0 0 100px; padding: 14px; border-radius: 12px; border: none; background: #f3f4f6; font-size: 15px; font-weight: 700; color: #374151; cursor: pointer; }
+        .ios-btn-simpan { flex: 1; padding: 14px; border-radius: 12px; border: none; background: var(--primary); font-size: 15px; font-weight: 700; color: white; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; }
+
+        @media (min-width: 641px) {
+          .ios-modal-overlay { justify-content: flex-end !important; padding: 0 !important; }
+          .ios-sheet { border-radius: 0; max-width: 440px; animation: slideInRight 0.3s cubic-bezier(0.22,1,0.36,1) forwards; }
+          .ios-sheet.is-closing { animation: slideOutRight 0.3s forwards; }
+          .ios-sheet-footer { padding: 16px 20px; }
+        }
+
         @keyframes fadeIn { from { opacity:0 } to { opacity:1 } }
         @keyframes fadeOut { from { opacity:1 } to { opacity:0 } }
-        @keyframes slideInRight {
-          from { transform: translateX(100%); }
-          to   { transform: translateX(0); }
-        }
-        @keyframes slideOutRight {
-          from { transform: translateX(0); }
-          to   { transform: translateX(100%); }
-        }
-        @keyframes slideUp {
-          from { opacity:0; transform: translateY(20px) scale(0.98); }
-          to   { opacity:1; transform: translateY(0) scale(1); }
-        }
-        @keyframes fadeInUp {
-          from { opacity:0; transform: translate(-50%, 12px); }
-          to   { opacity:1; transform: translate(-50%, 0); }
-        }
-        @keyframes scaleIn {
-          from { opacity:0; transform: scale(0.5); }
-          to   { opacity:1; transform: scale(1); }
-        }
+        @keyframes slideInRight { from { transform: translateX(100%); } to { transform: translateX(0); } }
+        @keyframes slideOutRight { from { transform: translateX(0); } to { transform: translateX(100%); } }
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+        @keyframes slideDown { from { transform: translateY(0); } to { transform: translateY(100%); } }
+        @keyframes scaleIn { from { opacity:0; transform: scale(0.5); } to { opacity:1; transform: scale(1); } }
       `}</style>
 
       {/* ===== MODAL: KONFIRMASI & POSTING ===== */}

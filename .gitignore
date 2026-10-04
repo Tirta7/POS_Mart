@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Web Push: VAPID private key & subscription device (rahasia)
+server/data
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
@@ -22,3 +25,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+/src/generated/prisma
+
+.env
+INSTALLER_*/
+

@@ -17,7 +17,7 @@ const avatarColor = (seed: string) => {
 
 const LoginPage: React.FC<{ onLogin: () => void }> = ({ onLogin }) => {
   const { login, employees } = useAuthStore();
-  const { appName } = useSettingsStore();
+  const { appName, appLogo } = useSettingsStore();
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -83,7 +83,13 @@ const LoginPage: React.FC<{ onLogin: () => void }> = ({ onLogin }) => {
       <main className="lg-card">
         {/* Brand */}
         <header className="lg-brand">
-          <div className="lg-icon">{appName.charAt(0)}</div>
+          <div className="lg-icon" style={{ overflow: 'hidden', padding: appLogo ? '0' : undefined }}>
+            {appLogo ? (
+              <img src={appLogo} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+            ) : (
+              appName.charAt(0)
+            )}
+          </div>
           <h1 className="lg-title">{appName}</h1>
           <p className="lg-subtitle">Masuk untuk melanjutkan</p>
         </header>

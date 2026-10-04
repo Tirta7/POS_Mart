@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSettingsStore, DEFAULT_INVOICE_FOOTER, defaultInvoiceHeader } from '../../store/useSettingsStore';
-import { Settings as SettingsIcon, Save, Percent, RefreshCw, Receipt } from 'lucide-react';
+import { Settings as SettingsIcon, Save, Percent, RefreshCw, Receipt, Bell, ShieldCheck, AlertTriangle, Clock, XOctagon } from 'lucide-react';
+import NotificationSettings from './NotificationSettings';
 
 const ROUNDING_OPTIONS = [
   { label: 'Tanpa Pembulatan', value: 0 },
@@ -9,19 +10,22 @@ const ROUNDING_OPTIONS = [
   { label: 'Bulatkan ke 1.000', value: 1000 },
 ];
 
-type TabId = 'general' | 'tax' | 'rounding' | 'invoice';
+type TabId = 'general' | 'tax' | 'rounding' | 'invoice' | 'notification' | 'license';
 
 const TABS: { id: TabId; label: string; desc: string; Icon: React.ElementType }[] = [
   { id: 'general', label: 'Umum', desc: 'Nama aplikasi', Icon: SettingsIcon },
   { id: 'tax', label: 'PPN / Pajak', desc: 'Aktif & persentase', Icon: Percent },
   { id: 'rounding', label: 'Pembulatan', desc: 'Total tagihan', Icon: RefreshCw },
   { id: 'invoice', label: 'Invoice', desc: 'Header & footer struk', Icon: Receipt },
+  { id: 'notification', label: 'Notifikasi', desc: 'Push uang masuk', Icon: Bell },
+  { id: 'license', label: 'Lisensi', desc: 'Detail lisensi aktif', Icon: ShieldCheck },
 ];
 
 const Settings: React.FC = () => {
-  const { appName, setAppName, taxEnabled, setTaxEnabled, taxRate, setTaxRate, roundingUnit, setRoundingUnit, invoiceHeader, setInvoiceHeader, invoiceFooter, setInvoiceFooter } = useSettingsStore();
+  const { appName, setAppName, appLogo, setAppLogo, taxEnabled, setTaxEnabled, taxRate, setTaxRate, roundingUnit, setRoundingUnit, invoiceHeader, setInvoiceHeader, invoiceFooter, setInvoiceFooter } = useSettingsStore();
   const [activeTab, setActiveTab] = useState<TabId>('general');
   const [localAppName, setLocalAppName] = useState(appName);
+  const [localAppLogo, setLocalAppLogo] = useState<string | null>(appLogo);
   const [localTaxEnabled, setLocalTaxEnabled] = useState(taxEnabled);
   const [localTaxRate, setLocalTaxRate] = useState(taxRate);
   const [localRounding, setLocalRounding] = useState(roundingUnit);
@@ -30,19 +34,50 @@ const Settings: React.FC = () => {
   const [localHeader, setLocalHeader] = useState(effectiveHeader);
   const [localFooter, setLocalFooter] = useState(effectiveFooter);
   const [isSaved, setIsSaved] = useState(false);
+  const [licenseData, setLicenseData] = useState<any>(null);
+  const [licenseLoading, setLicenseLoading] = useState(false);
+
+  useEffect(() => {
+    if (activeTab === 'license' && !licenseData) {
+      setLicenseLoading(true);
+      fetch('/api/license-status')
+        .then(res => res.json())
+        .then(data => {
+          setLicenseData(data);
+          setLicenseLoading(false);
+        })
+        .catch(err => {
+          console.error(err);
+          setLicenseLoading(false);
+        });
+    }
+  }, [activeTab]);
 
   useEffect(() => {
     setLocalAppName(appName);
+    setLocalAppLogo(appLogo);
     setLocalTaxEnabled(taxEnabled);
     setLocalTaxRate(taxRate);
     setLocalRounding(roundingUnit);
     setLocalHeader(effectiveHeader);
     setLocalFooter(effectiveFooter);
-  }, [appName, taxEnabled, taxRate, roundingUnit, effectiveHeader, effectiveFooter]);
+  }, [appName, appLogo, taxEnabled, taxRate, roundingUnit, effectiveHeader, effectiveFooter]);
+
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setLocalAppLogo(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     setAppName(localAppName);
+    setAppLogo(localAppLogo);
     setTaxEnabled(localTaxEnabled);
     setTaxRate(localTaxRate);
     setRoundingUnit(localRounding);
@@ -69,6 +104,7 @@ const Settings: React.FC = () => {
 
   const hasChanges =
     localAppName !== appName ||
+    localAppLogo !== appLogo ||
     localTaxEnabled !== taxEnabled ||
     localTaxRate !== taxRate ||
     localRounding !== roundingUnit ||
@@ -162,19 +198,53 @@ const Settings: React.FC = () => {
 
               {/* Umum */}
               {activeTab === 'general' && (
-                <div className="bo-form-group" style={{ maxWidth: '420px' }}>
-                  <label className="bo-label">Nama Aplikasi</label>
-                  <input
-                    type="text"
-                    value={localAppName}
-                    onChange={(e) => setLocalAppName(e.target.value)}
-                    placeholder="Contoh: SRIKANDI MART"
-                    className="bo-input"
-                    required
-                  />
-                  <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-                    Nama ini akan ditampilkan pada header, struk kasir, dan judul tab browser.
-                  </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '420px' }}>
+                  <div className="bo-form-group">
+                    <label className="bo-label">Nama Aplikasi</label>
+                    <input
+                      type="text"
+                      value={localAppName}
+                      onChange={(e) => setLocalAppName(e.target.value)}
+                      placeholder="Contoh: SRIKANDI MART"
+                      className="bo-input"
+                      required
+                    />
+                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                      Nama ini akan ditampilkan pada header, struk kasir, dan judul tab browser.
+                    </p>
+                  </div>
+                  
+                  <div className="bo-form-group">
+                    <label className="bo-label">Logo Aplikasi</label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                      <div style={{
+                        width: '64px', height: '64px', borderRadius: '8px', 
+                        backgroundColor: '#f3f4f6', border: '1px dashed #d1d5db',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        overflow: 'hidden'
+                      }}>
+                        {localAppLogo ? (
+                          <img src={localAppLogo} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                        ) : (
+                          <span style={{ fontSize: '24px', color: '#9ca3af', fontWeight: 'bold' }}>{localAppName.charAt(0).toUpperCase() || 'B'}</span>
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        <label style={{ cursor: 'pointer', padding: '6px 12px', background: 'white', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px', fontWeight: 'bold', display: 'inline-block', textAlign: 'center' }}>
+                          Pilih Gambar
+                          <input type="file" accept="image/png, image/jpeg, image/svg+xml" onChange={handleLogoUpload} style={{ display: 'none' }} />
+                        </label>
+                        {localAppLogo && (
+                          <button type="button" onClick={() => setLocalAppLogo(null)} style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '12px', cursor: 'pointer', textAlign: 'left', padding: 0 }}>
+                            Hapus Logo
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                      Format yang didukung: JPG, PNG, SVG. Ukuran ideal 1:1.
+                    </p>
+                  </div>
                 </div>
               )}
 
@@ -330,6 +400,90 @@ const Settings: React.FC = () => {
                       {previewLines(localFooter).map((l, i) => <div key={'f' + i} style={{ textAlign: 'center' }}>{l}</div>)}
                     </div>
                   </div>
+                </div>
+              )}
+
+              {/* Notifikasi — per device, langsung aktif (tidak perlu tombol Simpan) */}
+              {activeTab === 'notification' && <NotificationSettings />}
+
+              {/* Lisensi */}
+              {activeTab === 'license' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '600px' }}>
+                  {licenseLoading ? (
+                    <div style={{ padding: '20px', textAlign: 'center', color: '#6b7280' }}>Memuat data lisensi...</div>
+                  ) : licenseData ? (
+                    <>
+                      {/* Status Banner */}
+                      <div style={{ 
+                        padding: '16px', borderRadius: '12px', display: 'flex', gap: '16px', alignItems: 'flex-start',
+                        background: licenseData.allowed ? '#ecfdf5' : '#fef2f2', 
+                        border: `1px solid ${licenseData.allowed ? '#a7f3d0' : '#fecaca'}` 
+                      }}>
+                        <div style={{ 
+                          padding: '10px', borderRadius: '10px', 
+                          background: licenseData.allowed ? '#d1fae5' : '#fee2e2', 
+                          color: licenseData.allowed ? '#059669' : '#dc2626' 
+                        }}>
+                          {licenseData.allowed ? <ShieldCheck size={28} /> : (licenseData.status === 'expired' || licenseData.status === 'locked' ? <XOctagon size={28} /> : <AlertTriangle size={28} />)}
+                        </div>
+                        <div>
+                          <h4 style={{ margin: '0 0 4px 0', fontSize: '16px', color: licenseData.allowed ? '#065f46' : '#991b1b', fontWeight: 700 }}>
+                            {licenseData.status === 'active' ? 'Lisensi Aktif' : 
+                             licenseData.status === 'expired' ? 'Lisensi Kedaluwarsa' : 
+                             licenseData.status === 'locked' ? 'Aplikasi Terkunci' : 
+                             licenseData.status === 'pending' ? 'Menunggu Aktivasi' : 'Status Lisensi: ' + licenseData.status}
+                          </h4>
+                          <p style={{ margin: 0, fontSize: '13px', color: licenseData.allowed ? '#047857' : '#b91c1c', lineHeight: 1.5 }}>
+                            {licenseData.reason || (licenseData.allowed ? 'Aplikasi Anda terhubung dan memiliki lisensi yang valid. Semua fitur dapat digunakan tanpa batasan.' : 'Lisensi tidak valid atau perlu diperpanjang.')}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="bo-form-group">
+                        <label className="bo-label">Detail Lisensi</label>
+                        <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '10px', overflow: 'hidden' }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
+                            <tbody>
+                              <tr style={{ borderBottom: '1px solid #e5e7eb' }}>
+                                <td style={{ padding: '12px 16px', color: '#6b7280', width: '40%' }}>Status</td>
+                                <td style={{ padding: '12px 16px', fontWeight: 700, color: licenseData.allowed ? '#059669' : '#dc2626' }}>
+                                  {String(licenseData.status || '').toUpperCase()}
+                                  {licenseData.offline && <span style={{ marginLeft: '8px', fontSize: '11px', background: '#f3f4f6', color: '#6b7280', padding: '2px 6px', borderRadius: '4px' }}>Offline Mode</span>}
+                                </td>
+                              </tr>
+                              {licenseData.expiresAt && (
+                                <tr style={{ borderBottom: '1px solid #e5e7eb' }}>
+                                  <td style={{ padding: '12px 16px', color: '#6b7280' }}>Masa Aktif</td>
+                                  <td style={{ padding: '12px 16px', fontWeight: 600, color: '#111827' }}>
+                                    Sampai {new Date(licenseData.expiresAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+                                  </td>
+                                </tr>
+                              )}
+                              <tr style={{ borderBottom: '1px solid #e5e7eb' }}>
+                                <td style={{ padding: '12px 16px', color: '#6b7280' }}>Machine ID</td>
+                                <td style={{ padding: '12px 16px', fontFamily: 'monospace', fontWeight: 600, color: '#111827' }}>{licenseData.machineId || '-'}</td>
+                              </tr>
+                              <tr style={{ borderBottom: '1px solid #e5e7eb' }}>
+                                <td style={{ padding: '12px 16px', color: '#6b7280' }}>Tipe Produk</td>
+                                <td style={{ padding: '12px 16px', fontWeight: 600, color: '#111827' }}>SWALAYAN POS</td>
+                              </tr>
+                              {licenseData.licenseKey && (
+                                <tr>
+                                  <td style={{ padding: '12px 16px', color: '#6b7280' }}>Lisensi Key</td>
+                                  <td style={{ padding: '12px 16px', fontFamily: 'monospace', fontWeight: 600, color: '#111827' }}>{licenseData.licenseKey}</td>
+                                </tr>
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                        <p style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '8px' }}>
+                          * Data ditarik langsung dari server backend. Hubungi administrator VOC ML Anda untuk info lebih lanjut.
+                        </p>
+                      </div>
+                    </>
+                  ) : (
+                    <div style={{ padding: '20px', textAlign: 'center', color: '#dc2626' }}>Gagal memuat data lisensi. Pastikan server terhubung.</div>
+                  )}
                 </div>
               )}
             </div>

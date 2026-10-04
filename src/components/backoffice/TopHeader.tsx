@@ -11,7 +11,7 @@ interface TopHeaderProps {
 
 const TopHeader: React.FC<TopHeaderProps> = ({ onMenuToggle, menuOpen }) => {
   const { currentUser, logout } = useAuthStore();
-  const { appName } = useSettingsStore();
+  const { appName, appLogo } = useSettingsStore();
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -30,8 +30,12 @@ const TopHeader: React.FC<TopHeaderProps> = ({ onMenuToggle, menuOpen }) => {
         >
           {menuOpen ? <X size={22} /> : <Menu size={22} />}
         </button>
-        <div className="bo-header-logo">
-          {appName.charAt(0)}
+        <div className="bo-header-logo" style={{ overflow: 'hidden' }}>
+          {appLogo ? (
+            <img src={appLogo} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+          ) : (
+            appName.charAt(0)
+          )}
         </div>
         <div className="bo-header-titles">
           <div className="bo-header-title">{appName}</div>

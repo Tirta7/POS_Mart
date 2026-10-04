@@ -10,7 +10,9 @@ interface SettingsState {
   invoiceHeader: string;
   /** Footer struk (multi-baris). Kosong = teks default. */
   invoiceFooter: string;
+  appLogo: string | null;
   setAppName: (name: string) => void;
+  setAppLogo: (logo: string | null) => void;
   setTaxEnabled: (v: boolean) => void;
   setTaxRate: (rate: number) => void;
   setRoundingUnit: (unit: number) => void;
@@ -25,12 +27,14 @@ export const useSettingsStore = create<SettingsState>()(
   persist(
     (set) => ({
       appName: 'SRIKANDI MART',
+      appLogo: null,
       taxEnabled: true,
       taxRate: 11,
       roundingUnit: 0,
       invoiceHeader: '',
       invoiceFooter: '',
       setAppName: (name) => set({ appName: name }),
+      setAppLogo: (logo) => set({ appLogo: logo }),
       setTaxEnabled: (v) => set({ taxEnabled: v }),
       setTaxRate: (rate) => set({ taxRate: rate }),
       setRoundingUnit: (unit) => set({ roundingUnit: unit }),

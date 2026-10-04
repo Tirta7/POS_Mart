@@ -15,12 +15,13 @@ import { useSalesStore } from './store/useSalesStore';
 import { useAuthStore } from './store/useAuthStore';
 import BarcodeScannerCamera from './components/BarcodeScannerCamera';
 import { recordStockMutation } from './utils/stockMutation';
+import { sendSaleNotification } from './utils/pushNotification';
 import ReceiptModal from './components/ReceiptModal';
 import type { SalesTransaction } from './types';
 import type { ReceiptOptions } from './utils/receipt';
 
 function App() {
-  const { appName, taxEnabled, taxRate, roundingUnit } = useSettingsStore();
+  const { appName, appLogo, taxEnabled, taxRate, roundingUnit } = useSettingsStore();
   const { products: storeProducts, updateProductStock, categories, reserveStock, releaseReservedStock } = useInventoryStore();
   const { addSale, sales } = useSalesStore();
   const todayTxCount = sales.filter(s => new Date(s.date).toDateString() === new Date().toDateString()).length;
@@ -300,7 +301,13 @@ function App() {
       {/* TOP NAVBAR */}
       <div className="top-navbar">
         <div className="logo-section">
-          <div className="logo-icon">{appName.charAt(0)}</div>
+          <div className="logo-icon" style={{ overflow: 'hidden', padding: appLogo ? '0' : undefined }}>
+            {appLogo ? (
+              <img src={appLogo} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+            ) : (
+              appName.charAt(0)
+            )}
+          </div>
           <div>
             <div className="logo-title" style={{fontWeight: 800, color: 'var(--primary)', letterSpacing: '-0.5px'}}>{appName}</div>
             <div className="text-xs text-muted">Terminal #01 • Counter Utama</div>
@@ -727,6 +734,9 @@ function App() {
                   }))
                 };
                 addSale(sale);
+
+                // Web Push "Uang Masuk" ke semua device yang mengaktifkan notifikasi
+                sendSaleNotification(sale, selectedCustomer?.name, currentUser?.name);
 
                 // Deduct stock for all items
                 cart.forEach(item => {
