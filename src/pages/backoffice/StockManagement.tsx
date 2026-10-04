@@ -273,24 +273,24 @@ const StockManagement: React.FC = () => {
   };
 
   // Terapkan item ke stok (stok bertambah / produk baru muncul di Kasir POS)
-  const applyItemsToStock = (items: any[], docNo: string) => {
+  const applyItemsToStock = async (items: any[], docNo: string) => {
     const mutationLines: { productId: string; qty: number; purchasePrice: number; name: string; unit: string }[] = [];
-    items.forEach(item => {
+    for (const item of items) {
       // Item draf lama (sebelum fitur ini) sudah pernah masuk stok -> jangan ditambah dua kali
-      if (!item.pending) return;
+      if (!item.pending) continue;
       const live = useInventoryStore.getState().products;
       const existing = live.find(p => p.id === item.id || p.barcode === item.id);
       const qtyIn = Number(item.qty);
-      mutationLines.push({ productId: existing ? existing.id : item.id, qty: qtyIn, purchasePrice: Number(item.purchasePrice), name: item.name, unit: item.unit });
       if (existing) {
+        mutationLines.push({ productId: existing.id, qty: qtyIn, purchasePrice: Number(item.purchasePrice), name: item.name, unit: item.unit });
         // Produk sudah ada -> tambah stok, HPP Moving Average
         const newTotal = existing.stock + qtyIn;
         const avg = newTotal > 0
           ? Math.round(((existing.stock * existing.purchasePrice) + (qtyIn * Number(item.purchasePrice))) / newTotal)
           : Number(item.purchasePrice);
-        updateProduct(existing.id, { ...existing, stock: newTotal, purchasePrice: avg });
+        await updateProduct(existing.id, { ...existing, stock: newTotal, purchasePrice: avg });
       } else {
-        addProduct({
+        const createdProd = await addProduct({
           id: item.id,
           sku: item.sku,
           barcode: item.barcode || item.id,
@@ -306,8 +306,9 @@ const StockManagement: React.FC = () => {
           minStock: Number(item.minStock || 0),
           image: item.image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=300&q=80',
         });
+        mutationLines.push({ productId: createdProd.id, qty: qtyIn, purchasePrice: Number(item.purchasePrice), name: item.name, unit: item.unit });
       }
-    });
+    }
     // Mutasi stok: Barang Masuk (IN) per dokumen GR
     recordStockMutation('IN', docNo, mutationLines, 'Penerimaan Barang (GR)');
   };
@@ -345,8 +346,8 @@ const StockManagement: React.FC = () => {
 
   // ===== KONFIRMASI & POSTING (seluruh sesi aktif, tombol di header) =====
   // Di sinilah stok benar-benar bertambah dan produk baru muncul di Kasir POS.
-  const handlePosting = () => {
-    applyItemsToStock(sessionItems, grNumber);
+  const handlePosting = async () => {
+    await applyItemsToStock(sessionItems, grNumber);
 
     setIsPosted(true);
     writePostedLog(grNumber, sessionItems);
