@@ -30,7 +30,7 @@ const Purchases: React.FC = () => {
 
   const [documentNo, setDocumentNo] = useState(() => `PO-${Date.now()}`);
 
-  const handleCreateProduct = (e: React.FormEvent) => {
+  const handleCreateProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newProdBarcode || !newProdName || !newProdSellingPrice) return;
     
@@ -57,10 +57,10 @@ const Purchases: React.FC = () => {
       image: newProdImage || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=300&q=80'
     };
 
-    addProduct(newProduct);
+    const createdProd = await addProduct(newProduct);
     
     // Auto add to PO items
-    handleAddItem(newProduct);
+    handleAddItem(createdProd);
     
     // Reset and close
     setIsNewProductModalOpen(false);

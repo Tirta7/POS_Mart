@@ -23,7 +23,7 @@ function App() {
   const { appName } = useSettingsStore();
   const { currentUser } = useAuthStore();
 
-  const { fetchProducts } = useInventoryStore();
+  const { fetchProducts, fetchTransactions } = useInventoryStore();
 
   useEffect(() => {
     document.title = appName;
@@ -33,6 +33,7 @@ function App() {
   useEffect(() => {
     if (currentUser) {
       fetchProducts();
+      fetchTransactions();
     }
   }, [currentUser]);
 

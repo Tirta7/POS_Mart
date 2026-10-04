@@ -7,9 +7,10 @@ interface InventoryState {
   isLoading: boolean;
   error: string | null;
   fetchProducts: () => Promise<void>;
+  fetchTransactions: () => Promise<void>;
   transactions: StockTransaction[];
   categories: string[];
-  addProduct: (product: Product) => Promise<void>;
+  addProduct: (product: Product) => Promise<Product>;
   deleteProduct: (id: string) => Promise<void>;
   updateProduct: (oldId: string, product: Product) => Promise<void>;
   updateProductStock: (productId: string, qty: number) => void;
@@ -37,6 +38,27 @@ const mapProduct = (p: any): Product => ({
   image: p.image_url || 'https://via.placeholder.com/150',
 });
 
+const mapTransaction = (t: any): StockTransaction => ({
+  id: t.id,
+  type: t.type as any,
+  date: t.date,
+  documentNo: t.document_no,
+  supplierId: t.supplier_id,
+  employeeId: t.employee_id,
+  totalValue: t.total_value,
+  note: t.note,
+  customerId: t.customer_id,
+  customerName: t.customer_name,
+  items: (t.items || []).map((i: any) => ({
+    productId: i.product_id,
+    qty: i.qty,
+    batchNo: i.batch_no || '',
+    expiryDate: i.expiry_date || '',
+    purchasePrice: i.purchase_price,
+    subtotal: i.subtotal
+  }))
+});
+
 const getHeaders = () => {
   // Hardcoded for now. In a real app, get from auth store.
   return { 'Content-Type': 'application/json', 'x-tenant-id': 'TID-DEMO-123' };
@@ -59,6 +81,17 @@ export const useInventoryStore = create<InventoryState>()(
           set({ error: err.message, isLoading: false });
         }
       },
+      fetchTransactions: async () => {
+        try {
+          const res = await fetch('/api/saas/stock-transactions', { headers: getHeaders() });
+          if (res.ok) {
+            const data = await res.json();
+            set({ transactions: data.map(mapTransaction) });
+          }
+        } catch (err: any) {
+          console.error('Failed to fetch transactions:', err);
+        }
+      },
       transactions: [],
       categories: ['Sembako', 'Combo', 'Rokok', 'Minuman'],
       
@@ -71,11 +104,14 @@ export const useInventoryStore = create<InventoryState>()(
           });
           if (res.ok) {
             const data = await res.json();
-            set((state) => ({ products: [...state.products, mapProduct(data)] }));
+            const newProd = mapProduct(data);
+            set((state) => ({ products: [...state.products, newProd] }));
+            return newProd;
           }
         } catch(err) {
           console.error(err);
         }
+        return product; // fallback
       },
       
       deleteProduct: async (id) => {
