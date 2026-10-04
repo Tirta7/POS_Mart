@@ -24,7 +24,7 @@ function getMachineId() {
 
 // 2. Kunci Publik VOC ML
 const PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
-MCowBQYDK2VwAyEAFikG8bNm9mNGCfiWAWM3h0zPTAIwodhO71tnIp2ALqI=
+MCowBQYDK2VwAyEADenKScMcRxd/GFPnwHLg026Y3mKWNmtyUR1KPQgLTFI=
 -----END PUBLIC KEY-----`;
 
 // Variabel untuk menyimpan timer
@@ -35,7 +35,7 @@ async function verifikasiAplikasi() {
   console.log('[License] Mengecek lisensi untuk Machine ID:', machineId);
 
   const lisensi = await checkLicense({
-    serverUrl: 'http://localhost:8080',
+    serverUrl: 'https://vocml.vocpos.id',
     product: 'pos',
     machineId: machineId,
     publicKeyPem: PUBLIC_KEY,
