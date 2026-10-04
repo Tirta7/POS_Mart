@@ -31,6 +31,7 @@ const mapProduct = (p: any): Product => ({
   unit: 'Pcs',
   stock: p.stock,
   minStock: p.min_stock,
+  baseUnitMultiplier: 1,
   purchasePrice: p.purchase_price,
   sellingPrice: p.selling_price,
   image: p.image_url || 'https://via.placeholder.com/150',
@@ -43,7 +44,7 @@ const getHeaders = () => {
 
 export const useInventoryStore = create<InventoryState>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       products: [],
       isLoading: false,
       error: null,
