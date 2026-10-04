@@ -7,7 +7,7 @@ import type { StockTransactionItem } from '../../types';
 import BarcodeScannerCamera from '../../components/BarcodeScannerCamera';
 
 const Purchases: React.FC = () => {
-  const { products, updateProduct, updateProductStock, addTransaction, addProduct, categories } = useInventoryStore();
+  const { products, updateProduct, addTransaction, addProduct, categories } = useInventoryStore();
   const { suppliers, updateSupplierPayable } = useSupplierStore();
   const { currentUser } = useAuthStore();
   

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSettingsStore, DEFAULT_INVOICE_FOOTER, defaultInvoiceHeader } from '../../store/useSettingsStore';
-import { Settings as SettingsIcon, Save, Percent, RefreshCw, Receipt, Bell, ShieldCheck, AlertTriangle, Clock, XOctagon } from 'lucide-react';
+import { Settings as SettingsIcon, Save, Percent, RefreshCw, Receipt, Bell, ShieldCheck, AlertTriangle, XOctagon } from 'lucide-react';
 import NotificationSettings from './NotificationSettings';
 
 const ROUNDING_OPTIONS = [

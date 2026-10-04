@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useInventoryStore } from '../../store/useInventoryStore';
 import { useSettingsStore } from '../../store/useSettingsStore';
 
-import { Plus, Save, CheckCircle, PackageCheck, Edit2, Trash2, X, Settings, ArrowDownToLine, Camera, Search, FileText, AlertTriangle, Printer, LayoutGrid, Package } from 'lucide-react';
+import { Plus, Save, CheckCircle, PackageCheck, Edit2, Trash2, X, ArrowDownToLine, Camera, Search, FileText, AlertTriangle, Printer, LayoutGrid, Package } from 'lucide-react';
 import BarcodeScannerCamera from '../../components/BarcodeScannerCamera';
 import BarcodeLabelModal from '../../components/BarcodeLabelModal';
 import DraftReviewDrawer from '../../components/DraftReviewDrawer';

@@ -3,7 +3,9 @@ import { defineConfig, type Plugin } from 'vite'
 import tailwindcss from '@tailwindcss/vite'
 import basicSsl from '@vitejs/plugin-basic-ssl'
 import { pushApiMiddleware } from './server/pushApi.mjs'
+// @ts-ignore
 import { licenseMiddleware } from './server/license.mjs'
+// @ts-ignore
 import { saasApiMiddleware } from './server/api.mjs'
 
 /** Menyediakan endpoint /api/push/* (Web Push "Uang Masuk") langsung di dev & preview server. */
