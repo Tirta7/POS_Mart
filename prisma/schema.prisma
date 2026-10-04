@@ -13,10 +13,11 @@ model Tenant {
   license_expired_at DateTime?
   created_at         DateTime  @default(now())
 
-  users        User[]
-  products     Product[]
-  categories   Category[]
-  transactions Transaction[]
+  users             User[]
+  products          Product[]
+  categories        Category[]
+  transactions      Transaction[]
+  stockTransactions StockTransaction[]
 
   @@map("tenants")
 }
@@ -58,9 +59,10 @@ model Product {
   min_stock      Int     @default(0)
   image_url      String?
 
-  tenant           Tenant            @relation(fields: [tenant_id], references: [id])
-  category         Category?         @relation(fields: [category_id], references: [id])
-  transactionItems TransactionItem[]
+  tenant               Tenant                 @relation(fields: [tenant_id], references: [id])
+  category             Category?              @relation(fields: [category_id], references: [id])
+  transactionItems     TransactionItem[]
+  stockTransactionItems StockTransactionItem[]
 
   @@map("products")
 }
@@ -92,4 +94,39 @@ model TransactionItem {
   product     Product     @relation(fields: [product_id], references: [id])
 
   @@map("transaction_items")
+}
+
+model StockTransaction {
+  id           String   @id @default(uuid())
+  tenant_id    String
+  type         String   // "IN", "OUT", "ADJUSTMENT"
+  date         DateTime @default(now())
+  document_no  String
+  supplier_id  String?
+  employee_id  String
+  total_value  Float
+  note         String?
+  customer_id  String?
+  customer_name String?
+
+  tenant Tenant                 @relation(fields: [tenant_id], references: [id])
+  items  StockTransactionItem[]
+
+  @@map("stock_transactions")
+}
+
+model StockTransactionItem {
+  id                  String @id @default(uuid())
+  stock_transaction_id String
+  product_id          String
+  qty                 Int
+  batch_no            String?
+  expiry_date         String?
+  purchase_price      Float
+  subtotal            Float
+
+  stockTransaction StockTransaction @relation(fields: [stock_transaction_id], references: [id])
+  product          Product          @relation(fields: [product_id], references: [id])
+
+  @@map("stock_transaction_items")
 }

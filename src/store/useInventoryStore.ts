@@ -44,7 +44,7 @@ const getHeaders = () => {
 
 export const useInventoryStore = create<InventoryState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       products: [],
       isLoading: false,
       error: null,
@@ -128,9 +128,24 @@ export const useInventoryStore = create<InventoryState>()(
           reserved: Math.max(0, (p.reserved || 0) - qty)
         } : p)
       })),
-      addTransaction: (transaction) => set((state) => ({
-        transactions: [...state.transactions, transaction]
-      })),
+      addTransaction: async (transaction) => {
+        try {
+          const res = await fetch('/api/saas/stock-transactions', {
+            method: 'POST',
+            headers: getHeaders(),
+            body: JSON.stringify(transaction)
+          });
+          if (res.ok) {
+            const data = await res.json();
+            // Optional: you can add it to local state if needed
+            set((state) => ({ transactions: [...state.transactions, transaction] }));
+            // IMPORTANT: Refetch products so the new stock shows up everywhere!
+            get().fetchProducts(); 
+          }
+        } catch(err) {
+          console.error(err);
+        }
+      },
       addCategory: (category) => set((state) => ({
         categories: state.categories.includes(category) ? state.categories : [...state.categories, category]
       })),

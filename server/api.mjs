@@ -186,6 +186,73 @@ app.post('/api/saas/transactions', async (req, res) => {
   }
 });
 
+// ==========================================
+// ENDPOINT STOCK TRANSACTIONS
+// ==========================================
+app.get('/api/saas/stock-transactions', async (req, res) => {
+  try {
+    const txs = await prisma.stockTransaction.findMany({
+      where: { tenant_id: req.tenantId },
+      include: { items: true },
+      orderBy: { date: 'desc' }
+    });
+    res.json(txs);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/saas/stock-transactions', async (req, res) => {
+  try {
+    const data = req.body;
+    const { type, documentNo, supplierId, employeeId, totalValue, note, customerId, customerName, items } = data;
+    
+    const transaction = await prisma.$transaction(async (tx) => {
+      // 1. Buat Header Transaksi
+      const newTx = await tx.stockTransaction.create({
+        data: {
+          tenant_id: req.tenantId,
+          type,
+          document_no: documentNo,
+          supplier_id: supplierId,
+          employee_id: employeeId || 'cashier-1',
+          total_value: Number(totalValue),
+          note,
+          customer_id: customerId,
+          customer_name: customerName
+        }
+      });
+
+      // 2. Masukkan Item dan Update Stok Produk
+      for (const item of items) {
+        await tx.stockTransactionItem.create({
+          data: {
+            stock_transaction_id: newTx.id,
+            product_id: item.productId,
+            qty: item.qty,
+            batch_no: item.batchNo,
+            expiry_date: item.expiryDate,
+            purchase_price: Number(item.purchasePrice),
+            subtotal: Number(item.subtotal)
+          }
+        });
+
+        // Update stok (qty bisa positif atau negatif tergantung IN/OUT/ADJUSTMENT)
+        await tx.product.update({
+          where: { id: item.productId, tenant_id: req.tenantId },
+          data: { stock: { increment: item.qty } }
+        });
+      }
+
+      return newTx;
+    });
+
+    res.json(transaction);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Wrapper untuk middleware Vite
 export const saasApiMiddleware = (req, res, next) => {
   if (req.url && req.url.startsWith('/api/saas')) {
