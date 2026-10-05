@@ -13,7 +13,7 @@ const app = express();
 app.use(express.json());
 
 // Middleware CORS dan Auth
-app.use('/api/saas', (req, res, next) => {
+app.use('/api/saas', async (req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-tenant-id');
@@ -24,6 +24,17 @@ app.use('/api/saas', (req, res, next) => {
   const tenantId = req.headers['x-tenant-id'];
   if (!tenantId) {
     return res.status(401).json({ error: 'Missing x-tenant-id header.' });
+  }
+  
+  // Pastikan tenant ada di database untuk menghindari error foreign key
+  try {
+    await prisma.tenant.upsert({
+      where: { id: tenantId },
+      update: {},
+      create: { id: tenantId, name: tenantId }
+    });
+  } catch(err) {
+    console.error("Gagal upsert tenant:", err);
   }
   
   req.tenantId = tenantId;
