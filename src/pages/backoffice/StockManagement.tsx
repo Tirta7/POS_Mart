@@ -298,7 +298,7 @@ const StockManagement: React.FC = () => {
           category: item.category,
           location: item.location || 'Gudang Utama',
           unit: item.unit,
-          stock: qtyIn,
+          stock: 0, // Dikosongkan agar penambahan qty di mutasi tidak berlipat (doubled)
           baseUnitMultiplier: 1,
           purchasePrice: Number(item.purchasePrice),
           sellingPrice: Number(item.sellingPrice),
