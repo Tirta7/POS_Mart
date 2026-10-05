@@ -62,7 +62,7 @@ const Reports: React.FC = () => {
 
   // Apply filters
   const filteredSales = useMemo(() => {
-    let result = enrichedSales;
+    let result = [...enrichedSales];
     
     if (searchQuery.trim() !== '') {
       const lowerQuery = searchQuery.toLowerCase();
