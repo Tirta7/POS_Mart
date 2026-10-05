@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Package, Truck, Users, Settings, User, PieChart, FlaskConical, ChevronDown, ChevronRight, LogOut } from 'lucide-react';
+import { Package, Truck, Users, Settings, User, PieChart, ChevronDown, ChevronRight, LogOut } from 'lucide-react';
 import { useAuthStore } from '../../store/useAuthStore';
 
 interface SidebarMenuProps {
