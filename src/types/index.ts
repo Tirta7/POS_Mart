@@ -14,6 +14,7 @@ export interface Product {
   sellingPrice: number;
   wholesalePrice?: number;
   image?: string;
+  isPending?: boolean; // Flag to indicate if the product is a draft in Goods Receipt
 }
 
 export interface Supplier {
