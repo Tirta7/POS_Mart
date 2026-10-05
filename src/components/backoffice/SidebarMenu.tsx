@@ -33,7 +33,6 @@ const SidebarMenu: React.FC<SidebarMenuProps> = ({ open = false, onClose }) => {
     { path: '/backoffice/employees', label: 'Data Karyawan', icon: <Users size={18} /> },
     { path: '/backoffice/reports', label: 'Laporan & Analitik', icon: <PieChart size={18} /> },
     { path: '/backoffice/settings', label: 'Pengaturan', icon: <Settings size={18} /> },
-    { path: '/backoffice/seed', label: 'Seed Data Dummy', icon: <FlaskConical size={18} /> },
   ];
 
   return (

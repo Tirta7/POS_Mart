@@ -13,7 +13,6 @@ import EmployeeData from './pages/backoffice/EmployeeData';
 import Settings from './pages/backoffice/Settings';
 import { CustomerData } from './pages/backoffice/CustomerData';
 import Reports from './pages/backoffice/Reports';
-import SeedDummyData from './pages/backoffice/SeedDummyData';
 import LoginPage from './pages/LoginPage';
 import { useCustomerStore } from './store/useCustomerStore';
 import { useSalesStore } from './store/useSalesStore';
@@ -106,7 +105,6 @@ function App() {
           <Route path="suppliers" element={<SupplierData />} />
           <Route path="employees" element={<EmployeeData />} />
           <Route path="reports" element={<Reports />} />
-          <Route path="seed" element={<SeedDummyData />} />
           <Route path="settings" element={<Settings />} />
         </Route>
 
