@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useSalesStore } from '../../store/useSalesStore';
 import { useInventoryStore } from '../../store/useInventoryStore';
 import { useCustomerStore } from '../../store/useCustomerStore';
@@ -9,8 +9,14 @@ import type { ReceiptOptions } from '../../utils/receipt';
 import { FileText, TrendingUp, AlertCircle, Calendar, DollarSign, Search, Filter, CreditCard, CheckCircle2, Printer } from 'lucide-react';
 
 const Reports: React.FC = () => {
-  const { sales } = useSalesStore();
-  const { products } = useInventoryStore();
+  const { sales, fetchSales } = useSalesStore();
+  const { products, fetchProducts } = useInventoryStore();
+  
+  useEffect(() => {
+    fetchSales();
+    fetchProducts();
+  }, [fetchSales, fetchProducts]);
+
   const { customers } = useCustomerStore();
   const { appName, taxEnabled, taxRate } = useSettingsStore();
   const [reprint, setReprint] = useState<{ sale: SalesTransaction; options: ReceiptOptions } | null>(null);

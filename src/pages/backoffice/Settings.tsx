@@ -74,15 +74,18 @@ const Settings: React.FC = () => {
     }
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    setAppName(localAppName);
-    setAppLogo(localAppLogo);
-    setTaxEnabled(localTaxEnabled);
-    setTaxRate(localTaxRate);
-    setRoundingUnit(localRounding);
-    setInvoiceHeader(localHeader);
-    setInvoiceFooter(localFooter);
+    const newSettings = {
+      appName: localAppName,
+      appLogo: localAppLogo,
+      taxEnabled: localTaxEnabled,
+      taxRate: localTaxRate,
+      roundingUnit: localRounding,
+      invoiceHeader: localHeader,
+      invoiceFooter: localFooter,
+    };
+    await useSettingsStore.getState().saveSettings(newSettings);
     setIsSaved(true);
     setTimeout(() => setIsSaved(false), 3000);
   };

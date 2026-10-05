@@ -42,6 +42,50 @@ app.use('/api/saas', async (req, res, next) => {
 });
 
 // ==========================================
+// ENDPOINT PENGATURAN (SETTINGS)
+// ==========================================
+app.get('/api/saas/settings', async (req, res) => {
+  try {
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: req.tenantId }
+    });
+    if (!tenant) return res.status(404).json({ error: "Tenant not found" });
+    res.json({
+      appName: tenant.name,
+      taxEnabled: tenant.tax_enabled,
+      taxRate: tenant.tax_rate,
+      roundingUnit: tenant.rounding_unit,
+      invoiceHeader: tenant.invoice_header,
+      invoiceFooter: tenant.invoice_footer,
+      appLogo: tenant.app_logo
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/saas/settings', async (req, res) => {
+  try {
+    const data = req.body;
+    const tenant = await prisma.tenant.update({
+      where: { id: req.tenantId },
+      data: {
+        name: data.appName !== undefined ? data.appName : undefined,
+        tax_enabled: data.taxEnabled !== undefined ? data.taxEnabled : undefined,
+        tax_rate: data.taxRate !== undefined ? Number(data.taxRate) : undefined,
+        rounding_unit: data.roundingUnit !== undefined ? Number(data.roundingUnit) : undefined,
+        invoice_header: data.invoiceHeader !== undefined ? data.invoiceHeader : undefined,
+        invoice_footer: data.invoiceFooter !== undefined ? data.invoiceFooter : undefined,
+        app_logo: data.appLogo !== undefined ? data.appLogo : undefined
+      }
+    });
+    res.json({ success: true, tenant });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
 // ENDPOINT PRODUK
 // ==========================================
 app.get('/api/saas/products', async (req, res) => {
@@ -85,6 +129,7 @@ app.post('/api/saas/products', async (req, res) => {
         category_id: categoryId,
         purchase_price: Number(data.purchasePrice || 0),
         selling_price: Number(data.sellingPrice || 0),
+        wholesale_price: Number(data.wholesalePrice || 0),
         stock: Number(data.stock || 0),
         min_stock: Number(data.minStock || 0),
         image_url: data.image
@@ -123,6 +168,7 @@ app.put('/api/saas/products/:id', async (req, res) => {
     if (categoryId !== undefined) updateData.category_id = categoryId;
     if (data.purchasePrice !== undefined) updateData.purchase_price = Number(data.purchasePrice);
     if (data.sellingPrice !== undefined) updateData.selling_price = Number(data.sellingPrice);
+    if (data.wholesalePrice !== undefined) updateData.wholesale_price = Number(data.wholesalePrice);
     if (data.stock !== undefined) updateData.stock = Number(data.stock);
     if (data.minStock !== undefined) updateData.min_stock = Number(data.minStock);
     if (data.image !== undefined) updateData.image_url = data.image;
@@ -150,8 +196,93 @@ app.delete('/api/saas/products/:id', async (req, res) => {
 });
 
 // ==========================================
+// ENDPOINT PELANGGAN (CUSTOMERS)
+// ==========================================
+app.get('/api/saas/customers', async (req, res) => {
+  try {
+    const customers = await prisma.customer.findMany({
+      where: { tenant_id: req.tenantId }
+    });
+    res.json(customers);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/saas/customers', async (req, res) => {
+  try {
+    const data = req.body;
+    const customer = await prisma.customer.create({
+      data: {
+        tenant_id: req.tenantId,
+        name: data.name,
+        phone: data.phone,
+        address: data.address
+      }
+    });
+    res.json(customer);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/saas/customers/:id', async (req, res) => {
+  try {
+    const data = req.body;
+    const customer = await prisma.customer.update({
+      where: { id: req.params.id, tenant_id: req.tenantId },
+      data: {
+        name: data.name !== undefined ? data.name : undefined,
+        phone: data.phone !== undefined ? data.phone : undefined,
+        address: data.address !== undefined ? data.address : undefined
+      }
+    });
+    res.json(customer);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/saas/customers/:id', async (req, res) => {
+  try {
+    await prisma.customer.delete({
+      where: { id: req.params.id, tenant_id: req.tenantId }
+    });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
 // ENDPOINT TRANSAKSI (KASIR)
 // ==========================================
+app.get('/api/saas/transactions', async (req, res) => {
+  try {
+    const transactions = await prisma.transaction.findMany({
+      where: { tenant_id: req.tenantId },
+      include: { items: { include: { product: true } } },
+      orderBy: { created_at: 'desc' }
+    });
+    res.json(transactions);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/saas/transactions/:id', async (req, res) => {
+  try {
+    const transaction = await prisma.transaction.findUnique({
+      where: { id: req.params.id, tenant_id: req.tenantId },
+      include: { items: { include: { product: true } } }
+    });
+    if (!transaction) return res.status(404).json({ error: "Not found" });
+    res.json(transaction);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post('/api/saas/transactions', async (req, res) => {
   try {
     const data = req.body;
@@ -249,9 +380,13 @@ app.post('/api/saas/stock-transactions', async (req, res) => {
         });
 
         // Update stok (qty bisa positif atau negatif tergantung IN/OUT/ADJUSTMENT)
+        let stockChange = Number(item.qty);
+        if (type === 'OUT') stockChange = -Math.abs(stockChange);
+        else if (type === 'IN') stockChange = Math.abs(stockChange);
+
         await tx.product.update({
           where: { id: item.productId, tenant_id: req.tenantId },
-          data: { stock: { increment: item.qty } }
+          data: { stock: { increment: stockChange } }
         });
       }
 
@@ -259,6 +394,67 @@ app.post('/api/saas/stock-transactions', async (req, res) => {
     });
 
     res.json(transaction);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// ENDPOINT SUPPLIER
+// ==========================================
+app.get('/api/saas/suppliers', async (req, res) => {
+  try {
+    const suppliers = await prisma.supplier.findMany({
+      where: { tenant_id: req.tenantId }
+    });
+    res.json(suppliers);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/saas/suppliers', async (req, res) => {
+  try {
+    const data = req.body;
+    const supplier = await prisma.supplier.create({
+      data: {
+        tenant_id: req.tenantId,
+        name: data.name,
+        contact: data.contact,
+        phone: data.phone,
+        payment_term_days: Number(data.paymentTermDays || 0)
+      }
+    });
+    res.json(supplier);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/saas/suppliers/:id', async (req, res) => {
+  try {
+    const data = req.body;
+    const supplier = await prisma.supplier.update({
+      where: { id: req.params.id, tenant_id: req.tenantId },
+      data: {
+        name: data.name !== undefined ? data.name : undefined,
+        contact: data.contact !== undefined ? data.contact : undefined,
+        phone: data.phone !== undefined ? data.phone : undefined,
+        payment_term_days: data.paymentTermDays !== undefined ? Number(data.paymentTermDays) : undefined
+      }
+    });
+    res.json(supplier);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/saas/suppliers/:id', async (req, res) => {
+  try {
+    await prisma.supplier.delete({
+      where: { id: req.params.id, tenant_id: req.tenantId }
+    });
+    res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

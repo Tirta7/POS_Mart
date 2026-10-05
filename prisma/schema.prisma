@@ -11,6 +11,12 @@ model Tenant {
   name               String
   vocml_license_key  String?
   license_expired_at DateTime?
+  tax_enabled        Boolean   @default(true)
+  tax_rate           Float     @default(11)
+  rounding_unit      Int       @default(0)
+  invoice_header     String?
+  invoice_footer     String?
+  app_logo           String?
   created_at         DateTime  @default(now())
 
   users             User[]
@@ -18,8 +24,35 @@ model Tenant {
   categories        Category[]
   transactions      Transaction[]
   stockTransactions StockTransaction[]
+  customers         Customer[]
+  suppliers         Supplier[]
 
   @@map("tenants")
+}
+
+model Customer {
+  id        String   @id @default(uuid())
+  tenant_id String
+  name      String
+  phone     String?
+  address   String?
+
+  tenant    Tenant   @relation(fields: [tenant_id], references: [id])
+  
+  @@map("customers")
+}
+
+model Supplier {
+  id                String   @id @default(uuid())
+  tenant_id         String
+  name              String
+  contact           String?
+  phone             String?
+  payment_term_days Int      @default(0)
+
+  tenant    Tenant   @relation(fields: [tenant_id], references: [id])
+
+  @@map("suppliers")
 }
 
 model User {
@@ -55,6 +88,7 @@ model Product {
   category_id    String?
   purchase_price Float   @default(0)
   selling_price  Float   @default(0)
+  wholesale_price Float  @default(0)
   stock          Int     @default(0)
   min_stock      Int     @default(0)
   image_url      String?
