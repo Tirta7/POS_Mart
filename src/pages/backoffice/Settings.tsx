@@ -22,7 +22,7 @@ const TABS: { id: TabId; label: string; desc: string; Icon: React.ElementType }[
 ];
 
 const Settings: React.FC = () => {
-  const { appName, setAppName, appLogo, setAppLogo, taxEnabled, setTaxEnabled, taxRate, setTaxRate, roundingUnit, setRoundingUnit, invoiceHeader, setInvoiceHeader, invoiceFooter, setInvoiceFooter } = useSettingsStore();
+  const { appName, appLogo, taxEnabled, taxRate, roundingUnit, invoiceHeader, invoiceFooter } = useSettingsStore();
   const [activeTab, setActiveTab] = useState<TabId>('general');
   const [localAppName, setLocalAppName] = useState(appName);
   const [localAppLogo, setLocalAppLogo] = useState<string | null>(appLogo);

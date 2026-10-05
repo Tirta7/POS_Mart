@@ -18,6 +18,7 @@ import LoginPage from './pages/LoginPage';
 import { useCustomerStore } from './store/useCustomerStore';
 import { useSalesStore } from './store/useSalesStore';
 import { useHoldStore } from './store/useHoldStore';
+import { useSupplierStore } from './store/useSupplierStore';
 
 function App() {
   const { appName } = useSettingsStore();
