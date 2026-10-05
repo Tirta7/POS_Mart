@@ -417,10 +417,30 @@ const StockManagement: React.FC = () => {
   // Jika kategori aktif sudah dihapus/diganti nama, kembali ke 'Semua'
   const currentCategory = activeCategory === 'all' || categories.includes(activeCategory) ? activeCategory : 'all';
 
-  const filteredProducts = products.filter(p =>
+  // Combine database products with pending draft items
+  const pendingDisplayProducts = sessionItems.map(si => ({
+    id: si.id,
+    sku: si.sku,
+    barcode: si.barcode,
+    name: si.name,
+    category: si.category,
+    location: si.location,
+    unit: si.unit,
+    stock: si.qty,
+    purchasePrice: si.purchasePrice,
+    sellingPrice: si.sellingPrice,
+    wholesalePrice: si.wholesalePrice,
+    minStock: si.minStock,
+    image: si.image,
+    isPending: true
+  }));
+
+  const allDisplayProducts = [...pendingDisplayProducts, ...products];
+
+  const filteredProducts = allDisplayProducts.filter(p =>
     (currentCategory === 'all' || p.category === currentCategory) &&
     (p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-     p.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
+     (p.sku && p.sku.toLowerCase().includes(searchQuery.toLowerCase())) ||
      p.id.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
@@ -540,7 +560,10 @@ const StockManagement: React.FC = () => {
                 <tr key={p.id}>
                   <td className="bo-table-sku" style={{ color: '#6b7280' }}>{p.id}</td>
                   <td className="bo-table-sku">{p.sku}</td>
-                  <td className="bo-table-bold r-card-title r-sheet-name">{p.name}</td>
+                  <td className="bo-table-bold r-card-title r-sheet-name">
+                    {p.name}
+                    {p.isPending && <span style={{ marginLeft: '8px', fontSize: '10px', backgroundColor: '#fbbf24', color: '#fff', padding: '2px 6px', borderRadius: '4px' }}>DRAF</span>}
+                  </td>
                   <td>
                     <span className="bo-badge bo-badge-gray">
                       {p.category}
@@ -574,10 +597,23 @@ const StockManagement: React.FC = () => {
                     })()}
                   </td>
                   <td style={{ textAlign: 'center', display: 'flex', gap: '8px', justifyContent: 'center' }}>
-                    <button className="bo-action-btn" title="Restock / Barang Masuk" onClick={() => openRestockModal(p)} style={{ color: '#10b981' }}><ArrowDownToLine size={16} /></button>
-                    <button className="bo-action-btn" title="Cetak Label Barcode" onClick={() => { setLabelCopies(1); setLabelProduct(p); }} style={{ color: '#2563eb' }}><Printer size={16} /></button>
-                    <button className="bo-action-btn" title="Edit Master Data" onClick={() => handleEditClick(p)}><Edit2 size={16} /></button>
-                    <button className="bo-action-btn" title="Hapus Produk" onClick={() => deleteProduct(p.id)}><Trash2 size={16} /></button>
+                    {p.isPending ? (
+                      <>
+                        <button className="bo-action-btn" title="Cetak Label Barcode" onClick={() => { setLabelCopies(Math.max(1, Math.ceil(Number(p.stock)))); setLabelProduct(p); }} style={{ color: '#2563eb' }}><Printer size={16} /></button>
+                        <button className="bo-action-btn" title="Batal Tambah (Hapus Draf)" onClick={() => {
+                          const next = sessionItems.filter(si => si.id !== p.id);
+                          setSessionItems(next);
+                          persistDraft(next);
+                        }} style={{ color: '#ef4444' }}><Trash2 size={16} /></button>
+                      </>
+                    ) : (
+                      <>
+                        <button className="bo-action-btn" title="Restock / Barang Masuk" onClick={() => openRestockModal(p)} style={{ color: '#10b981' }}><ArrowDownToLine size={16} /></button>
+                        <button className="bo-action-btn" title="Cetak Label Barcode" onClick={() => { setLabelCopies(1); setLabelProduct(p); }} style={{ color: '#2563eb' }}><Printer size={16} /></button>
+                        <button className="bo-action-btn" title="Edit Master Data" onClick={() => handleEditClick(p)}><Edit2 size={16} /></button>
+                        <button className="bo-action-btn" title="Hapus Produk" onClick={() => deleteProduct(p.id)}><Trash2 size={16} /></button>
+                      </>
+                    )}
                   </td>
                 </tr>
               ))}
