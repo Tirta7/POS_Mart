@@ -558,7 +558,7 @@ const StockManagement: React.FC = () => {
             <tbody>
               {filteredProducts.map(p => (
                 <tr key={p.id}>
-                  <td className="bo-table-sku" style={{ color: '#6b7280' }}>{p.id}</td>
+                  <td className="bo-table-sku" style={{ color: '#6b7280' }}>{p.barcode || p.id}</td>
                   <td className="bo-table-sku">{p.sku}</td>
                   <td className="bo-table-bold r-card-title r-sheet-name">
                     {p.name}

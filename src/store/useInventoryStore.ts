@@ -35,6 +35,7 @@ const mapProduct = (p: any): Product => ({
   baseUnitMultiplier: 1,
   purchasePrice: p.purchase_price,
   sellingPrice: p.selling_price,
+  wholesalePrice: p.wholesale_price || 0,
   image: p.image_url || 'https://via.placeholder.com/150',
 });
 
