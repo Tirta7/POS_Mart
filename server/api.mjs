@@ -15,10 +15,10 @@ app.use(express.json());
 
 const knownTenants = new Set();
 
-const notifyTenant = (tenantId) => {
+const notifyTenant = (tenantId, entity) => {
   const io = getIo();
   if (io) {
-    io.to(tenantId).emit('data_updated');
+    io.to(tenantId).emit('data_updated', entity);
   }
 };
 
@@ -97,7 +97,7 @@ app.put('/api/saas/settings', async (req, res) => {
         app_logo: data.appLogo !== undefined ? data.appLogo : undefined
       }
     });
-    notifyTenant(req.tenantId);
+    notifyTenant(req.tenantId, 'settings');
     res.json({ success: true, tenant });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -155,7 +155,7 @@ app.post('/api/saas/products', async (req, res) => {
       },
       include: { category: true }
     });
-    notifyTenant(req.tenantId);
+    notifyTenant(req.tenantId, 'products');
     res.json(product);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -198,7 +198,7 @@ app.put('/api/saas/products/:id', async (req, res) => {
       data: updateData,
       include: { category: true }
     });
-    notifyTenant(req.tenantId);
+    notifyTenant(req.tenantId, 'products');
     res.json(product);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -210,7 +210,7 @@ app.delete('/api/saas/products/:id', async (req, res) => {
     await prisma.product.delete({
       where: { id: req.params.id, tenant_id: req.tenantId }
     });
-    notifyTenant(req.tenantId);
+    notifyTenant(req.tenantId, 'products');
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -242,7 +242,7 @@ app.post('/api/saas/customers', async (req, res) => {
         address: data.address
       }
     });
-    notifyTenant(req.tenantId);
+    notifyTenant(req.tenantId, 'customers');
     res.json(customer);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -260,7 +260,7 @@ app.put('/api/saas/customers/:id', async (req, res) => {
         address: data.address !== undefined ? data.address : undefined
       }
     });
-    notifyTenant(req.tenantId);
+    notifyTenant(req.tenantId, 'customers');
     res.json(customer);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -272,7 +272,7 @@ app.delete('/api/saas/customers/:id', async (req, res) => {
     await prisma.customer.delete({
       where: { id: req.params.id, tenant_id: req.tenantId }
     });
-    notifyTenant(req.tenantId);
+    notifyTenant(req.tenantId, 'customers');
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -368,7 +368,9 @@ app.post('/api/saas/transactions', async (req, res) => {
       return newTx;
     });
 
-    notifyTenant(req.tenantId);
+    notifyTenant(req.tenantId, 'transactions');
+    notifyTenant(req.tenantId, 'sales');
+    notifyTenant(req.tenantId, 'products'); // Because stock changed
     res.json(transaction);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -402,11 +404,11 @@ app.post('/api/saas/stock-transactions', async (req, res) => {
         data: {
           tenant_id: req.tenantId,
           type,
-          doc_no: documentNo,
+          document_no: documentNo,
           supplier_id: supplierId,
           employee_id: employeeId || 'cashier-1',
           total_value: Number(totalValue),
-          notes: note,
+          note,
           customer_id: customerId,
           customer_name: customerName
         }
@@ -440,7 +442,8 @@ app.post('/api/saas/stock-transactions', async (req, res) => {
       return newTx;
     });
 
-    notifyTenant(req.tenantId);
+    notifyTenant(req.tenantId, 'stock-transactions');
+    notifyTenant(req.tenantId, 'products'); // Because stock changed
     res.json(transaction);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -473,7 +476,7 @@ app.post('/api/saas/suppliers', async (req, res) => {
         payment_term_days: Number(data.paymentTermDays || 0)
       }
     });
-    notifyTenant(req.tenantId);
+    notifyTenant(req.tenantId, 'suppliers');
     res.json(supplier);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -492,7 +495,7 @@ app.put('/api/saas/suppliers/:id', async (req, res) => {
         payment_term_days: data.paymentTermDays !== undefined ? Number(data.paymentTermDays) : undefined
       }
     });
-    notifyTenant(req.tenantId);
+    notifyTenant(req.tenantId, 'suppliers');
     res.json(supplier);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -504,7 +507,7 @@ app.delete('/api/saas/suppliers/:id', async (req, res) => {
     await prisma.supplier.delete({
       where: { id: req.params.id, tenant_id: req.tenantId }
     });
-    notifyTenant(req.tenantId);
+    notifyTenant(req.tenantId, 'suppliers');
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });

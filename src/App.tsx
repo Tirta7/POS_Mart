@@ -80,14 +80,14 @@ function App() {
     (window as any).socketInstance = socket;
     socket.emit('join_tenant', 'TID-DEMO-123');
     
-    socket.on('data_updated', () => {
-      // Refresh semua data dari database ketika ada perubahan dari Kasir/Admin lain
-      fetchProducts();
-      fetchTransactions();
-      fetchSales();
-      fetchCustomers();
-      fetchSuppliers();
-      fetchSettings();
+    socket.on('data_updated', (entity) => {
+      // Refresh secara efisien hanya data yang berubah untuk menghemat limit database!
+      if (!entity || entity === 'products') fetchProducts();
+      if (!entity || entity === 'transactions') fetchTransactions();
+      if (!entity || entity === 'sales') fetchSales();
+      if (!entity || entity === 'customers') fetchCustomers();
+      if (!entity || entity === 'suppliers') fetchSuppliers();
+      if (!entity || entity === 'settings') fetchSettings();
     });
 
     socket.on('sync_drafts', (draftsStr) => {
