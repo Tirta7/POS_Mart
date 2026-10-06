@@ -21,10 +21,15 @@ html {
   text-size-adjust: 100%;
 }
 
-html,
-body,
-#root {
-  height: 100%;
+html, body, #root {
+  width: 100vw;
+  height: 100dvh;
+  /* KIOSK MODE: Fixes the black gap at the bottom of iOS PWA */
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
 }
 
 body {
@@ -36,12 +41,8 @@ body {
 .app-container,
 .bo-layout {
   width: 100%;
-}
-@supports (height: 100dvh) {
-  .app-container,
-  .bo-layout {
-    height: 100dvh;
-  }
+  height: 100%;
+  overflow-y: auto; /* Allow scrolling inside the container */
 }
 
 /* Header menghormati safe-area kiri/kanan (landscape iPhone dengan notch) */
