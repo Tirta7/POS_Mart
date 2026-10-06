@@ -42,7 +42,7 @@ const Reports: React.FC = () => {
 
     return sales.map(sale => {
       // Find customer
-      const customerName = customerMap.get(sale.customerId) || 'Umum (Guest)';
+      const customerName = sale.customerId ? customerMap.get(sale.customerId) || 'Umum (Guest)' : 'Umum (Guest)';
 
       // Calculate profit margin
       let totalPurchasePrice = 0;
