@@ -3,6 +3,7 @@ import express from 'express';
 import pkg from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import pg from 'pg';
+import { getIo } from './socket.mjs';
 
 const { PrismaClient } = pkg;
 const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
@@ -13,6 +14,13 @@ const app = express();
 app.use(express.json());
 
 const knownTenants = new Set();
+
+const notifyTenant = (tenantId) => {
+  const io = getIo();
+  if (io) {
+    io.to(tenantId).emit('data_updated');
+  }
+};
 
 // Middleware CORS dan Auth
 app.use('/api/saas', async (req, res, next) => {
@@ -146,6 +154,7 @@ app.post('/api/saas/products', async (req, res) => {
       },
       include: { category: true }
     });
+    notifyTenant(req.tenantId);
     res.json(product);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -188,6 +197,7 @@ app.put('/api/saas/products/:id', async (req, res) => {
       data: updateData,
       include: { category: true }
     });
+    notifyTenant(req.tenantId);
     res.json(product);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -199,6 +209,7 @@ app.delete('/api/saas/products/:id', async (req, res) => {
     await prisma.product.delete({
       where: { id: req.params.id, tenant_id: req.tenantId }
     });
+    notifyTenant(req.tenantId);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -326,6 +337,7 @@ app.post('/api/saas/transactions', async (req, res) => {
       return newTx;
     });
 
+    notifyTenant(req.tenantId);
     res.json(transaction);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -397,6 +409,7 @@ app.post('/api/saas/stock-transactions', async (req, res) => {
       return newTx;
     });
 
+    notifyTenant(req.tenantId);
     res.json(transaction);
   } catch (err) {
     res.status(500).json({ error: err.message });

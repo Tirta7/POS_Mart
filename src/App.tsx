@@ -18,6 +18,7 @@ import { useCustomerStore } from './store/useCustomerStore';
 import { useSalesStore } from './store/useSalesStore';
 import { useHoldStore } from './store/useHoldStore';
 import { useSupplierStore } from './store/useSupplierStore';
+import { io } from 'socket.io-client';
 
 // Route guard — jika belum login, redirect ke /login
 const RequireAuth = ({ children }: { children: React.ReactNode }) => {
@@ -61,10 +62,36 @@ function App() {
       if (e.key === 'sales-storage') useSalesStore.persist.rehydrate();
       if (e.key === 'auth-storage') useAuthStore.persist.rehydrate();
       if (e.key === 'hold-storage') useHoldStore.persist.rehydrate();
+      // Handle drafts cross-tab sync manually (dispatch a custom event to self if needed, or rely on storage event)
+      if (e.key === 'grDrafts') {
+         window.dispatchEvent(new Event('drafts_updated'));
+      }
     };
     window.addEventListener('storage', handleStorage);
     return () => window.removeEventListener('storage', handleStorage);
   }, []);
+
+  // WebSockets Real-time Database Sync (Redis/Socket.IO)
+  useEffect(() => {
+    if (!currentUser) return;
+    
+    // Default tenant for demo (TID-DEMO-123)
+    const socket = io('/', { transports: ['websocket'] });
+    socket.emit('join_tenant', 'TID-DEMO-123');
+    
+    socket.on('data_updated', () => {
+      // Refresh semua data dari database ketika ada perubahan dari Kasir/Admin lain
+      fetchProducts();
+      fetchTransactions();
+      fetchSales();
+      fetchCustomers();
+      fetchSuppliers();
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [currentUser]);
 
 
   return (

@@ -80,6 +80,23 @@ const StockManagement: React.FC = () => {
   const [reviewItems, setReviewItems] = useState<any[] | null>(null);
   const [reviewMode, setReviewMode] = useState<'single' | 'multi'>('single');
 
+  React.useEffect(() => {
+    const handleDraftsUpdated = () => {
+      const latestDrafts = readDrafts();
+      setDrafts(latestDrafts);
+      
+      // Update session items if current GR is still active
+      const active = latestDrafts.find(d => d.grNumber === grNumber);
+      if (active) {
+        setSessionItems(active.items);
+      } else {
+        setSessionItems([]);
+      }
+    };
+    window.addEventListener('drafts_updated', handleDraftsUpdated);
+    return () => window.removeEventListener('drafts_updated', handleDraftsUpdated);
+  }, [grNumber]);
+
   const resetForm = () => {
     setEditingId(null);
     setProductId('');
