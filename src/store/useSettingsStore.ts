@@ -69,9 +69,5 @@ export const useSettingsStore = create<SettingsState>()(
       setRoundingUnit: (unit) => set({ roundingUnit: unit }),
       setInvoiceHeader: (text) => set({ invoiceHeader: text }),
       setInvoiceFooter: (text) => set({ invoiceFooter: text }),
-    }),
-    {
-      name: 'settings-storage',
-    }
-  )
+    })
 );

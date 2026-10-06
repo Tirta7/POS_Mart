@@ -87,10 +87,6 @@ export const useSalesStore = create<SalesState>()(
         }
       },
       clearSales: () => set({ sales: [] }),
-    }),
-    {
-      name: 'sales-storage',
-    }
-  )
+    })
 );
 

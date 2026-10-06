@@ -44,9 +44,5 @@ export const useSupplierStore = create<SupplierState>()(
             : s
         )
       })),
-    }),
-    {
-      name: 'supplier-storage',
-    }
-  )
+    })
 );

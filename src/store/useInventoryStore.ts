@@ -191,11 +191,5 @@ export const useInventoryStore = create<InventoryState>()(
         categories: state.categories.map(c => c === oldCategory ? newCategory : c),
         products: state.products.map(p => p.category === oldCategory ? { ...p, category: newCategory } : p)
       })),
-    }),
-    {
-      name: 'inventory-storage',
-      // We only want to persist categories for now, since products are from DB
-      partialize: (state) => ({ categories: state.categories, transactions: state.transactions }),
-    }
-  )
+    })
 );

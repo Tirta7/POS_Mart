@@ -29,9 +29,5 @@ export const useHoldStore = create<HoldState>()(
           heldOrders: state.heldOrders.filter((o) => o.holdId !== holdId),
         })),
       clearAllHeld: () => set({ heldOrders: [] }),
-    }),
-    {
-      name: 'hold-orders-storage',
-    }
-  )
+    })
 );

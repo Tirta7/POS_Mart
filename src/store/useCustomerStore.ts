@@ -79,9 +79,5 @@ export const useCustomerStore = create<CustomerState>()(
           return c;
         })
       }))
-    }),
-    {
-      name: 'customer-storage',
-    }
-  )
+    })
 );
