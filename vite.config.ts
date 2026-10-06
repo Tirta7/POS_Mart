@@ -1,7 +1,6 @@
 import react from '@vitejs/plugin-react'
 import { defineConfig, type Plugin } from 'vite'
 import tailwindcss from '@tailwindcss/vite'
-import basicSsl from '@vitejs/plugin-basic-ssl'
 import { pushApiMiddleware } from './server/pushApi.mjs'
 // @ts-ignore
 import { licenseMiddleware } from './server/license.mjs'
@@ -12,6 +11,18 @@ import { saasApiMiddleware } from './server/api.mjs'
 const pushApiPlugin = (): Plugin => ({
   name: 'pos-push-api',
   configureServer(server) {
+    server.middlewares.use((req, res, next) => {
+      // Polyfill HTTP/2 socket & prevent res.end crash in Node 22
+      if (!req.socket && (req as any).stream) {
+        (req as any).socket = { destroy: () => (req as any).stream.destroy() } as any;
+      }
+      const origEnd = res.end;
+      res.end = function(...args: any[]) {
+        if ((res as any).destroyed) return;
+        try { return origEnd.apply(this, args as any); } catch(e) {}
+      };
+      next();
+    });
     server.middlewares.use(licenseMiddleware())
     server.middlewares.use(pushApiMiddleware())
     server.middlewares.use((req, res, next) => {
@@ -23,6 +34,17 @@ const pushApiPlugin = (): Plugin => ({
     })
   },
   configurePreviewServer(server) {
+    server.middlewares.use((req, res, next) => {
+      if (!req.socket && (req as any).stream) {
+        (req as any).socket = { destroy: () => (req as any).stream.destroy() } as any;
+      }
+      const origEnd = res.end;
+      res.end = function(...args: any[]) {
+        if ((res as any).destroyed) return;
+        try { return origEnd.apply(this, args as any); } catch(e) {}
+      };
+      next();
+    });
     server.middlewares.use(licenseMiddleware())
     server.middlewares.use(pushApiMiddleware())
     server.middlewares.use((req, res, next) => {
@@ -37,7 +59,7 @@ const pushApiPlugin = (): Plugin => ({
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), tailwindcss(), basicSsl(), pushApiPlugin()],
+  plugins: [react(), tailwindcss(), pushApiPlugin()],
   server: {
     host: true,
     // Izinkan akses lewat tunnel (ngrok / Cloudflare Tunnel) agar iOS mendapat HTTPS valid.

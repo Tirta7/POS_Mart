@@ -12,6 +12,8 @@ const prisma = new PrismaClient({ adapter });
 const app = express();
 app.use(express.json());
 
+const knownTenants = new Set();
+
 // Middleware CORS dan Auth
 app.use('/api/saas', async (req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -27,14 +29,22 @@ app.use('/api/saas', async (req, res, next) => {
   }
   
   // Pastikan tenant ada di database untuk menghindari error foreign key
-  try {
-    await prisma.tenant.upsert({
-      where: { id: tenantId },
-      update: {},
-      create: { id: tenantId, name: tenantId }
-    });
-  } catch(err) {
-    console.error("Gagal upsert tenant:", err);
+  if (!knownTenants.has(tenantId)) {
+    try {
+      await prisma.tenant.upsert({
+        where: { id: tenantId },
+        update: {},
+        create: { id: tenantId, name: tenantId }
+      });
+      knownTenants.add(tenantId);
+    } catch(err) {
+      if (err.code === 'P2002') {
+        // Race condition: tenant baru saja dimasukkan oleh request lain secara bersamaan
+        knownTenants.add(tenantId);
+      } else {
+        console.error("Gagal upsert tenant:", err);
+      }
+    }
   }
   
   req.tenantId = tenantId;
@@ -463,7 +473,11 @@ app.delete('/api/saas/suppliers/:id', async (req, res) => {
 // Wrapper untuk middleware Vite
 export const saasApiMiddleware = (req, res, next) => {
   if (req.url && req.url.startsWith('/api/saas')) {
-    return app(req, res, next);
+    app(req, res, (err) => {
+      if (!req.url) req.url = '/';
+      next(err);
+    });
+    return;
   }
   next();
 };

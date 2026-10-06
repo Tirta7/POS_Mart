@@ -19,6 +19,13 @@ import { useSalesStore } from './store/useSalesStore';
 import { useHoldStore } from './store/useHoldStore';
 import { useSupplierStore } from './store/useSupplierStore';
 
+// Route guard — jika belum login, redirect ke /login
+const RequireAuth = ({ children }: { children: React.ReactNode }) => {
+  const { currentUser } = useAuthStore();
+  if (!currentUser) return <Navigate to="/login" replace />;
+  return <>{children}</>;
+};
+
 function App() {
   const { appName } = useSettingsStore();
   const { currentUser } = useAuthStore();
@@ -59,11 +66,6 @@ function App() {
     return () => window.removeEventListener('storage', handleStorage);
   }, []);
 
-  // Route guard — jika belum login, redirect ke /login
-  const RequireAuth = ({ children }: { children: React.ReactNode }) => {
-    if (!currentUser) return <Navigate to="/login" replace />;
-    return <>{children}</>;
-  };
 
   return (
     <Router>
