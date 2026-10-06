@@ -3,17 +3,20 @@ import Redis from 'ioredis';
 import { createAdapter } from '@socket.io/redis-adapter';
 
 let io;
-const pubClient = new Redis({
-  retryStrategy: (times) => Math.min(times * 50, 2000)
-});
-const subClient = pubClient.duplicate();
-
-pubClient.on('error', (err) => console.error('Redis Pub Client Error', err));
-subClient.on('error', (err) => console.error('Redis Sub Client Error', err));
+let pubClient;
+let subClient;
 
 export const initSocket = async (httpServer) => {
   if (io) return io;
   
+  pubClient = new Redis({
+    retryStrategy: (times) => Math.min(times * 50, 2000)
+  });
+  subClient = pubClient.duplicate();
+
+  pubClient.on('error', (err) => console.error('Redis Pub Client Error', err));
+  subClient.on('error', (err) => console.error('Redis Sub Client Error', err));
+
   io = new Server(httpServer, {
     cors: {
       origin: '*',
