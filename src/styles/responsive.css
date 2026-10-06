@@ -1695,16 +1695,12 @@ body {
   table.bo-table.r-sheet tbody tr:nth-child(even) td {
     background: rgba(0,0,0,0.02);
   }
-  /* Kolom Nama Produk dibekukan di kiri saat geser */
+  /* Kolom Nama Produk */
   table.bo-table.r-sheet .r-sheet-name {
-    position: sticky;
-    left: 0;
-    z-index: 1;
     min-width: 110px;
     max-width: 140px;
     white-space: normal !important;
     background: var(--bg-main, #f2f2f7);
-    box-shadow: 1px 0 0 #d1d1d6;
   }
   table.bo-table.r-sheet tbody tr:nth-child(even) td.r-sheet-name {
     background: #ebebf0;
