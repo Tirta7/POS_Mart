@@ -15,7 +15,8 @@ const Reports: React.FC = () => {
   useEffect(() => {
     fetchSales();
     fetchProducts();
-  }, [fetchSales, fetchProducts]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const { customers } = useCustomerStore();
   const { appName, taxEnabled, taxRate } = useSettingsStore();
@@ -35,15 +36,18 @@ const Reports: React.FC = () => {
 
   // Compute enriched sales with Customer Name and Profit Margin
   const enrichedSales = useMemo(() => {
+    // Create lookup maps for faster access (O(1) instead of O(N))
+    const customerMap = new Map(customers.map(c => [c.id, c.name]));
+    const productMap = new Map(products.map(p => [p.id, p]));
+
     return sales.map(sale => {
       // Find customer
-      const customer = customers.find(c => c.id === sale.customerId);
-      const customerName = customer ? customer.name : 'Umum (Guest)';
+      const customerName = customerMap.get(sale.customerId) || 'Umum (Guest)';
 
       // Calculate profit margin
       let totalPurchasePrice = 0;
       sale.items.forEach(item => {
-        const product = products.find(p => p.id === item.productId);
+        const product = productMap.get(item.productId);
         // Harga modal langsung dari purchasePrice
         const unitCost = product ? product.purchasePrice : 0;
         totalPurchasePrice += unitCost * item.qty;
