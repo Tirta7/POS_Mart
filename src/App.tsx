@@ -18,6 +18,7 @@ import { useCustomerStore } from './store/useCustomerStore';
 import { useSalesStore } from './store/useSalesStore';
 import { useHoldStore } from './store/useHoldStore';
 import { useSupplierStore } from './store/useSupplierStore';
+import { useDraftStore } from './store/useDraftStore';
 import { io } from 'socket.io-client';
 
 // Route guard — jika belum login, redirect ke /login
@@ -36,6 +37,7 @@ function App() {
   const { fetchSettings } = useSettingsStore();
   const { fetchCustomers } = useCustomerStore();
   const { fetchSuppliers } = useSupplierStore();
+  const { fetchDrafts } = useDraftStore();
 
   useEffect(() => {
     document.title = appName;
@@ -55,6 +57,7 @@ function App() {
       fetchSettings();
       fetchCustomers();
       fetchSuppliers();
+      fetchDrafts();
     }
   }, [currentUser]);
 
@@ -96,9 +99,9 @@ function App() {
       if (!entity || entity === 'users') fetchEmployees();
     });
 
-    socket.on('sync_drafts', (draftsStr) => {
-      localStorage.setItem('grDrafts', draftsStr);
-      window.dispatchEvent(new Event('drafts_updated'));
+    socket.on('draft_updated_grDrafts', (draftsArr) => {
+      // Data already parsed in API response JSON
+      useDraftStore.getState().fetchDrafts();
     });
 
     return () => {

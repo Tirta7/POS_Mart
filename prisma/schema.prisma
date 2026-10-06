@@ -71,6 +71,16 @@ model User {
   @@map("users")
 }
 
+model Draft {
+  id        String @id @default(uuid())
+  tenant_id String
+  key       String
+  value     String // JSON string
+  
+  @@unique([tenant_id, key])
+  @@map("drafts")
+}
+
 model Category {
   id        String @id @default(uuid())
   tenant_id String

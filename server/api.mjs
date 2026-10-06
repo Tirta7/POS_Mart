@@ -593,6 +593,39 @@ app.delete('/api/saas/users/:id', async (req, res) => {
   }
 });
 
+// ==========================================
+// ENDPOINT DRAFTS (Draft Tersimpan Realtime)
+// ==========================================
+app.get('/api/saas/drafts/:key', async (req, res) => {
+  try {
+    const draft = await prisma.draft.findUnique({
+      where: { tenant_id_key: { tenant_id: req.tenantId, key: req.params.key } }
+    });
+    res.json(draft ? JSON.parse(draft.value) : null);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/saas/drafts/:key', async (req, res) => {
+  try {
+    const data = req.body; // should be JSON object/array
+    const draft = await prisma.draft.upsert({
+      where: { tenant_id_key: { tenant_id: req.tenantId, key: req.params.key } },
+      update: { value: JSON.stringify(data) },
+      create: { tenant_id: req.tenantId, key: req.params.key, value: JSON.stringify(data) }
+    });
+    // Broadcast explicitly for this draft key
+    const io = getIo();
+    if (io) {
+      io.to(req.tenantId).emit(`draft_updated_${req.params.key}`, data);
+    }
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Wrapper untuk middleware Vite
 export const saasApiMiddleware = (req, res, next) => {
   if (req.url && req.url.startsWith('/api/saas')) {

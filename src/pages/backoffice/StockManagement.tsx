@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useInventoryStore } from '../../store/useInventoryStore';
 import { useSettingsStore } from '../../store/useSettingsStore';
+import { useDraftStore } from '../../store/useDraftStore';
 
 import { Plus, Save, CheckCircle, PackageCheck, Edit2, Trash2, X, ArrowDownToLine, Camera, Search, FileText, AlertTriangle, Printer, LayoutGrid, Package } from 'lucide-react';
 import BarcodeScannerCamera from '../../components/BarcodeScannerCamera';
@@ -67,24 +68,13 @@ const StockManagement: React.FC = () => {
   const [isPosted, setIsPosted] = useState(false);
   const [grNumber, setGrNumber] = useState(makeGrNumber);
 
-  // Draf Tersimpan (disimpan di localStorage 'grDrafts')
-  const readDrafts = (): any[] => {
-    try { return JSON.parse(localStorage.getItem('grDrafts') || '[]'); } catch { return []; }
-  };
-  const [drafts, setDrafts] = useState<any[]>(readDrafts);
+  // Draf Tersimpan (disimpan di Database via API)
+  const { drafts, saveDrafts } = useDraftStore();
   const [showDraftModal, setShowDraftModal] = useState(false);
   // Pilihan item di daftar draf + drawer review (Lihat 1 item / Lanjutkan beberapa item)
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [reviewItems, setReviewItems] = useState<any[] | null>(null);
   const [reviewMode, setReviewMode] = useState<'single' | 'multi'>('single');
-
-  React.useEffect(() => {
-    const handleDraftsUpdated = () => {
-      setDrafts(readDrafts());
-    };
-    window.addEventListener('drafts_updated', handleDraftsUpdated);
-    return () => window.removeEventListener('drafts_updated', handleDraftsUpdated);
-  }, []);
 
   const resetForm = () => {
     setEditingId(null);
@@ -195,7 +185,7 @@ const StockManagement: React.FC = () => {
       const nextItems = [...draftItems, newItem];
       
       // Update global draft
-      broadcastDrafts([{ grNumber: 'GLOBAL-DRAFT', savedAt: new Date().toISOString(), draftId: 'DRAFT-GLOBAL', items: nextItems }]);
+      saveDrafts([{ grNumber: 'GLOBAL-DRAFT', savedAt: new Date().toISOString(), draftId: 'DRAFT-GLOBAL', items: nextItems }]);
       
       setDraftToast(`"${name}" ditambahkan ke Draf. Belum tampil di Kasir POS sebelum diposting.`);
       setTimeout(() => setDraftToast(null), 4500);
@@ -210,15 +200,7 @@ const StockManagement: React.FC = () => {
     resetForm();
   };
 
-  const broadcastDrafts = (draftsArray: any[]) => {
-    const nextStr = JSON.stringify(draftsArray);
-    localStorage.setItem('grDrafts', nextStr);
-    setDrafts(draftsArray);
-    if ((window as any).socketInstance) {
-      (window as any).socketInstance.emit('broadcast_drafts', { tenantId: 'TID-DEMO-123', drafts: nextStr });
-    }
-  };
-
+  
   // Semua item draf (datar)
   const draftItems: any[] = drafts
     .slice()
@@ -248,21 +230,21 @@ const StockManagement: React.FC = () => {
       wholesalePrice: Number(updated.wholesalePrice || 0),
       image: updated.image || undefined,
     };
-    const next = readDrafts().map(d => ({
+    const next = drafts.map(d => ({
       ...d,
       items: (d.items || []).map((i: any) => i.id === updated.id ? { ...i, ...fields } : i),
     }));
-    broadcastDrafts(next);
+    saveDrafts(next);
     setReviewItems(prev => prev ? prev.map(i => i.id === updated.id ? { ...i, ...fields } : i) : prev);
   };
 
   // Hapus satu item dari draf (draf yang kosong ikut dihapus)
   const handleRemoveDraftItem = (itemId: string) => {
     if (!window.confirm('Hapus item ini dari draf? Item belum masuk stok dan akan hilang.')) return;
-    const next = readDrafts()
+    const next = drafts
       .map(d => ({ ...d, items: (d.items || []).filter((i: any) => i.id !== itemId) }))
       .filter(d => d.items.length > 0);
-    broadcastDrafts(next);
+    saveDrafts(next);
     setSelectedIds(prev => prev.filter(x => x !== itemId));
   };
 
@@ -331,10 +313,10 @@ const StockManagement: React.FC = () => {
     writePostedLog(ref, items);
 
     const ids = new Set(items.map(i => i.id));
-    const next = readDrafts()
+    const next = drafts
       .map(d => ({ ...d, items: (d.items || []).filter((i: any) => !ids.has(i.id)) }))
       .filter(d => d.items.length > 0);
-    broadcastDrafts(next);
+    saveDrafts(next);
     setSelectedIds(prev => prev.filter(id => !ids.has(id)));
     return ref;
   };
@@ -351,12 +333,8 @@ const StockManagement: React.FC = () => {
       writePostedLog(grNumber, draftItems);
       // Kosongkan draft global
       const emptyDraft: any[] = [];
-      localStorage.setItem('grDrafts', JSON.stringify(emptyDraft));
-      setDrafts(emptyDraft);
-      if ((window as any).socketInstance) {
-        (window as any).socketInstance.emit('broadcast_drafts', { tenantId: 'TID-DEMO-123', drafts: JSON.stringify(emptyDraft) });
-      }
-    } finally {
+      saveDrafts(emptyDraft);
+          } finally {
       setIsSubmitting(false);
     }
   };
@@ -462,7 +440,7 @@ const StockManagement: React.FC = () => {
           <p className="bo-page-subtitle">Input form cepat untuk penambahan stok masuk.</p>
         </div>
         <div className="bo-header-actions">
-          <button className="bo-btn bo-btn-secondary" onClick={() => { setDrafts(readDrafts()); setSelectedIds([]); setShowDraftModal(true); }}>
+          <button className="bo-btn bo-btn-secondary" onClick={() => {  setSelectedIds([]); setShowDraftModal(true); }}>
             <FileText size={16} /> <span className="hide-mobile">Draf Tersimpan</span><span className="show-mobile">Draf</span>
             {draftItems.length > 0 && <span style={{ marginLeft: '4px', background: '#6b7280', color: 'white', borderRadius: '10px', padding: '1px 6px', fontSize: '11px' }}>{draftItems.length}</span>}
           </button>
@@ -609,7 +587,7 @@ const StockManagement: React.FC = () => {
                           const nextItems = draftItems.filter(si => si.id !== p.id);
                           const newDraft = [{ grNumber: 'GLOBAL-DRAFT', savedAt: new Date().toISOString(), draftId: 'DRAFT-GLOBAL', items: nextItems }];
                           const nextStr = JSON.stringify(newDraft);
-                          localStorage.setItem('grDrafts', nextStr);
+                          
                           setDrafts(newDraft);
                           if ((window as any).socketInstance) {
                             (window as any).socketInstance.emit('broadcast_drafts', { tenantId: 'TID-DEMO-123', drafts: nextStr });
