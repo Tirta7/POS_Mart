@@ -59,7 +59,7 @@ export const useSalesStore = create<SalesState>()(
             receipt_number: sale.id,
             total_amount: sale.total,
             payment_method: sale.paymentMethod,
-            cashier_id: 'cashier-1', // Idealnya dari auth store
+            cashier_id: sale.employeeId || 'cashier-1',
             items: sale.items.map(item => ({
               product_id: item.productId,
               quantity: item.qty,

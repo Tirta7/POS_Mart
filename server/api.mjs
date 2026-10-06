@@ -310,7 +310,7 @@ app.post('/api/saas/transactions', async (req, res) => {
         }
       });
 
-      // 2. Masukkan Item dan Kurangi Stok Produk
+      // 2. Masukkan Item Transaksi
       for (const item of items) {
         await tx.transactionItem.create({
           data: {
@@ -320,12 +320,6 @@ app.post('/api/saas/transactions', async (req, res) => {
             price_at_time: item.price,
             subtotal: item.subtotal
           }
-        });
-
-        // Kurangi stok
-        await tx.product.update({
-          where: { id: item.product_id, tenant_id: req.tenantId },
-          data: { stock: { decrement: item.quantity } }
         });
       }
 
