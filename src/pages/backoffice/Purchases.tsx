@@ -195,13 +195,13 @@ const Purchases: React.FC = () => {
 
       <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
         {/* Form Pembelian */}
-        <div className="bo-card" style={{ flex: '1 1 60%' }}>
+        <div className="bo-card" style={{ flex: '1 1 500px' }}>
           <div className="bo-card-header">
             <h3 className="bo-card-title"><ShoppingCart size={20} style={{ color: 'var(--primary)' }} /> Detail Pembelian</h3>
           </div>
           
-          <form onSubmit={handleSubmit} style={{ padding: '20px' }}>
-            <div className="r-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
+          <form onSubmit={handleSubmit} className="bo-card-body">
+            <div className="bo-grid-2" style={{ marginBottom: '20px' }}>
               <div className="bo-form-group">
                 <label className="bo-label">NO. DOKUMEN / FAKTUR</label>
                 <input type="text" className="bo-input" value={documentNo} onChange={e => setDocumentNo(e.target.value)} required />
@@ -352,11 +352,11 @@ const Purchases: React.FC = () => {
         </div>
 
         {/* Info Supplier */}
-        <div className="bo-card" style={{ flex: '1 1 30%', alignSelf: 'flex-start' }}>
+        <div className="bo-card" style={{ flex: '1 1 300px', alignSelf: 'flex-start' }}>
           <div className="bo-card-header">
             <h3 className="bo-card-title">Ringkasan Supplier</h3>
           </div>
-          <div style={{ padding: '20px' }}>
+          <div className="bo-card-body">
             {!selectedSupplier ? (
               <div style={{ color: '#6b7280', textAlign: 'center', padding: '20px 0' }}>Pilih supplier untuk melihat info.</div>
             ) : (
