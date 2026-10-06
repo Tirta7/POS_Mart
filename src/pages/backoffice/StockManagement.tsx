@@ -58,10 +58,7 @@ const StockManagement: React.FC = () => {
   const [restockQty, setRestockQty] = useState<number | string>('');
   const [restockPrice, setRestockPrice] = useState<number | string>('');
 
-  // GR Session — item yang ditambahkan dalam sesi ini
-  const [sessionItems, setSessionItems] = useState<any[]>([]);
-
-  // Toast notifikasi Simpan Draf
+  // Tidak lagi menggunakan sessionItems terpisah, semua draf global
   const [draftToast, setDraftToast] = useState<string | null>(null);
 
   // Modal Konfirmasi & Posting
@@ -82,20 +79,11 @@ const StockManagement: React.FC = () => {
 
   React.useEffect(() => {
     const handleDraftsUpdated = () => {
-      const latestDrafts = readDrafts();
-      setDrafts(latestDrafts);
-      
-      // Update session items if current GR is still active
-      const active = latestDrafts.find(d => d.grNumber === grNumber);
-      if (active) {
-        setSessionItems(active.items);
-      } else {
-        setSessionItems([]);
-      }
+      setDrafts(readDrafts());
     };
     window.addEventListener('drafts_updated', handleDraftsUpdated);
     return () => window.removeEventListener('drafts_updated', handleDraftsUpdated);
-  }, [grNumber]);
+  }, []);
 
   const resetForm = () => {
     setEditingId(null);
@@ -180,7 +168,7 @@ const StockManagement: React.FC = () => {
       }
     } else {
       // Cek duplikat: di stok, di sesi ini, dan di draf lain yang belum diposting
-      const pendingItems = [...sessionItems, ...readDrafts().flatMap(d => d.items || [])];
+      const pendingItems = [...draftItems];
       const isDuplicate =
         products.some(p => p.id === finalId || p.barcode === finalBarcode) ||
         pendingItems.some(i => i.id === finalId || i.barcode === finalBarcode);
@@ -191,7 +179,7 @@ const StockManagement: React.FC = () => {
 
       // Masuk ke Draf (BELUM masuk stok / Kasir POS sampai di-Posting)
       const newItem = {
-        pending: true, // belum masuk stok; baru diterapkan saat Posting
+        pending: true,
         id: finalId,
         barcode: finalBarcode,
         sku, name, category, unit,
@@ -203,10 +191,12 @@ const StockManagement: React.FC = () => {
         minStock: Number(minStock),
         image: image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=300&q=80',
       };
-      const nextItems = [...sessionItems, newItem];
-      setSessionItems(nextItems);
-      persistDraft(nextItems);
-      setDraftToast(`"${name}" masuk ke Draf ${grNumber}. Belum tampil di Kasir POS sebelum Posting.`);
+      const nextItems = [...draftItems, newItem];
+      
+      // Update global draft
+      broadcastDrafts([{ grNumber: 'GLOBAL-DRAFT', savedAt: new Date().toISOString(), draftId: 'DRAFT-GLOBAL', items: nextItems }]);
+      
+      setDraftToast(`"${name}" ditambahkan ke Draf. Belum tampil di Kasir POS sebelum diposting.`);
       setTimeout(() => setDraftToast(null), 4500);
 
       // Barang tanpa barcode pabrikan -> langsung tawarkan cetak label stiker
@@ -228,21 +218,7 @@ const StockManagement: React.FC = () => {
     }
   };
 
-  const persistDraft = (items: any[]) => {
-    const others = readDrafts().filter(d => d.grNumber !== grNumber);
-    const next = items.length > 0
-      ? [...others, { draftId: 'DRAFT-' + Date.now(), savedAt: new Date().toISOString(), grNumber, items }]
-      : others;
-    broadcastDrafts(next);
-  };
-
-  const handleSaveDraft = () => {
-    persistDraft(sessionItems);
-    setDraftToast(`Draf ${grNumber} berhasil disimpan (${sessionItems.length} item) — buka lewat tombol "Draf Tersimpan"`);
-    setTimeout(() => setDraftToast(null), 4500);
-  };
-
-  // Semua item draf (datar), lengkap dengan info draf asalnya
+  // Semua item draf (datar)
   const draftItems: any[] = drafts
     .slice()
     .sort((a, b) => b.savedAt.localeCompare(a.savedAt))
@@ -276,8 +252,6 @@ const StockManagement: React.FC = () => {
       items: (d.items || []).map((i: any) => i.id === updated.id ? { ...i, ...fields } : i),
     }));
     broadcastDrafts(next);
-    const active = next.find(d => d.grNumber === grNumber);
-    setSessionItems(active ? active.items : []);
     setReviewItems(prev => prev ? prev.map(i => i.id === updated.id ? { ...i, ...fields } : i) : prev);
   };
 
@@ -289,8 +263,6 @@ const StockManagement: React.FC = () => {
       .filter(d => d.items.length > 0);
     broadcastDrafts(next);
     setSelectedIds(prev => prev.filter(x => x !== itemId));
-    const active = next.find(d => d.grNumber === grNumber);
-    setSessionItems(active ? active.items : []);
   };
 
   // Terapkan item ke stok (stok bertambah / produk baru muncul di Kasir POS)
@@ -359,21 +331,24 @@ const StockManagement: React.FC = () => {
       .filter(d => d.items.length > 0);
     broadcastDrafts(next);
     setSelectedIds(prev => prev.filter(id => !ids.has(id)));
-    const active = next.find(d => d.grNumber === grNumber);
-    setSessionItems(active ? active.items : []);
     return ref;
   };
 
-  // ===== KONFIRMASI & POSTING (seluruh sesi aktif, tombol di header) =====
-  // Di sinilah stok benar-benar bertambah dan produk baru muncul di Kasir POS.
+  // Posting seluruh draft
   const handlePosting = async () => {
-    await applyItemsToStock(sessionItems, grNumber);
+    if (draftItems.length === 0) return;
+    
+    await applyItemsToStock(draftItems, grNumber);
 
     setIsPosted(true);
-    writePostedLog(grNumber, sessionItems);
-    // Draf dengan No. GR ini sudah diposting -> hapus dari daftar draf
-    const remaining = readDrafts().filter(d => d.grNumber !== grNumber);
-    broadcastDrafts(remaining);
+    writePostedLog(grNumber, draftItems);
+    // Kosongkan draft global
+    const emptyDraft = [];
+    localStorage.setItem('grDrafts', JSON.stringify(emptyDraft));
+    setDrafts(emptyDraft);
+    if ((window as any).socketInstance) {
+      (window as any).socketInstance.emit('broadcast_drafts', { tenantId: 'TID-DEMO-123', drafts: JSON.stringify(emptyDraft) });
+    }
   };
 
   const handleEditClick = (p: any) => {
@@ -437,7 +412,7 @@ const StockManagement: React.FC = () => {
   const currentCategory = activeCategory === 'all' || categories.includes(activeCategory) ? activeCategory : 'all';
 
   // Combine database products with pending draft items
-  const pendingDisplayProducts = sessionItems.map(si => ({
+  const pendingDisplayProducts = draftItems.map(si => ({
     id: si.id,
     sku: si.sku,
     barcode: si.barcode,
@@ -477,10 +452,7 @@ const StockManagement: React.FC = () => {
             <FileText size={16} /> <span className="hide-mobile">Draf Tersimpan</span><span className="show-mobile">Draf</span>
             {draftItems.length > 0 && <span style={{ marginLeft: '4px', background: '#6b7280', color: 'white', borderRadius: '10px', padding: '1px 6px', fontSize: '11px' }}>{draftItems.length}</span>}
           </button>
-          <button className="bo-btn bo-btn-secondary" onClick={handleSaveDraft} disabled={sessionItems.length === 0} style={{ opacity: sessionItems.length === 0 ? 0.5 : 1 }}>
-            <Save size={16} /> <span className="hide-mobile">Simpan Draf</span><span className="show-mobile">Simpan</span>
-          </button>
-          <button className="bo-btn bo-btn-primary" onClick={() => { setShowPostModal(true); setIsPosted(false); }} disabled={sessionItems.length === 0} style={{ opacity: sessionItems.length === 0 ? 0.5 : 1 }}>
+          <button className="bo-btn bo-btn-primary" onClick={() => { setShowPostModal(true); setIsPosted(false); }} disabled={draftItems.length === 0} style={{ opacity: draftItems.length === 0 ? 0.5 : 1 }}>
             <CheckCircle size={16} /> <span className="hide-mobile">Konfirmasi &amp; Posting</span><span className="show-mobile">Posting</span>
           </button>
         </div>
@@ -620,9 +592,14 @@ const StockManagement: React.FC = () => {
                       <>
                         <button className="bo-action-btn" title="Cetak Label Barcode" onClick={() => { setLabelCopies(Math.max(1, Math.ceil(Number(p.stock)))); setLabelProduct(p); }} style={{ color: '#2563eb' }}><Printer size={16} /></button>
                         <button className="bo-action-btn" title="Batal Tambah (Hapus Draf)" onClick={() => {
-                          const next = sessionItems.filter(si => si.id !== p.id);
-                          setSessionItems(next);
-                          persistDraft(next);
+                          const nextItems = draftItems.filter(si => si.id !== p.id);
+                          const newDraft = [{ grNumber: 'GLOBAL-DRAFT', savedAt: new Date().toISOString(), draftId: 'DRAFT-GLOBAL', items: nextItems }];
+                          const nextStr = JSON.stringify(newDraft);
+                          localStorage.setItem('grDrafts', nextStr);
+                          setDrafts(newDraft);
+                          if ((window as any).socketInstance) {
+                            (window as any).socketInstance.emit('broadcast_drafts', { tenantId: 'TID-DEMO-123', drafts: nextStr });
+                          }
                         }} style={{ color: '#ef4444' }}><Trash2 size={16} /></button>
                       </>
                     ) : (
@@ -1362,9 +1339,9 @@ const StockManagement: React.FC = () => {
                   {/* Info bar */}
                   <div style={{ display: 'flex', gap: '12px', marginBottom: '20px' }}>
                     {[
-                      { label: 'Total Item', value: sessionItems.length + ' produk', color: '#1e40af', bg: '#eff6ff' },
-                      { label: 'Total Qty Masuk', value: sessionItems.reduce((s,i) => s + Number(i.qty), 0) + ' unit', color: '#065f46', bg: '#ecfdf5' },
-                      { label: 'Total Nilai Beli', value: 'Rp ' + sessionItems.reduce((s,i) => s + Number(i.purchasePrice) * Number(i.qty), 0).toLocaleString('id-ID'), color: '#92400e', bg: '#fffbeb' },
+                      { label: 'Total Item', value: draftItems.length + ' produk', color: '#1e40af', bg: '#eff6ff' },
+                      { label: 'Total Qty Masuk', value: draftItems.reduce((s,i) => s + Number(i.qty), 0) + ' unit', color: '#065f46', bg: '#ecfdf5' },
+                      { label: 'Total Nilai Beli', value: 'Rp ' + draftItems.reduce((s,i) => s + Number(i.purchasePrice) * Number(i.qty), 0).toLocaleString('id-ID'), color: '#92400e', bg: '#fffbeb' },
                     ].map(card => (
                       <div key={card.label} style={{ flex: 1, padding: '12px 16px', backgroundColor: card.bg, borderRadius: '10px', textAlign: 'center' }}>
                         <div style={{ fontSize: '11px', color: '#6b7280', marginBottom: '4px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{card.label}</div>
@@ -1384,7 +1361,7 @@ const StockManagement: React.FC = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {sessionItems.map((item, i) => (
+                        {draftItems.map((item, i) => (
                           <tr key={i} style={{ borderBottom: '1px solid #f3f4f6' }}>
                             <td style={{ padding: '10px 12px', fontWeight: 600 }}>{item.name}</td>
                             <td style={{ padding: '10px 12px', textAlign: 'right', color: '#6b7280' }}>{item.category}</td>
@@ -1426,10 +1403,10 @@ const StockManagement: React.FC = () => {
                   <div style={{ fontSize: '22px', fontWeight: 800, color: '#111827', marginBottom: '6px' }}>Posting Berhasil!</div>
                   <div style={{ fontSize: '14px', color: '#6b7280', marginBottom: '4px' }}>Nomor GR: <strong style={{ color: '#1e40af' }}>{grNumber}</strong></div>
                   <div style={{ fontSize: '13px', color: '#9ca3af', marginBottom: '24px' }}>
-                    {sessionItems.length} produk • {new Date().toLocaleString('id-ID')}
+                    {draftItems.length} produk • {new Date().toLocaleString('id-ID')}
                   </div>
                   <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
-                    <button className="bo-btn bo-btn-secondary" onClick={() => { setShowPostModal(false); setSessionItems([]); setGrNumber(makeGrNumber()); }}>
+                    <button className="bo-btn bo-btn-secondary" onClick={() => { setShowPostModal(false); setGrNumber(makeGrNumber()); }}>
                       <X size={16} /> Tutup &amp; Bersihkan Sesi
                     </button>
                     <button className="bo-btn bo-btn-primary" onClick={() => window.print()} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
