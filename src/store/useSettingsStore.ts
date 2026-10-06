@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
 
 export const DEFAULT_INVOICE_FOOTER = 'Terima kasih atas kunjungan Anda\nBarang yang sudah dibeli tidak dapat\nditukar / dikembalikan';
 export const defaultInvoiceHeader = (appName: string) => `${appName}\nSTRUK PENJUALAN`;
@@ -24,8 +23,7 @@ interface SettingsState {
 }
 
 export const useSettingsStore = create<SettingsState>()(
-  persist(
-    (set) => ({
+  (set) => ({
       appName: 'SRIKANDI MART',
       appLogo: null,
       taxEnabled: true,

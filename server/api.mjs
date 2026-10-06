@@ -524,6 +524,75 @@ app.delete('/api/saas/suppliers/:id', async (req, res) => {
   }
 });
 
+// ==========================================
+// ENDPOINT KARYAWAN (USERS)
+// ==========================================
+app.get('/api/saas/users', async (req, res) => {
+  try {
+    const users = await prisma.user.findMany({
+      where: { tenant_id: req.tenantId }
+    });
+    res.json(users);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/saas/users', async (req, res) => {
+  try {
+    const data = req.body;
+    const user = await prisma.user.create({
+      data: {
+        tenant_id: req.tenantId,
+        username: data.username,
+        password_hash: data.password, // Ideally hashed, using plain for now as per legacy auth
+        role: data.role || 'Cashier',
+        name: data.name,
+        pin: data.pin,
+        is_active: data.isActive !== undefined ? data.isActive : true,
+        id: data.id // Optional explicit ID
+      }
+    });
+    notifyTenant(req.tenantId, 'users');
+    res.json(user);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/saas/users/:id', async (req, res) => {
+  try {
+    const data = req.body;
+    const user = await prisma.user.update({
+      where: { id: req.params.id, tenant_id: req.tenantId },
+      data: {
+        username: data.username !== undefined ? data.username : undefined,
+        password_hash: data.password !== undefined ? data.password : undefined,
+        role: data.role !== undefined ? data.role : undefined,
+        name: data.name !== undefined ? data.name : undefined,
+        pin: data.pin !== undefined ? data.pin : undefined,
+        is_active: data.isActive !== undefined ? data.isActive : undefined
+      }
+    });
+    notifyTenant(req.tenantId, 'users');
+    res.json(user);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/saas/users/:id', async (req, res) => {
+  try {
+    await prisma.user.delete({
+      where: { id: req.params.id, tenant_id: req.tenantId }
+    });
+    notifyTenant(req.tenantId, 'users');
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Wrapper untuk middleware Vite
 export const saasApiMiddleware = (req, res, next) => {
   if (req.url && req.url.startsWith('/api/saas')) {

@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
 import type { Customer, CustomerOrder } from '../types';
 
 interface CustomerState {
@@ -12,8 +11,7 @@ interface CustomerState {
 }
 
 export const useCustomerStore = create<CustomerState>()(
-  persist(
-    (set) => ({
+  (set) => ({
       customers: [],
       fetchCustomers: async () => {
         try {

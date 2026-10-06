@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
 
 export interface HeldOrder {
   holdId: string;
@@ -19,8 +18,7 @@ interface HoldState {
 }
 
 export const useHoldStore = create<HoldState>()(
-  persist(
-    (set) => ({
+  (set) => ({
       heldOrders: [],
       holdOrder: (order) =>
         set((state) => ({

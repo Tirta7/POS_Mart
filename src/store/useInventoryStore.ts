@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
 import type { Product, StockTransaction } from '../types';
 
 interface InventoryState {
@@ -66,8 +65,7 @@ const getHeaders = () => {
 };
 
 export const useInventoryStore = create<InventoryState>()(
-  persist(
-    (set, get) => ({
+  (set, get) => ({
       products: [],
       isLoading: false,
       error: null,

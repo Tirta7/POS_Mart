@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
 import type { Supplier } from '../types';
 
 interface SupplierState {
@@ -10,8 +9,7 @@ interface SupplierState {
 }
 
 export const useSupplierStore = create<SupplierState>()(
-  persist(
-    (set) => ({
+  (set) => ({
       suppliers: [],
       fetchSuppliers: async () => {
         try {

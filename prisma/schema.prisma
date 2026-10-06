@@ -58,9 +58,12 @@ model Supplier {
 model User {
   id            String   @id @default(uuid())
   tenant_id     String
+  name          String?  // Added for Employee migration
   username      String
   password_hash String
+  pin           String?  // Added for PIN login
   role          String   @default("cashier")
+  is_active     Boolean  @default(true) // Added to match isActive
   created_at    DateTime @default(now())
 
   tenant Tenant @relation(fields: [tenant_id], references: [id])

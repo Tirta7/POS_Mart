@@ -7,15 +7,7 @@ import App from './App.tsx'
 import { installMobileTableLabels } from './utils/mobileTableLabels'
 import { registerServiceWorker } from './utils/pushNotification'
 
-// Set title instantly from localStorage — tanpa jeda/ghost flash
-try {
-  const raw = localStorage.getItem('settings-storage');
-  if (raw) {
-    const parsed = JSON.parse(raw);
-    const name = parsed?.state?.appName;
-    if (name) document.title = name;
-  }
-} catch { /* ignore */ }
+// Render application
 
 // Tabel back-office tampil sebagai kartu di HP — label kolom diisi otomatis
 installMobileTableLabels();

@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
 import type { SalesTransaction } from '../types';
 
 import { useAuthStore } from './useAuthStore';
@@ -12,8 +11,7 @@ interface SalesState {
 }
 
 export const useSalesStore = create<SalesState>()(
-  persist(
-    (set) => ({
+  (set) => ({
       sales: [],
       fetchSales: async () => {
         try {

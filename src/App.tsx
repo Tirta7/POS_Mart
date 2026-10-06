@@ -29,7 +29,7 @@ const RequireAuth = ({ children }: { children: React.ReactNode }) => {
 
 function App() {
   const { appName } = useSettingsStore();
-  const { currentUser } = useAuthStore();
+  const { currentUser, fetchEmployees } = useAuthStore();
 
   const { fetchProducts, fetchTransactions } = useInventoryStore();
   const { fetchSales } = useSalesStore();
@@ -40,6 +40,11 @@ function App() {
   useEffect(() => {
     document.title = appName;
   }, [appName]);
+
+  // Initial fetch for employees (needed before login)
+  useEffect(() => {
+    fetchEmployees();
+  }, []);
 
   // Fetch data dari API ketika user sudah login (Fase SaaS)
   useEffect(() => {
@@ -88,6 +93,7 @@ function App() {
       if (!entity || entity === 'customers') fetchCustomers();
       if (!entity || entity === 'suppliers') fetchSuppliers();
       if (!entity || entity === 'settings') fetchSettings();
+      if (!entity || entity === 'users') fetchEmployees();
     });
 
     socket.on('sync_drafts', (draftsStr) => {
