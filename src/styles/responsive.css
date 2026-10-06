@@ -1653,9 +1653,9 @@ body {
     overflow: auto !important;
     -webkit-overflow-scrolling: touch;
     overscroll-behavior: contain;
-    background: #fff !important;
+    background: transparent !important;
     padding-bottom: var(--sab);
-    border-top: 0.5px solid rgba(60, 60, 67, 0.14);
+    border-top: none;
   }
 
   /* ---- Tabel gaya sheet ---- */
@@ -1668,47 +1668,54 @@ body {
   }
   table.bo-table.r-sheet th,
   table.bo-table.r-sheet td {
-    padding: 7px 10px !important;
-    font-size: 12.5px;
+    padding: 6px 8px !important;
+    font-size: 11.5px;
     line-height: 1.35;
     white-space: nowrap;
-    border-bottom: 0.5px solid #ececf0;
-    border-right: 0.5px solid #f2f2f5;
+    border-bottom: 0.5px solid #e5e5ea;
+    border-right: 0.5px solid #e5e5ea;
     vertical-align: middle;
+  }
+  table.bo-table.r-sheet td:nth-child(1),
+  table.bo-table.r-sheet td:nth-child(2) {
+    font-size: 10px;
+    max-width: 80px;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   table.bo-table.r-sheet th {
     position: sticky;
     top: 0;
     z-index: 2;
-    background: #f7f7f9 !important;
-    font-size: 10.5px;
+    background: #e5e5ea !important;
+    font-size: 9.5px;
     letter-spacing: 0.03em;
-    border-bottom: 0.5px solid #dcdce2;
+    border-bottom: 0.5px solid #d1d1d6;
   }
   table.bo-table.r-sheet tbody tr:nth-child(even) td {
-    background: #fbfbfd;
+    background: rgba(0,0,0,0.02);
   }
   /* Kolom Nama Produk dibekukan di kiri saat geser */
   table.bo-table.r-sheet .r-sheet-name {
     position: sticky;
     left: 0;
     z-index: 1;
-    min-width: 140px;
-    max-width: 170px;
+    min-width: 110px;
+    max-width: 140px;
     white-space: normal !important;
-    background: #fff;
-    box-shadow: 1px 0 0 #e5e5ea;
+    background: var(--bg-main, #f2f2f7);
+    box-shadow: 1px 0 0 #d1d1d6;
   }
   table.bo-table.r-sheet tbody tr:nth-child(even) td.r-sheet-name {
-    background: #fbfbfd;
+    background: #ebebf0;
   }
   table.bo-table.r-sheet th.r-sheet-name {
     z-index: 3;
-    background: #f7f7f9 !important;
+    background: #e5e5ea !important;
   }
   table.bo-table.r-sheet .bo-badge {
-    padding: 2px 8px;
-    font-size: 11px;
+    padding: 2px 6px;
+    font-size: 10px;
   }
   /* Kolom margin lebih ramping */
   table.bo-table.r-sheet td[style*='min-width'] {
