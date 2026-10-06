@@ -242,6 +242,7 @@ app.post('/api/saas/customers', async (req, res) => {
         address: data.address
       }
     });
+    notifyTenant(req.tenantId);
     res.json(customer);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -259,6 +260,7 @@ app.put('/api/saas/customers/:id', async (req, res) => {
         address: data.address !== undefined ? data.address : undefined
       }
     });
+    notifyTenant(req.tenantId);
     res.json(customer);
   } catch (err) {
     res.status(500).json({ error: err.message });
