@@ -174,7 +174,7 @@ const Reports: React.FC = () => {
   const initials = (name: string) => name.trim().split(/\s+/).slice(0, 2).map(s => s[0]?.toUpperCase() || '').join('') || '?';
 
   return (
-    <div className="bo-container r-kiosk">
+    <div className="bo-container r-kiosk" style={{ overflowY: 'hidden' }}>
       <style>{`
         .rpt-table th { padding: 9px 14px !important; font-size: 11px !important; letter-spacing: 0.4px; white-space: nowrap; position: sticky; top: 0; z-index: 1; background: #f9fafb; }
         .rpt-table td { padding: 8px 14px !important; font-size: 13px; line-height: 1.35; }
@@ -280,7 +280,7 @@ const Reports: React.FC = () => {
                 </div>
               </div>
 
-              <div className="bo-table-container">
+              <div className="bo-table-container" style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
                 {filteredSales.length === 0 ? (
                   emptyState('Data penjualan tidak ditemukan', 'Coba ubah rentang tanggal, metode pembayaran, atau kata kunci pencarian.', <FileText size={26} color="#9ca3af" />)
                 ) : (
@@ -403,7 +403,7 @@ const Reports: React.FC = () => {
 
           {activeTab === 'low-stock' && (
             <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-              <div className="bo-table-container">
+              <div className="bo-table-container" style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
                 {lowStockItems.length === 0 ? (
                   emptyState('Semua stok aman', 'Tidak ada produk yang berada di bawah atau sama dengan batas minimum.', <CheckCircle2 size={26} color="#10b981" />)
                 ) : (
