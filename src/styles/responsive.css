@@ -17,26 +17,31 @@
 }
 
 html {
+  height: -webkit-fill-available;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }
 
-html, body, #root {
+body {
+  min-height: 100vh;
+  min-height: -webkit-fill-available;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+  margin: 0;
+  padding: 0;
+}
+
+#root {
   width: 100vw;
   height: 100%;
   /* KIOSK MODE: Fixes the black gap at the bottom of iOS PWA */
   position: fixed;
   inset: 0;
   overflow: hidden;
-  margin: 0;
-  padding: 0;
   background-color: var(--bg-main, #faf9fd);
 }
 
-body {
-  -webkit-tap-highlight-color: transparent;
-  overscroll-behavior: none;
-}
+
 
 /* Tinggi layar dinamis (mengikuti address-bar mobile yang muncul/hilang) */
 .app-container,
