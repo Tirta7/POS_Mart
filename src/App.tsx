@@ -90,9 +90,9 @@ function App() {
       if (!entity || entity === 'users') fetchEmployees();
     });
 
-    socket.on('draft_updated_grDrafts', () => {
+    socket.on('draft_updated_grDrafts', (draftsArr) => {
       // Data already parsed in API response JSON
-      useDraftStore.getState().fetchDrafts();
+      useDraftStore.setState({ drafts: Array.isArray(draftsArr) ? draftsArr : [] });
     });
 
     return () => {
