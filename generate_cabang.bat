@@ -76,6 +76,12 @@ copy "C:\Users\tirta\.cloudflared\!TUNNEL_UUID!.json" "!TARGET_DIR!\cloudflare\c
 if exist "!TARGET_DIR!\docker-compose.yml" (
     powershell -NoProfile -Command "(Get-Content '!TARGET_DIR!\docker-compose.yml') -replace 'NAMACABANG', '!BRANCH!' | Set-Content '!TARGET_DIR!\docker-compose.yml'"
 )
+if exist "!TARGET_DIR!\backup_db.bat" (
+    powershell -NoProfile -Command "(Get-Content '!TARGET_DIR!\backup_db.bat') -replace 'NAMACABANG', '!BRANCH!' | Set-Content '!TARGET_DIR!\backup_db.bat'"
+)
+if exist "!TARGET_DIR!\restore_db.bat" (
+    powershell -NoProfile -Command "(Get-Content '!TARGET_DIR!\restore_db.bat') -replace 'NAMACABANG', '!BRANCH!' | Set-Content '!TARGET_DIR!\restore_db.bat'"
+)
 
 del temp_tunnel_output.txt >nul 2>&1
 

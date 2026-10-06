@@ -49,6 +49,22 @@ app.use('/api/saas', async (req, res, next) => {
         update: {},
         create: { id: tenantId, name: tenantId }
       });
+      
+      // Auto-seed admin user jika belum ada user sama sekali di tenant ini
+      const userCount = await prisma.user.count({ where: { tenant_id: tenantId } });
+      if (userCount === 0) {
+        await prisma.user.create({
+          data: {
+            tenant_id: tenantId,
+            username: 'admin',
+            password_hash: 'admin',
+            role: 'Admin',
+            name: 'Administrator',
+            is_active: true
+          }
+        });
+      }
+
       knownTenants.add(tenantId);
     } catch(err) {
       if (err.code === 'P2002') {

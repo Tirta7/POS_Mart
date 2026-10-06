@@ -24,7 +24,7 @@ interface SettingsState {
 
 export const useSettingsStore = create<SettingsState>()(
   (set) => ({
-      appName: 'SRIKANDI MART',
+      appName: 'VOC POS',
       appLogo: null,
       taxEnabled: true,
       taxRate: 11,
@@ -37,7 +37,7 @@ export const useSettingsStore = create<SettingsState>()(
           if (res.ok) {
             const data = await res.json();
             set({
-              appName: data.appName || 'SRIKANDI MART',
+              appName: data.appName || 'VOC POS',
               taxEnabled: data.taxEnabled ?? true,
               taxRate: data.taxRate ?? 11,
               roundingUnit: data.roundingUnit ?? 0,
