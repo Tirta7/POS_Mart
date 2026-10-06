@@ -402,11 +402,11 @@ app.post('/api/saas/stock-transactions', async (req, res) => {
         data: {
           tenant_id: req.tenantId,
           type,
-          document_no: documentNo,
+          doc_no: documentNo,
           supplier_id: supplierId,
           employee_id: employeeId || 'cashier-1',
           total_value: Number(totalValue),
-          note,
+          notes: note,
           customer_id: customerId,
           customer_name: customerName
         }
