@@ -105,6 +105,7 @@ model Transaction {
   id             String   @id @default(uuid())
   tenant_id      String
   cashier_id     String
+  cashier_name   String?
   receipt_number String
   total_amount   Float
   payment_method String

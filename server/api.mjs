@@ -291,17 +291,9 @@ app.get('/api/saas/transactions', async (req, res) => {
       orderBy: { created_at: 'desc' }
     });
 
-    // Ambil semua user untuk tenant ini agar bisa memetakan cashier_id ke username (nama kasir)
-    const users = await prisma.user.findMany({
-      where: { tenant_id: req.tenantId },
-      select: { id: true, username: true }
-    });
-    const userMap = {};
-    users.forEach(u => userMap[u.id] = u.username);
-
     const result = transactions.map(t => ({
       ...t,
-      cashier_name: userMap[t.cashier_id] || t.cashier_id
+      cashier_name: t.cashier_name || t.cashier_id
     }));
 
     res.json(result);
@@ -326,7 +318,7 @@ app.get('/api/saas/transactions/:id', async (req, res) => {
 app.post('/api/saas/transactions', async (req, res) => {
   try {
     const data = req.body;
-    const { receipt_number, total_amount, payment_method, cashier_id, items } = data;
+    const { receipt_number, total_amount, payment_method, cashier_id, cashier_name, items } = data;
     
     const transaction = await prisma.$transaction(async (tx) => {
       // 1. Buat Header Transaksi
@@ -334,6 +326,7 @@ app.post('/api/saas/transactions', async (req, res) => {
         data: {
           tenant_id: req.tenantId,
           cashier_id: cashier_id || 'cashier-1',
+          cashier_name: cashier_name || 'Unknown',
           receipt_number,
           total_amount: Number(total_amount),
           payment_method
