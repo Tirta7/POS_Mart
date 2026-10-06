@@ -9,21 +9,24 @@ let subClient;
 export const initSocket = async (httpServer) => {
   if (io) return io;
   
-  pubClient = new Redis({
-    retryStrategy: (times) => Math.min(times * 50, 2000)
-  });
-  subClient = pubClient.duplicate();
-
-  pubClient.on('error', (err) => console.error('Redis Pub Client Error', err));
-  subClient.on('error', (err) => console.error('Redis Sub Client Error', err));
-
   io = new Server(httpServer, {
     cors: {
       origin: '*',
     },
   });
 
-  io.adapter(createAdapter(pubClient, subClient));
+  const redisUrl = process.env.REDIS_URL || process.env.REDIS_HOST;
+  if (redisUrl) {
+    pubClient = new Redis(redisUrl, {
+      retryStrategy: (times) => Math.min(times * 50, 2000)
+    });
+    subClient = pubClient.duplicate();
+
+    pubClient.on('error', (err) => console.error('Redis Pub Client Error', err));
+    subClient.on('error', (err) => console.error('Redis Sub Client Error', err));
+
+    io.adapter(createAdapter(pubClient, subClient));
+  }
 
   io.on('connection', (socket) => {
     socket.on('join_tenant', (tenantId) => {
