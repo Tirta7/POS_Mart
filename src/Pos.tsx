@@ -301,7 +301,7 @@ function App() {
       {/* TOP NAVBAR */}
       <div className="top-navbar">
         <div className="logo-section">
-          <div className="logo-icon" style={{ overflow: 'hidden', padding: appLogo ? '0' : undefined }}>
+          <div className="logo-icon" style={{ overflow: 'hidden', padding: appLogo ? '0' : undefined, backgroundColor: appLogo ? 'transparent' : undefined }}>
             {appLogo ? (
               <img src={appLogo} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
             ) : (

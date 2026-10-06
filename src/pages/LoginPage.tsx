@@ -83,7 +83,7 @@ const LoginPage: React.FC<{ onLogin: () => void }> = ({ onLogin }) => {
       <main className="lg-card">
         {/* Brand */}
         <header className="lg-brand">
-          <div className="lg-icon" style={{ overflow: 'hidden', padding: appLogo ? '0' : undefined }}>
+          <div className="lg-icon" style={{ overflow: 'hidden', padding: appLogo ? '0' : undefined, backgroundColor: appLogo ? 'transparent' : undefined }}>
             {appLogo ? (
               <img src={appLogo} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
             ) : (

@@ -30,7 +30,7 @@ const TopHeader: React.FC<TopHeaderProps> = ({ onMenuToggle, menuOpen }) => {
         >
           {menuOpen ? <X size={22} /> : <Menu size={22} />}
         </button>
-        <div className="bo-header-logo" style={{ overflow: 'hidden' }}>
+        <div className="bo-header-logo" style={{ overflow: 'hidden', backgroundColor: appLogo ? 'transparent' : undefined }}>
           {appLogo ? (
             <img src={appLogo} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
           ) : (
