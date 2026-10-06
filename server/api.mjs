@@ -350,10 +350,10 @@ app.post('/api/saas/transactions', async (req, res) => {
         // Record di Mutasi
         await tx.stockTransactionItem.create({
           data: {
-            transaction_id: stockMutation.id,
+            stock_transaction_id: stockMutation.id,
             product_id: item.product_id,
-            quantity: item.quantity,
-            price_at_time: item.price,
+            qty: item.quantity,
+            purchase_price: item.price,
             subtotal: item.subtotal
           }
         });
