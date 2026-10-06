@@ -330,8 +330,10 @@ app.post('/api/saas/transactions', async (req, res) => {
         data: {
           tenant_id: req.tenantId,
           type: 'OUT',
-          doc_no: receipt_number,
-          notes: 'Penjualan Kasir'
+          document_no: receipt_number,
+          employee_id: cashier_id || 'cashier-1',
+          total_value: Number(total_amount),
+          note: 'Penjualan Kasir'
         }
       });
 
