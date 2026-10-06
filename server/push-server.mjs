@@ -11,6 +11,8 @@ import { pushApiMiddleware } from './pushApi.mjs';
 import { licenseMiddleware } from './license.mjs';
 import { saasApiMiddleware } from './api.mjs';
 
+import { initSocket } from './socket.mjs';
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DIST = path.join(__dirname, '..', 'dist');
 const PORT = Number(process.env.PORT) || 4173;
@@ -26,7 +28,7 @@ const api = pushApiMiddleware();
 const license = licenseMiddleware();
 const saasApi = saasApiMiddleware;
 
-http.createServer((req, res) => {
+const server = http.createServer((req, res) => {
   const runNext = () => {
     license(req, res, () => {
       api(req, res, () => {
@@ -47,4 +49,9 @@ http.createServer((req, res) => {
   } else {
     runNext();
   }
-}).listen(PORT, () => console.log(`[push-server] http://localhost:${PORT}`));
+});
+
+// Initialize Socket.io on this server instance
+initSocket(server);
+
+server.listen(PORT, () => console.log(`[push-server] http://localhost:${PORT}`));
