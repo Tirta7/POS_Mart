@@ -738,19 +738,9 @@ function App() {
                 // Web Push "Uang Masuk" ke semua device yang mengaktifkan notifikasi
                 sendSaleNotification(sale, selectedCustomer?.name, currentUser?.name);
 
-                // Deduct stock for all items
-                cart.forEach(item => {
-                  updateProductStock(item.id, -item.qty);
-                });
-
-                // Mutasi stok: Barang Keluar (OUT) per transaksi penjualan
-                recordStockMutation(
-                  'OUT',
-                  sale.id,
-                  cart.map(item => ({ productId: item.id, qty: item.qty, name: item.name })),
-                  'Penjualan Kasir',
-                  { customerId: selectedCustomer?.id, customerName: selectedCustomer?.name }
-                );
+                // Note: Stock deduction and mutation recording is now handled ATOMICALLY 
+                // in a single database transaction inside POST /api/saas/transactions!
+                // Ini mencegah terjadinya race condition.
 
                 // Tampilkan struk & buka dialog cetak
                 setReceipt({

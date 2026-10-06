@@ -323,8 +323,18 @@ app.post('/api/saas/transactions', async (req, res) => {
         }
       });
 
-      // 2. Masukkan Item Transaksi
+      // 2. Masukkan Item Transaksi & Mutasi Stok (Atomic)
+      const stockMutation = await tx.stockTransaction.create({
+        data: {
+          tenant_id: req.tenantId,
+          type: 'OUT',
+          doc_no: receipt_number,
+          notes: 'Penjualan Kasir'
+        }
+      });
+
       for (const item of items) {
+        // Record di Nota
         await tx.transactionItem.create({
           data: {
             transaction_id: newTx.id,
@@ -333,6 +343,23 @@ app.post('/api/saas/transactions', async (req, res) => {
             price_at_time: item.price,
             subtotal: item.subtotal
           }
+        });
+
+        // Record di Mutasi
+        await tx.stockTransactionItem.create({
+          data: {
+            transaction_id: stockMutation.id,
+            product_id: item.product_id,
+            quantity: item.quantity,
+            price_at_time: item.price,
+            subtotal: item.subtotal
+          }
+        });
+
+        // Kurangi stok secara ATOMIC (Mencegah Race Condition)
+        await tx.product.update({
+          where: { id: item.product_id, tenant_id: req.tenantId },
+          data: { stock: { decrement: item.quantity } }
         });
       }
 
