@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { SalesTransaction } from '../types';
 
+import { useAuthStore } from './useAuthStore';
+
 interface SalesState {
   sales: SalesTransaction[];
   fetchSales: () => Promise<void>;
@@ -23,26 +25,30 @@ export const useSalesStore = create<SalesState>()(
           });
           if (res.ok) {
             const data = await res.json();
-            const mapped = data.map((t: any) => ({
-              id: t.receipt_number,
-              date: t.created_at,
-              total: t.total_amount,
-              subtotal: t.items.reduce((acc: number, item: any) => acc + item.subtotal, 0),
-              tax: 0, 
-              rounding: 0,
-              paymentMethod: t.payment_method,
-              tendered: t.total_amount, 
-              change: 0,
-              employeeId: t.cashier_id,
-              employeeName: t.cashier_name || t.cashier_id,
-              items: t.items.map((i: any) => ({
-                productId: i.product_id,
-                name: i.product?.name || 'Unknown',
-                qty: i.quantity,
-                price: i.price_at_time,
-                subtotal: i.subtotal
-              }))
-            }));
+            const employees = useAuthStore.getState().employees;
+            const mapped = data.map((t: any) => {
+              const localEmp = employees.find((e: any) => e.id === t.cashier_id);
+              return {
+                id: t.receipt_number,
+                date: t.created_at,
+                total: t.total_amount,
+                subtotal: t.items.reduce((acc: number, item: any) => acc + item.subtotal, 0),
+                tax: 0, 
+                rounding: 0,
+                paymentMethod: t.payment_method,
+                tendered: t.total_amount, 
+                change: 0,
+                employeeId: t.cashier_id,
+                employeeName: localEmp?.name || t.cashier_name || t.cashier_id,
+                items: t.items.map((i: any) => ({
+                  productId: i.product_id,
+                  name: i.product?.name || 'Unknown',
+                  qty: i.quantity,
+                  price: i.price_at_time,
+                  subtotal: i.subtotal
+                }))
+              };
+            });
             set({ sales: mapped });
           }
         } catch (error) {
