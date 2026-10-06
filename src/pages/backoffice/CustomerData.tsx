@@ -49,34 +49,39 @@ export const CustomerData = () => {
   };
 
   return (
-    <div className="backoffice-page">
-      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+    <div className="bo-container">
+      <div className="bo-page-header">
         <div>
-          <h2 style={{ fontSize: '24px', fontWeight: 'bold', color: '#111' }}>Data Pelanggan Grosir</h2>
-          <p style={{ color: '#666', marginTop: '4px' }}>Kelola daftar pelanggan dan riwayat transaksi mereka.</p>
+          <h1 className="bo-page-title">Data Pelanggan Grosir</h1>
+          <p className="bo-page-subtitle">Kelola daftar pelanggan dan riwayat transaksi mereka.</p>
         </div>
-        <button 
-          className="btn-primary" 
-          onClick={() => { setModalMode('ADD'); setCurrentCustomer({}); setIsModalOpen(true); }}
-          style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', background: 'var(--primary)', color: 'white', borderRadius: '8px', fontWeight: 'bold', border: 'none', cursor: 'pointer' }}
-        >
-          <Plus size={18} /> Tambah Pelanggan
-        </button>
+        <div className="bo-header-actions">
+          <button 
+            className="bo-btn bo-btn-primary" 
+            onClick={() => { setModalMode('ADD'); setCurrentCustomer({}); setIsModalOpen(true); }}
+          >
+            <Plus size={18} /> Tambah Pelanggan
+          </button>
+        </div>
       </div>
 
-      <div className="card" style={{ padding: '20px', background: 'white', borderRadius: '12px', border: '1px solid #e5e7eb' }}>
-        <div style={{ display: 'flex', marginBottom: '20px', position: 'relative' }}>
-          <Search size={18} style={{ position: 'absolute', left: '12px', top: '10px', color: '#888' }} />
-          <input 
-            type="text" 
-            placeholder="Cari nama atau nomor telepon..." 
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            style={{ width: '100%', padding: '10px 10px 10px 40px', borderRadius: '8px', border: '1px solid #e5e7eb', outline: 'none' }}
-          />
+      <div className="bo-card">
+        <div className="bo-card-header" style={{ marginBottom: '20px', padding: 0, border: 'none' }}>
+          <div style={{ display: 'flex', position: 'relative', width: '100%' }}>
+            <Search size={18} style={{ position: 'absolute', left: '12px', top: '10px', color: '#888' }} />
+            <input 
+              type="text" 
+              placeholder="Cari nama atau nomor telepon..." 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="bo-input"
+              style={{ width: '100%', paddingLeft: '40px' }}
+            />
+          </div>
         </div>
 
-        <table className="bo-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <div className="bo-table-container">
+          <table className="bo-table">
           <thead>
             <tr style={{ borderBottom: '2px solid #f3f4f6', textAlign: 'left' }}>
               <th style={{ padding: '12px 8px', color: '#666', fontSize: '12px' }}>ID</th>
@@ -130,12 +135,13 @@ export const CustomerData = () => {
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       {/* MODAL FORM PELANGGAN */}
       {isModalOpen && (
-        <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
-          <div className="modal-content" style={{ background: 'white', padding: '24px', borderRadius: '12px', width: '400px' }}>
+        <div className="r-modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
+          <div className="r-modal" style={{ background: 'white', padding: '24px', borderRadius: '12px', width: '400px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
               <h3 style={{ margin: 0, fontSize: '18px' }}>{modalMode === 'ADD' ? 'Tambah Pelanggan Baru' : 'Edit Pelanggan'}</h3>
               <button onClick={() => setIsModalOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={20}/></button>
@@ -193,8 +199,8 @@ export const CustomerData = () => {
 
       {/* MODAL RIWAYAT TRANSAKSI */}
       {historyModalOpen && viewCustomer && (
-        <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
-          <div className="modal-content" style={{ background: 'white', padding: '0', borderRadius: '12px', width: '700px', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+        <div className="r-modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
+          <div className="r-modal" style={{ background: 'white', padding: '0', borderRadius: '12px', width: '700px', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
             <div style={{ padding: '20px 24px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f9fafb', borderTopLeftRadius: '12px', borderTopRightRadius: '12px' }}>
               <div>
                 <h3 style={{ margin: 0, fontSize: '18px', color: '#111' }}>Riwayat Transaksi</h3>
