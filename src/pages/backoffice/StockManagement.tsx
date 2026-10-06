@@ -1225,7 +1225,7 @@ const StockManagement: React.FC = () => {
           width: 32px; height: 32px; border-radius: 50%; background: #e5e7eb;
           border: none; color: #4b5563; display: flex; align-items: center; justify-content: center; cursor: pointer;
         }
-        .ios-sheet-body { flex: 1; overflow-y: auto; padding: 0 16px; padding-bottom: 80px; }
+        .ios-sheet-body { flex: 1; overflow-y: auto; padding: 0 16px; padding-bottom: calc(90px + env(safe-area-inset-bottom, 0px)); }
         
         .ios-section-header {
           display: flex; justify-content: space-between; align-items: flex-end;
@@ -1288,8 +1288,8 @@ const StockManagement: React.FC = () => {
         
         .ios-sheet-footer {
           position: absolute; bottom: 0; left: 0; right: 0;
-          background: rgba(255,255,255,0.9); backdrop-filter: blur(10px); border-top: 1px solid #e5e7eb;
-          padding: 12px 16px 24px; display: flex; gap: 12px;
+          background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); border-top: 1px solid #e5e7eb;
+          padding: 12px 16px calc(16px + env(safe-area-inset-bottom, 0px)); display: flex; gap: 12px;
         }
         .ios-btn-batal { flex: 0 0 100px; padding: 14px; border-radius: 12px; border: none; background: #f3f4f6; font-size: 15px; font-weight: 700; color: #374151; cursor: pointer; }
         .ios-btn-simpan { flex: 1; padding: 14px; border-radius: 12px; border: none; background: var(--primary); font-size: 15px; font-weight: 700; color: white; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; }

@@ -23,13 +23,14 @@ html {
 
 html, body, #root {
   width: 100vw;
-  height: 100dvh;
+  height: 100%;
   /* KIOSK MODE: Fixes the black gap at the bottom of iOS PWA */
   position: fixed;
   inset: 0;
   overflow: hidden;
   margin: 0;
   padding: 0;
+  background-color: var(--bg-main, #faf9fd);
 }
 
 body {
