@@ -586,12 +586,7 @@ const StockManagement: React.FC = () => {
                         <button className="bo-action-btn" title="Batal Tambah (Hapus Draf)" onClick={() => {
                           const nextItems = draftItems.filter(si => si.id !== p.id);
                           const newDraft = [{ grNumber: 'GLOBAL-DRAFT', savedAt: new Date().toISOString(), draftId: 'DRAFT-GLOBAL', items: nextItems }];
-                          const nextStr = JSON.stringify(newDraft);
-                          
-                          setDrafts(newDraft);
-                          if ((window as any).socketInstance) {
-                            (window as any).socketInstance.emit('broadcast_drafts', { tenantId: 'TID-DEMO-123', drafts: nextStr });
-                          }
+                          saveDrafts(newDraft);
                         }} style={{ color: '#ef4444' }}><Trash2 size={16} /></button>
                       </>
                     ) : (

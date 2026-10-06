@@ -61,19 +61,10 @@ function App() {
     }
   }, [currentUser]);
 
-  // Real-time cross-tab synchronization
+  // Real-time cross-tab synchronization untuk Auth / Sesi (karena masih pakai persist localStorage)
   useEffect(() => {
     const handleStorage = (e: StorageEvent) => {
-      if (e.key === 'inventory-storage') useInventoryStore.persist.rehydrate();
-      if (e.key === 'settings-storage') useSettingsStore.persist.rehydrate();
-      if (e.key === 'customer-storage') useCustomerStore.persist.rehydrate();
-      if (e.key === 'sales-storage') useSalesStore.persist.rehydrate();
       if (e.key === 'auth-storage') useAuthStore.persist.rehydrate();
-      if (e.key === 'hold-storage') useHoldStore.persist.rehydrate();
-      // Handle drafts cross-tab sync manually (dispatch a custom event to self if needed, or rely on storage event)
-      if (e.key === 'grDrafts') {
-         window.dispatchEvent(new Event('drafts_updated'));
-      }
     };
     window.addEventListener('storage', handleStorage);
     return () => window.removeEventListener('storage', handleStorage);
@@ -99,7 +90,7 @@ function App() {
       if (!entity || entity === 'users') fetchEmployees();
     });
 
-    socket.on('draft_updated_grDrafts', (draftsArr) => {
+    socket.on('draft_updated_grDrafts', () => {
       // Data already parsed in API response JSON
       useDraftStore.getState().fetchDrafts();
     });
