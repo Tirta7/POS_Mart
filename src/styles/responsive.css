@@ -10,24 +10,47 @@
 
 :root {
   --sat: env(safe-area-inset-top, 0px);
-  --sab: 0px; /* DISABLED per user request for ZERO bottom gap */
+  --sab: env(safe-area-inset-bottom, 0px);
   --sal: env(safe-area-inset-left, 0px);
   --sar: env(safe-area-inset-right, 0px);
   --ios-ease: cubic-bezier(0.32, 0.72, 0, 1);
 }
 
-html, body, #root {
-  width: 100%;
-  height: 100%;
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  overflow: hidden;
-  margin: 0;
-  padding: 0;
-  background-color: var(--bg-main, #faf9fd);
+/* =====================================================================
+   GLOBAL LAYOUT (DESKTOP / TABLET)
+   ===================================================================== */
+@media (min-width: 769px) {
+  html, body, #root {
+    width: 100vw;
+    height: 100dvh;
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+    margin: 0;
+    padding: 0;
+    background-color: var(--bg-main, #faf9fd);
+  }
+}
+
+/* =====================================================================
+   GLOBAL LAYOUT (MOBILE IOS / ANDROID)
+   ===================================================================== */
+@media (max-width: 768px) {
+  html, body {
+    width: 100%;
+    min-height: 100vh;
+    margin: 0;
+    padding: 0;
+    background-color: var(--bg-main, #faf9fd);
+    /* Tidak memakai position: fixed agar PWA iOS bisa tembus layar bawah */
+    overflow-x: hidden;
+  }
+  #root {
+    width: 100%;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
 }
 
 body {
@@ -1073,8 +1096,6 @@ body {
     backdrop-filter: saturate(180%) blur(20px) !important;
     border-bottom: 0.5px solid rgba(60, 60, 67, 0.16) !important;
     box-shadow: none !important;
-    padding-top: max(env(safe-area-inset-top), 10px) !important;
-    height: auto !important;
   }
 
   /* Drawer / panel yang tembus ke area status bar memakai warna panelnya
