@@ -83,7 +83,7 @@ export const buildReceiptHtml = (sale: SalesTransaction, opts: ReceiptOptions): 
     .join('');
 
   const logoHtml = st.appLogo 
-    ? `<div class="center" style="margin-bottom: 8px;"><img src="${st.appLogo}" alt="Logo" style="max-width: 50mm; max-height: 25mm; object-fit: contain; filter: grayscale(100%) contrast(200%) brightness(1.1);" /></div>`
+    ? `<div class="center" style="margin-bottom: 8px;"><img src="${st.appLogo}" alt="Logo" style="max-width: 50mm; max-height: 25mm; object-fit: contain; filter: grayscale(100%) contrast(150%);" /></div>`
     : '';
 
   return `<!doctype html>
