@@ -693,7 +693,7 @@ body {
   .r-modal {
     width: 100% !important;
     max-width: 100% !important;
-    max-height: calc(100% - var(--sat) - 16px) !important;
+    max-height: calc(100dvh - max(var(--sat), 64px) - 16px) !important;
     overflow-y: auto !important;
     -webkit-overflow-scrolling: touch;
     border-radius: 22px 22px 0 0 !important;
@@ -1811,7 +1811,7 @@ body {
   /* Tinggi sheet mengikuti isi (tidak selalu penuh layar) */
   .pf-sheet {
     height: auto !important;
-    max-height: calc(100% - var(--sat) - 10px) !important;
+    max-height: calc(100dvh - max(var(--sat), 64px) - 10px) !important;
   }
   .pf-sheet > form {
     flex: 1 1 auto !important;
