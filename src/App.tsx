@@ -20,6 +20,7 @@ import { useHoldStore } from './store/useHoldStore';
 import { useSupplierStore } from './store/useSupplierStore';
 import { useDraftStore } from './store/useDraftStore';
 import { io } from 'socket.io-client';
+import GlobalNotification from './components/GlobalNotification';
 
 // Route guard — jika belum login, redirect ke /login
 const RequireAuth = ({ children }: { children: React.ReactNode }) => {
@@ -154,6 +155,7 @@ function App() {
         {/* Catch all */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      <GlobalNotification />
     </Router>
   );
 }

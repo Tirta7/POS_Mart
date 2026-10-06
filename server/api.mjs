@@ -373,10 +373,21 @@ app.post('/api/saas/transactions', async (req, res) => {
         });
 
         // Kurangi stok secara ATOMIC (Mencegah Race Condition)
-        await tx.product.update({
+        const updatedProduct = await tx.product.update({
           where: { id: item.product_id, tenant_id: req.tenantId },
           data: { stock: { decrement: item.quantity } }
         });
+
+        // Notify if stock is depleted
+        if (updatedProduct.stock <= 0) {
+          const io = getIo();
+          if (io) {
+            io.to(req.tenantId).emit('stock_depleted', {
+              productName: updatedProduct.name,
+              stock: updatedProduct.stock
+            });
+          }
+        }
       }
 
       return newTx;
@@ -385,6 +396,18 @@ app.post('/api/saas/transactions', async (req, res) => {
     notifyTenant(req.tenantId, 'transactions');
     notifyTenant(req.tenantId, 'sales');
     notifyTenant(req.tenantId, 'products'); // Because stock changed
+    
+    // Explicit notification for incoming sale
+    const io = getIo();
+    if (io) {
+      io.to(req.tenantId).emit('sale_completed', {
+        amount: Number(total_amount),
+        cashier: cashier_name || 'Unknown',
+        receiptNumber: receipt_number,
+        paymentMethod: payment_method
+      });
+    }
+
     res.json(transaction);
   } catch (err) {
     res.status(500).json({ error: err.message });
