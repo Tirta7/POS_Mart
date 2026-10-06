@@ -60,6 +60,7 @@ const StockManagement: React.FC = () => {
 
   // Tidak lagi menggunakan sessionItems terpisah, semua draf global
   const [draftToast, setDraftToast] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Modal Konfirmasi & Posting
   const [showPostModal, setShowPostModal] = useState(false);
@@ -281,7 +282,12 @@ const StockManagement: React.FC = () => {
         const avg = newTotal > 0
           ? Math.round(((existing.stock * existing.purchasePrice) + (qtyIn * Number(item.purchasePrice))) / newTotal)
           : Number(item.purchasePrice);
-        await updateProduct(existing.id, { ...existing, stock: newTotal, purchasePrice: avg });
+          
+        // Mencegah Race Condition: Jangan update stok di sini! Biarkan Mutasi (recordStockMutation) 
+        // yang melakukan INCREMENT secara atomic di sisi database.
+        const payload = { ...existing, purchasePrice: avg };
+        delete payload.stock;
+        await updateProduct(existing.id, payload);
       } else {
         const createdProd = await addProduct({
           id: item.id,
@@ -336,18 +342,23 @@ const StockManagement: React.FC = () => {
 
   // Posting seluruh draft
   const handlePosting = async () => {
-    if (draftItems.length === 0) return;
+    if (draftItems.length === 0 || isSubmitting) return;
+    setIsSubmitting(true);
     
-    await applyItemsToStock(draftItems, grNumber);
+    try {
+      await applyItemsToStock(draftItems, grNumber);
 
-    setIsPosted(true);
-    writePostedLog(grNumber, draftItems);
-    // Kosongkan draft global
-    const emptyDraft = [];
-    localStorage.setItem('grDrafts', JSON.stringify(emptyDraft));
-    setDrafts(emptyDraft);
-    if ((window as any).socketInstance) {
-      (window as any).socketInstance.emit('broadcast_drafts', { tenantId: 'TID-DEMO-123', drafts: JSON.stringify(emptyDraft) });
+      setIsPosted(true);
+      writePostedLog(grNumber, draftItems);
+      // Kosongkan draft global
+      const emptyDraft = [];
+      localStorage.setItem('grDrafts', JSON.stringify(emptyDraft));
+      setDrafts(emptyDraft);
+      if ((window as any).socketInstance) {
+        (window as any).socketInstance.emit('broadcast_drafts', { tenantId: 'TID-DEMO-123', drafts: JSON.stringify(emptyDraft) });
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -390,12 +401,16 @@ const StockManagement: React.FC = () => {
     // Hitung Harga Pokok Pembelian (HPP) baru dengan Moving Average
     const newAveragePrice = Math.round(((oldQty * oldPrice) + (addedQty * newPrice)) / newTotalQty);
 
-    updateProduct(restockProduct.id, {
+    // Mencegah Race Condition: Jangan update stok di sini! Mutasi IN yang akan
+    // menambah stok (increment) di database.
+    const payload = {
       ...restockProduct,
-      stock: newTotalQty,
       purchasePrice: newAveragePrice,
       // Harga jual tidak diubah otomatis
-    });
+    };
+    delete payload.stock;
+    
+    updateProduct(restockProduct.id, payload);
 
     // Mutasi stok: Barang Masuk (IN) dari restock
     recordStockMutation(
@@ -1384,13 +1399,14 @@ const StockManagement: React.FC = () => {
 
                   {/* Actions */}
                   <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-                    <button className="bo-btn bo-btn-secondary" onClick={() => setShowPostModal(false)}>Batal</button>
+                    <button className="bo-btn bo-btn-secondary" onClick={() => setShowPostModal(false)} disabled={isSubmitting}>Batal</button>
                     <button
                       className="bo-btn bo-btn-primary"
                       style={{ minWidth: '180px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
                       onClick={handlePosting}
+                      disabled={isSubmitting}
                     >
-                      <CheckCircle size={16} /> Posting Sekarang
+                      <CheckCircle size={16} /> {isSubmitting ? 'Memproses...' : 'Posting Sekarang'}
                     </button>
                   </div>
                 </>
