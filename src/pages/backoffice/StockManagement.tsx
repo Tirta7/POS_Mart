@@ -219,15 +219,21 @@ const StockManagement: React.FC = () => {
     resetForm();
   };
 
-  // ===== SIMPAN DRAF =====
-  // Satu No. GR = satu draf (simpan ulang = perbarui, tidak dobel). Draf kosong dihapus.
+  const broadcastDrafts = (draftsArray: any[]) => {
+    const nextStr = JSON.stringify(draftsArray);
+    localStorage.setItem('grDrafts', nextStr);
+    setDrafts(draftsArray);
+    if ((window as any).socketInstance) {
+      (window as any).socketInstance.emit('broadcast_drafts', { tenantId: 'TID-DEMO-123', drafts: nextStr });
+    }
+  };
+
   const persistDraft = (items: any[]) => {
     const others = readDrafts().filter(d => d.grNumber !== grNumber);
     const next = items.length > 0
       ? [...others, { draftId: 'DRAFT-' + Date.now(), savedAt: new Date().toISOString(), grNumber, items }]
       : others;
-    localStorage.setItem('grDrafts', JSON.stringify(next));
-    setDrafts(next);
+    broadcastDrafts(next);
   };
 
   const handleSaveDraft = () => {
@@ -269,8 +275,7 @@ const StockManagement: React.FC = () => {
       ...d,
       items: (d.items || []).map((i: any) => i.id === updated.id ? { ...i, ...fields } : i),
     }));
-    localStorage.setItem('grDrafts', JSON.stringify(next));
-    setDrafts(next);
+    broadcastDrafts(next);
     const active = next.find(d => d.grNumber === grNumber);
     setSessionItems(active ? active.items : []);
     setReviewItems(prev => prev ? prev.map(i => i.id === updated.id ? { ...i, ...fields } : i) : prev);
@@ -282,8 +287,7 @@ const StockManagement: React.FC = () => {
     const next = readDrafts()
       .map(d => ({ ...d, items: (d.items || []).filter((i: any) => i.id !== itemId) }))
       .filter(d => d.items.length > 0);
-    localStorage.setItem('grDrafts', JSON.stringify(next));
-    setDrafts(next);
+    broadcastDrafts(next);
     setSelectedIds(prev => prev.filter(x => x !== itemId));
     const active = next.find(d => d.grNumber === grNumber);
     setSessionItems(active ? active.items : []);
@@ -353,8 +357,7 @@ const StockManagement: React.FC = () => {
     const next = readDrafts()
       .map(d => ({ ...d, items: (d.items || []).filter((i: any) => !ids.has(i.id)) }))
       .filter(d => d.items.length > 0);
-    localStorage.setItem('grDrafts', JSON.stringify(next));
-    setDrafts(next);
+    broadcastDrafts(next);
     setSelectedIds(prev => prev.filter(id => !ids.has(id)));
     const active = next.find(d => d.grNumber === grNumber);
     setSessionItems(active ? active.items : []);
@@ -370,8 +373,7 @@ const StockManagement: React.FC = () => {
     writePostedLog(grNumber, sessionItems);
     // Draf dengan No. GR ini sudah diposting -> hapus dari daftar draf
     const remaining = readDrafts().filter(d => d.grNumber !== grNumber);
-    localStorage.setItem('grDrafts', JSON.stringify(remaining));
-    setDrafts(remaining);
+    broadcastDrafts(remaining);
   };
 
   const handleEditClick = (p: any) => {

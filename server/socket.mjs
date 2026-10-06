@@ -26,7 +26,12 @@ export const initSocket = async (httpServer) => {
     socket.on('join_tenant', (tenantId) => {
       if (tenantId) {
         socket.join(tenantId);
-        // console.log(`Socket ${socket.id} joined tenant ${tenantId}`);
+      }
+    });
+
+    socket.on('broadcast_drafts', ({ tenantId, drafts }) => {
+      if (tenantId) {
+        socket.to(tenantId).emit('sync_drafts', drafts);
       }
     });
   });

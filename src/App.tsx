@@ -77,6 +77,7 @@ function App() {
     
     // Default tenant for demo (TID-DEMO-123)
     const socket = io('/', { transports: ['websocket'] });
+    (window as any).socketInstance = socket;
     socket.emit('join_tenant', 'TID-DEMO-123');
     
     socket.on('data_updated', () => {
@@ -86,10 +87,17 @@ function App() {
       fetchSales();
       fetchCustomers();
       fetchSuppliers();
+      fetchSettings();
+    });
+
+    socket.on('sync_drafts', (draftsStr) => {
+      localStorage.setItem('grDrafts', draftsStr);
+      window.dispatchEvent(new Event('drafts_updated'));
     });
 
     return () => {
       socket.disconnect();
+      delete (window as any).socketInstance;
     };
   }, [currentUser]);
 
