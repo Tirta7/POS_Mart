@@ -66,6 +66,7 @@ export const useSalesStore = create<SalesState>()(
             total_amount: sale.total,
             payment_method: sale.paymentMethod,
             cashier_id: sale.employeeId || 'cashier-1',
+            cashier_name: sale.employeeName || 'Unknown',
             items: sale.items.map(item => ({
               product_id: item.productId,
               quantity: item.qty,
