@@ -14,7 +14,6 @@ import { useHoldStore } from './store/useHoldStore';
 import { useSalesStore } from './store/useSalesStore';
 import { useAuthStore } from './store/useAuthStore';
 import BarcodeScannerCamera from './components/BarcodeScannerCamera';
-import { recordStockMutation } from './utils/stockMutation';
 import { sendSaleNotification } from './utils/pushNotification';
 import ReceiptModal from './components/ReceiptModal';
 import type { SalesTransaction } from './types';
@@ -22,7 +21,7 @@ import type { ReceiptOptions } from './utils/receipt';
 
 function App() {
   const { appName, appLogo, taxEnabled, taxRate, roundingUnit } = useSettingsStore();
-  const { products: storeProducts, updateProductStock, categories, reserveStock, releaseReservedStock } = useInventoryStore();
+  const { products: storeProducts, categories, reserveStock, releaseReservedStock } = useInventoryStore();
   const { addSale, sales } = useSalesStore();
   const todayTxCount = sales.filter(s => new Date(s.date).toDateString() === new Date().toDateString()).length;
   const { currentUser, logout } = useAuthStore();

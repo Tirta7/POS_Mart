@@ -285,9 +285,8 @@ const StockManagement: React.FC = () => {
           
         // Mencegah Race Condition: Jangan update stok di sini! Biarkan Mutasi (recordStockMutation) 
         // yang melakukan INCREMENT secara atomic di sisi database.
-        const payload = { ...existing, purchasePrice: avg };
-        delete payload.stock;
-        await updateProduct(existing.id, payload);
+        const { stock, ...payload } = { ...existing, purchasePrice: avg };
+        await updateProduct(existing.id, payload as any);
       } else {
         const createdProd = await addProduct({
           id: item.id,
@@ -351,7 +350,7 @@ const StockManagement: React.FC = () => {
       setIsPosted(true);
       writePostedLog(grNumber, draftItems);
       // Kosongkan draft global
-      const emptyDraft = [];
+      const emptyDraft: any[] = [];
       localStorage.setItem('grDrafts', JSON.stringify(emptyDraft));
       setDrafts(emptyDraft);
       if ((window as any).socketInstance) {
