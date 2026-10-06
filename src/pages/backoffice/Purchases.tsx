@@ -193,9 +193,9 @@ const Purchases: React.FC = () => {
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
+      <div className="bo-layout-grid" style={{ display: 'flex', gap: '24px', flexWrap: 'wrap', alignItems: 'flex-start' }}>
         {/* Form Pembelian */}
-        <div className="bo-card" style={{ flex: '1 1 500px' }}>
+        <div className="bo-card r-full-mobile" style={{ flex: '1 1 500px', minWidth: 0 }}>
           <div className="bo-card-header">
             <h3 className="bo-card-title"><ShoppingCart size={20} style={{ color: 'var(--primary)' }} /> Detail Pembelian</h3>
           </div>
@@ -352,7 +352,7 @@ const Purchases: React.FC = () => {
         </div>
 
         {/* Info Supplier */}
-        <div className="bo-card" style={{ flex: '1 1 300px', alignSelf: 'flex-start' }}>
+        <div className="bo-card r-full-mobile" style={{ flex: '1 1 300px', minWidth: 0 }}>
           <div className="bo-card-header">
             <h3 className="bo-card-title">Ringkasan Supplier</h3>
           </div>
