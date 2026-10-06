@@ -38,6 +38,7 @@ function App() {
   const { fetchCustomers } = useCustomerStore();
   const { fetchSuppliers } = useSupplierStore();
   const { fetchDrafts } = useDraftStore();
+  const { fetchHeldOrders } = useHoldStore();
 
   useEffect(() => {
     document.title = appName;
@@ -58,6 +59,7 @@ function App() {
       fetchCustomers();
       fetchSuppliers();
       fetchDrafts();
+      fetchHeldOrders();
     }
   }, [currentUser]);
 
@@ -93,6 +95,10 @@ function App() {
     socket.on('draft_updated_grDrafts', (draftsArr) => {
       // Data already parsed in API response JSON
       useDraftStore.setState({ drafts: Array.isArray(draftsArr) ? draftsArr : [] });
+    });
+    
+    socket.on('draft_updated_posHold', (heldArr) => {
+      useHoldStore.setState({ heldOrders: Array.isArray(heldArr) ? heldArr : [] });
     });
 
     return () => {

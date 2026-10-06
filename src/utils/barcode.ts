@@ -37,8 +37,7 @@ export const generateInternalBarcode = (products: HasCodes[]): string => {
     maxExisting = Math.max(maxExisting, parseSeq(p.id), parseSeq(p.barcode));
   }
 
-  const stored = parseInt(localStorage.getItem(COUNTER_KEY) || '0', 10) || 0;
-  let next = Math.max(stored, maxExisting) + 1;
+  let next = maxExisting + 1;
 
   let code = INTERNAL_BARCODE_PREFIX + String(next).padStart(6, '0');
   while (used.has(code)) {
@@ -46,6 +45,5 @@ export const generateInternalBarcode = (products: HasCodes[]): string => {
     code = INTERNAL_BARCODE_PREFIX + String(next).padStart(6, '0');
   }
 
-  localStorage.setItem(COUNTER_KEY, String(next));
   return code;
 };
