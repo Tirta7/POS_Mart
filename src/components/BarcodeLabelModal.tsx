@@ -103,9 +103,32 @@ const BarcodeLabelModal: React.FC<Props> = ({ product, initialCopies = 1, onClos
   };
 
   return (
-    <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000 }}>
-      <div style={{ backgroundColor: 'white', borderRadius: '14px', padding: '22px', width: '420px', maxWidth: '94%', boxShadow: '0 20px 40px rgba(0,0,0,0.25)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+    <>
+      <style>{`
+        @keyframes sheetSlideUp {
+          from { transform: translateY(100%); }
+          to { transform: translateY(0); }
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+      `}</style>
+      <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 10000, animation: 'fadeIn 0.2s ease-out' }} onClick={onClose}>
+        <div 
+          onClick={(e) => e.stopPropagation()}
+          style={{ 
+          backgroundColor: 'white', 
+          borderTopLeftRadius: '24px', 
+          borderTopRightRadius: '24px', 
+          padding: '24px 24px calc(24px + env(safe-area-inset-bottom, 20px))', 
+          width: '100%', 
+          maxWidth: '500px', 
+          boxShadow: '0 -10px 40px rgba(0,0,0,0.15)',
+          animation: 'sheetSlideUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.1)' 
+        }}>
+          <div style={{ width: '40px', height: '5px', backgroundColor: '#e5e7eb', borderRadius: '10px', margin: '0 auto 20px auto' }} />
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
           <h3 style={{ margin: 0, fontSize: '17px', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Printer size={18} color="var(--primary)" /> Cetak Label Barcode
           </h3>
@@ -162,6 +185,7 @@ const BarcodeLabelModal: React.FC<Props> = ({ product, initialCopies = 1, onClos
         </div>
       </div>
     </div>
+    </>
   );
 };
 
