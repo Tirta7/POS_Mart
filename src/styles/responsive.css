@@ -1676,6 +1676,14 @@ body {
     border-right: 0.5px solid #e5e5ea;
     vertical-align: middle;
   }
+  table.bo-table.r-sheet th:first-child,
+  table.bo-table.r-sheet td:first-child {
+    padding-left: max(16px, env(safe-area-inset-left, 16px)) !important;
+  }
+  table.bo-table.r-sheet th:last-child,
+  table.bo-table.r-sheet td:last-child {
+    padding-right: max(16px, env(safe-area-inset-right, 16px)) !important;
+  }
   table.bo-table.r-sheet td:nth-child(1),
   table.bo-table.r-sheet td:nth-child(2) {
     font-size: 10px;
