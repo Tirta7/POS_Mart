@@ -63,6 +63,13 @@ const Settings: React.FC = () => {
     setLocalFooter(effectiveFooter);
   }, [appName, appLogo, taxEnabled, taxRate, roundingUnit, effectiveHeader, effectiveFooter]);
 
+  // Keep localHeader in sync if user changes localAppName and the header is currently the default
+  useEffect(() => {
+    if (localHeader === defaultInvoiceHeader(appName) || localHeader === defaultInvoiceHeader('TID-DEMO-123')) {
+      setLocalHeader(defaultInvoiceHeader(localAppName));
+    }
+  }, [localAppName]);
+
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
