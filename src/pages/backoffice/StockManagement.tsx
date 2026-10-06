@@ -1207,7 +1207,7 @@ const StockManagement: React.FC = () => {
       )}
       <style>{`
         /* iOS Bottom Sheet Styles */
-        .ios-modal-overlay { padding: 20px 0 0 0; }
+        .ios-modal-overlay { padding: max(20px, calc(env(safe-area-inset-top) + 15px)) 0 0 0; }
         .ios-sheet {
           background-color: #f2f2f7; width: 100%; max-width: 480px; height: 100%;
           border-radius: 20px 20px 0 0; display: flex; flex-direction: column;
