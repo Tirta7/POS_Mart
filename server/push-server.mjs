@@ -54,4 +54,4 @@ const server = http.createServer((req, res) => {
 // Initialize Socket.io on this server instance
 initSocket(server);
 
-server.listen(PORT, () => console.log(`[push-server] http://localhost:${PORT}`));
+server.listen(PORT, '0.0.0.0', () => console.log(`[push-server] http://0.0.0.0:${PORT}`));
