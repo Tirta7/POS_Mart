@@ -7,7 +7,7 @@ interface DraftState {
   saveDrafts: (drafts: any[]) => Promise<void>;
 }
 
-export const useDraftStore = create<DraftState>((set, get) => ({
+export const useDraftStore = create<DraftState>((set) => ({
   drafts: [],
   isLoading: false,
   fetchDrafts: async () => {

@@ -14,7 +14,6 @@
  */
 
 export const INTERNAL_BARCODE_PREFIX = 'SK';
-const COUNTER_KEY = 'internalBarcodeCounter';
 const INTERNAL_PATTERN = /^SK\d{6}$/;
 
 export const isInternalBarcode = (code?: string | null): boolean =>
