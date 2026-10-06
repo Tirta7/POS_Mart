@@ -17,9 +17,9 @@ const pushApiPlugin = (): Plugin => ({
         (req as any).socket = { destroy: () => (req as any).stream.destroy() } as any;
       }
       const origEnd = res.end;
-      res.end = function(...args: any[]) {
-        if ((res as any).destroyed) return;
-        try { return origEnd.apply(this, args as any); } catch(e) {}
+      (res as any).end = function(...args: any[]) {
+        if ((res as any).destroyed) return this;
+        try { return origEnd.apply(this, args as any); } catch(e) { return this; }
       };
       next();
     });
@@ -39,9 +39,9 @@ const pushApiPlugin = (): Plugin => ({
         (req as any).socket = { destroy: () => (req as any).stream.destroy() } as any;
       }
       const origEnd = res.end;
-      res.end = function(...args: any[]) {
-        if ((res as any).destroyed) return;
-        try { return origEnd.apply(this, args as any); } catch(e) {}
+      (res as any).end = function(...args: any[]) {
+        if ((res as any).destroyed) return this;
+        try { return origEnd.apply(this, args as any); } catch(e) { return this; }
       };
       next();
     });
