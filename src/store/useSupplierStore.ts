@@ -4,7 +4,9 @@ import type { Supplier } from '../types';
 interface SupplierState {
   suppliers: Supplier[];
   fetchSuppliers: () => Promise<void>;
-  addSupplier: (supplier: Supplier) => Promise<void>;
+  addSupplier: (supplier: Omit<Supplier, 'id'>) => Promise<void>;
+  updateSupplier: (id: string, supplier: Partial<Supplier>) => Promise<void>;
+  deleteSupplier: (id: string) => Promise<void>;
   updateSupplierPayable: (supplierId: string, amount: number) => void;
 }
 
@@ -32,6 +34,34 @@ export const useSupplierStore = create<SupplierState>()(
           if (res.ok) {
             const newSup = await res.json();
             set((state) => ({ suppliers: [...state.suppliers, newSup] }));
+          }
+        } catch (err) {
+          console.error(err);
+        }
+      },
+      updateSupplier: async (id, supplier) => {
+        try {
+          const res = await fetch(`/api/saas/suppliers/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'x-tenant-id': 'TID-DEMO-123' },
+            body: JSON.stringify(supplier)
+          });
+          if (res.ok) {
+            const updated = await res.json();
+            set((state) => ({ suppliers: state.suppliers.map(s => s.id === id ? updated : s) }));
+          }
+        } catch (err) {
+          console.error(err);
+        }
+      },
+      deleteSupplier: async (id) => {
+        try {
+          const res = await fetch(`/api/saas/suppliers/${id}`, {
+            method: 'DELETE',
+            headers: { 'x-tenant-id': 'TID-DEMO-123' }
+          });
+          if (res.ok) {
+            set((state) => ({ suppliers: state.suppliers.filter(s => s.id !== id) }));
           }
         } catch (err) {
           console.error(err);
