@@ -18,18 +18,21 @@
 
 html, body, #root {
   width: 100vw;
-  height: 100vh;
   height: 100dvh;
+  /* KIOSK MODE: Fixes the black gap at the bottom of iOS PWA */
   position: fixed;
   inset: 0;
   overflow: hidden;
   margin: 0;
   padding: 0;
   background-color: var(--bg-main, #faf9fd);
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  color: var(--text-dark);
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior: none;
-  -webkit-text-size-adjust: 100%;
-  text-size-adjust: 100%;
 }
 
 
