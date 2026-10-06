@@ -289,7 +289,21 @@ app.get('/api/saas/transactions', async (req, res) => {
       include: { items: { include: { product: true } } },
       orderBy: { created_at: 'desc' }
     });
-    res.json(transactions);
+
+    // Ambil semua user untuk tenant ini agar bisa memetakan cashier_id ke username (nama kasir)
+    const users = await prisma.user.findMany({
+      where: { tenant_id: req.tenantId },
+      select: { id: true, username: true }
+    });
+    const userMap = {};
+    users.forEach(u => userMap[u.id] = u.username);
+
+    const result = transactions.map(t => ({
+      ...t,
+      cashier_name: userMap[t.cashier_id] || t.cashier_id
+    }));
+
+    res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

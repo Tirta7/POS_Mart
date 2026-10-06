@@ -34,7 +34,7 @@ export const useSalesStore = create<SalesState>()(
               tendered: t.total_amount, 
               change: 0,
               employeeId: t.cashier_id,
-              employeeName: t.cashier_id,
+              employeeName: t.cashier_name || t.cashier_id,
               items: t.items.map((i: any) => ({
                 productId: i.product_id,
                 name: i.product?.name || 'Unknown',
