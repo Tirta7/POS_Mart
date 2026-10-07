@@ -1158,8 +1158,63 @@ const StockManagement: React.FC = () => {
               </div>
               <div className="ios-group">
                 <div className="ios-row-vert">
-                  <div className="ios-label-row"><label>Tautan (URL) Gambar</label></div>
-                  <input type="text" inputMode="url" autoCapitalize="off" autoCorrect="off" value={image} onChange={(e) => setImage(e.target.value)} className="ios-input-gray" placeholder="https://..." />
+                  <div className="ios-label-row"><label>Tautan (URL) Gambar / Foto Kamera</label></div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <input type="text" inputMode="url" autoCapitalize="off" autoCorrect="off" value={image} onChange={(e) => setImage(e.target.value)} className="ios-input-gray" placeholder="https://..." style={{ flex: 1 }} />
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      capture="environment" 
+                      id="camera-input" 
+                      style={{ display: 'none' }}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        const reader = new FileReader();
+                        reader.onload = (event) => {
+                          const img = new Image();
+                          img.onload = () => {
+                            const canvas = document.createElement('canvas');
+                            let width = img.width;
+                            let height = img.height;
+                            const MAX_SIZE = 800;
+                            if (width > height) {
+                              if (width > MAX_SIZE) {
+                                height *= MAX_SIZE / width;
+                                width = MAX_SIZE;
+                              }
+                            } else {
+                              if (height > MAX_SIZE) {
+                                width *= MAX_SIZE / height;
+                                height = MAX_SIZE;
+                              }
+                            }
+                            canvas.width = width;
+                            canvas.height = height;
+                            const ctx = canvas.getContext('2d');
+                            ctx?.drawImage(img, 0, 0, width, height);
+                            const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
+                            setImage(dataUrl);
+                          };
+                          img.src = event.target?.result as string;
+                        };
+                        reader.readAsDataURL(file);
+                      }}
+                    />
+                    <button 
+                      type="button" 
+                      onClick={() => document.getElementById('camera-input')?.click()}
+                      className="bo-btn"
+                      style={{ backgroundColor: '#2563eb', color: 'white', padding: '0 16px', borderRadius: '8px', fontSize: '13px', fontWeight: 'bold' }}
+                    >
+                      📷 Kamera
+                    </button>
+                  </div>
+                  {image && image.startsWith('data:image') && (
+                    <div style={{ marginTop: '10px' }}>
+                      <img src={image} alt="Preview" style={{ width: '100px', height: '100px', objectFit: 'cover', borderRadius: '8px' }} />
+                    </div>
+                  )}
                 </div>
               </div>
 
