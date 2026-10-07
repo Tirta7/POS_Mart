@@ -78,7 +78,7 @@ function App() {
     if (!currentUser) return;
     
     // Default tenant for demo (TID-DEMO-123)
-    const socket = io('/', { transports: ['websocket'] });
+    const socket = io('/');
     (window as any).socketInstance = socket;
     socket.emit('join_tenant', 'TID-DEMO-123');
     
