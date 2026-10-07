@@ -85,6 +85,7 @@ export interface SalesTransaction {
   tendered: number;
   change: number;
   customerId?: string;
+  customerName?: string;
   employeeId?: string;
   employeeName?: string;
   items: {
