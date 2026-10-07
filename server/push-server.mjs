@@ -9,7 +9,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { pushApiMiddleware } from './pushApi.mjs';
 import { licenseMiddleware } from './license.mjs';
-import { saasApiMiddleware } from './api.mjs';
+import { saasApiMiddleware, manifestMiddleware } from './api.mjs';
 
 import { initSocket } from './socket.mjs';
 
@@ -27,19 +27,22 @@ const MIME = {
 const api = pushApiMiddleware();
 const license = licenseMiddleware();
 const saasApi = saasApiMiddleware;
+const manifest = manifestMiddleware;
 
 const server = http.createServer((req, res) => {
   const runNext = () => {
     license(req, res, () => {
       api(req, res, () => {
-        const urlPath = decodeURIComponent((req.url || '/').split('?')[0]);
-        let file = path.join(DIST, urlPath);
-        if (!file.startsWith(DIST) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
-          file = path.join(DIST, 'index.html'); // SPA fallback
-        }
-        res.setHeader('Content-Type', MIME[path.extname(file)] || 'application/octet-stream');
-        if (path.basename(file) === 'sw.js') res.setHeader('Cache-Control', 'no-cache');
-        fs.createReadStream(file).pipe(res);
+        manifest(req, res, () => {
+          const urlPath = decodeURIComponent((req.url || '/').split('?')[0]);
+          let file = path.join(DIST, urlPath);
+          if (!file.startsWith(DIST) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
+            file = path.join(DIST, 'index.html'); // SPA fallback
+          }
+          res.setHeader('Content-Type', MIME[path.extname(file)] || 'application/octet-stream');
+          if (path.basename(file) === 'sw.js') res.setHeader('Cache-Control', 'no-cache');
+          fs.createReadStream(file).pipe(res);
+        });
       });
     });
   };

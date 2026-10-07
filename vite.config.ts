@@ -5,7 +5,7 @@ import { pushApiMiddleware } from './server/pushApi.mjs'
 // @ts-ignore
 import { licenseMiddleware } from './server/license.mjs'
 // @ts-ignore
-import { saasApiMiddleware } from './server/api.mjs'
+import { saasApiMiddleware, manifestMiddleware } from './server/api.mjs'
 // @ts-ignore
 import { initSocket } from './server/socket.mjs'
 
@@ -30,6 +30,7 @@ const pushApiPlugin = (): Plugin => ({
     });
     server.middlewares.use(licenseMiddleware())
     server.middlewares.use(pushApiMiddleware())
+    server.middlewares.use(manifestMiddleware)
     server.middlewares.use((req, res, next) => {
       if (req.url?.startsWith('/api/saas')) {
         saasApiMiddleware(req, res, next)
@@ -55,6 +56,7 @@ const pushApiPlugin = (): Plugin => ({
     });
     server.middlewares.use(licenseMiddleware())
     server.middlewares.use(pushApiMiddleware())
+    server.middlewares.use(manifestMiddleware)
     server.middlewares.use((req, res, next) => {
       if (req.url?.startsWith('/api/saas')) {
         saasApiMiddleware(req, res, next)

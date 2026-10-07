@@ -680,3 +680,35 @@ export const saasApiMiddleware = (req, res, next) => {
   }
   next();
 };
+
+export const manifestMiddleware = (req, res, next) => {
+  if (req.url === '/manifest.webmanifest' || req.url === '/manifest.json') {
+    prisma.tenant.findFirst().then(tenant => {
+      const appName = tenant?.name || 'VOC POS';
+      const manifest = {
+        name: appName,
+        short_name: appName,
+        description: "Aplikasi Point of Sale & Back-Office swalayan.",
+        lang: "id",
+        start_url: "/",
+        scope: "/",
+        display: "standalone",
+        orientation: "any",
+        background_color: "#ffffff",
+        theme_color: "#f9f9fb",
+        icons: [
+          { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
+          { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
+          { src: "/icons/icon-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" }
+        ]
+      };
+      res.setHeader('Content-Type', 'application/manifest+json');
+      res.end(JSON.stringify(manifest));
+    }).catch(err => {
+      console.error("Gagal generate manifest:", err);
+      next();
+    });
+    return;
+  }
+  next();
+};
