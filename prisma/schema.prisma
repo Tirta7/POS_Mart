@@ -26,6 +26,7 @@ model Tenant {
   stockTransactions StockTransaction[]
   customers         Customer[]
   suppliers         Supplier[]
+  supplierPayments  SupplierPayment[]
 
   @@map("tenants")
 }
@@ -49,10 +50,27 @@ model Supplier {
   contact           String?
   phone             String?
   payment_term_days Int      @default(0)
+  payable           Float    @default(0) // Total debt to this supplier
 
   tenant    Tenant   @relation(fields: [tenant_id], references: [id])
+  payments  SupplierPayment[]
 
   @@map("suppliers")
+}
+
+model SupplierPayment {
+  id          String   @id @default(uuid())
+  tenant_id   String
+  supplier_id String
+  amount      Float
+  payment_method String @default("CASH")
+  note        String?
+  created_at  DateTime @default(now())
+
+  tenant   Tenant   @relation(fields: [tenant_id], references: [id])
+  supplier Supplier @relation(fields: [supplier_id], references: [id])
+
+  @@map("supplier_payments")
 }
 
 model User {

@@ -3,6 +3,7 @@ import { useSalesStore } from '../../store/useSalesStore';
 import { useInventoryStore } from '../../store/useInventoryStore';
 import { useCustomerStore } from '../../store/useCustomerStore';
 import { useSettingsStore } from '../../store/useSettingsStore';
+import { useSupplierStore } from '../../store/useSupplierStore';
 import ReceiptModal from '../../components/ReceiptModal';
 import type { SalesTransaction } from '../../types';
 import type { ReceiptOptions } from '../../utils/receipt';
@@ -15,6 +16,7 @@ const Reports: React.FC = () => {
   useEffect(() => {
     fetchSales();
     fetchProducts();
+    useSupplierStore.getState().fetchSuppliers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -22,7 +24,7 @@ const Reports: React.FC = () => {
   const { appName, taxEnabled, taxRate } = useSettingsStore();
   const [reprint, setReprint] = useState<{ sale: SalesTransaction; options: ReceiptOptions } | null>(null);
   
-  const [activeTab, setActiveTab] = useState<'sales' | 'low-stock'>('sales');
+  const [activeTab, setActiveTab] = useState<'sales' | 'low-stock' | 'supplier-debts'>('sales');
   
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -138,7 +140,38 @@ const Reports: React.FC = () => {
     { label: 'STOK TIPIS / HABIS', value: `${lowStockItems.length} Produk`, sub: `${outOfStockCount} habis • ${lowStockItems.length - outOfStockCount} tipis`, color: '#ef4444', bg: '#fef2f2', Icon: AlertCircle },
   ];
 
-  const tabBtn = (id: 'sales' | 'low-stock', label: string, n: number, activeColor: string): React.ReactNode => {
+  const { suppliers, paySupplierDebt } = useSupplierStore();
+  const [payAmount, setPayAmount] = useState('');
+  const [payNote, setPayNote] = useState('');
+  const [payingSupplier, setPayingSupplier] = useState<string | null>(null);
+  const [paymentHistory, setPaymentHistory] = useState<any[]>([]);
+
+  // Fetch payment history when opening the tab
+  useEffect(() => {
+    if (activeTab === 'supplier-debts') {
+      fetch('/api/saas/supplier-payments', { headers: { 'x-tenant-id': 'TID-DEMO-123' } })
+        .then(res => res.json())
+        .then(data => setPaymentHistory(data))
+        .catch(console.error);
+    }
+  }, [activeTab]);
+
+  const handlePaySupplier = async () => {
+    if (!payingSupplier || !payAmount) return;
+    await paySupplierDebt(payingSupplier, Number(payAmount), payNote);
+    alert('Pembayaran berhasil dicatat!');
+    setPayingSupplier(null);
+    setPayAmount('');
+    setPayNote('');
+    // Refresh history
+    const res = await fetch('/api/saas/supplier-payments', { headers: { 'x-tenant-id': 'TID-DEMO-123' } });
+    const data = await res.json();
+    setPaymentHistory(data);
+  };
+
+  const suppliersWithDebt = suppliers.filter(s => s.totalPayable && s.totalPayable > 0);
+
+  const tabBtn = (id: 'sales' | 'low-stock' | 'supplier-debts', label: string, n: number, activeColor: string): React.ReactNode => {
     const active = activeTab === id;
     return (
       <button
@@ -207,6 +240,7 @@ const Reports: React.FC = () => {
         <div className="r-tabs" style={{ display: 'flex', borderBottom: '1px solid #e5e7eb', flexShrink: 0 }}>
           {tabBtn('sales', 'Laporan Penjualan', filteredSales.length, 'var(--primary)')}
           {tabBtn('low-stock', 'Peringatan Stok Tipis', lowStockItems.length, '#ef4444')}
+          {tabBtn('supplier-debts', 'Hutang Supplier', suppliersWithDebt.length, '#f59e0b')}
         </div>
 
         <div className="bo-card-body" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, padding: 0 }}>
@@ -474,6 +508,137 @@ const Reports: React.FC = () => {
                   <span style={{ marginLeft: 'auto' }}>{lowStockItems.length} produk perlu restock</span>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* TAB HUTANG SUPPLIER */}
+          {activeTab === 'supplier-debts' && (
+            <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, padding: '20px', gap: '24px', overflowY: 'auto' }}>
+              
+              {/* Payment Modal/Form Inline */}
+              {payingSupplier && (
+                <div style={{ padding: '20px', backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '12px' }}>
+                  <h3 style={{ fontSize: '16px', fontWeight: 'bold', color: '#166534', marginBottom: '16px' }}>
+                    Lunasi Hutang: {suppliers.find(s => s.id === payingSupplier)?.name}
+                  </h3>
+                  <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                    <div style={{ flex: 1, minWidth: '200px' }}>
+                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#166534', marginBottom: '6px' }}>Jumlah Pembayaran (Rp)</label>
+                      <input 
+                        type="number" 
+                        className="bo-input" 
+                        style={{ borderColor: '#bbf7d0', width: '100%' }}
+                        value={payAmount}
+                        onChange={e => setPayAmount(e.target.value)}
+                        placeholder="Contoh: 500000"
+                      />
+                    </div>
+                    <div style={{ flex: 2, minWidth: '300px' }}>
+                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#166534', marginBottom: '6px' }}>Catatan / Referensi</label>
+                      <input 
+                        type="text" 
+                        className="bo-input" 
+                        style={{ borderColor: '#bbf7d0', width: '100%' }}
+                        value={payNote}
+                        onChange={e => setPayNote(e.target.value)}
+                        placeholder="Contoh: Transfer BCA, Cicilan 1"
+                      />
+                    </div>
+                    <button 
+                      onClick={handlePaySupplier}
+                      className="bo-btn"
+                      style={{ backgroundColor: '#16a34a', color: 'white', border: 'none' }}
+                    >
+                      Konfirmasi Pembayaran
+                    </button>
+                    <button 
+                      onClick={() => setPayingSupplier(null)}
+                      className="bo-btn bo-btn-secondary"
+                    >
+                      Batal
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
+                {/* Daftar Supplier dengan Hutang */}
+                <div style={{ flex: '1 1 500px' }}>
+                  <h3 style={{ fontSize: '16px', fontWeight: 'bold', color: '#374151', marginBottom: '16px' }}>Daftar Hutang Aktif</h3>
+                  {suppliersWithDebt.length === 0 ? (
+                    emptyState('Tidak Ada Hutang', 'Saat ini tidak ada hutang tagihan aktif ke supplier.', <CheckCircle2 color="#10b981" />)
+                  ) : (
+                    <div className="bo-table-container">
+                      <table className="bo-table rpt-table" style={{ width: '100%' }}>
+                        <thead>
+                          <tr>
+                            <th>SUPPLIER</th>
+                            <th>KONTAK</th>
+                            <th style={{ textAlign: 'right' }}>TOTAL HUTANG</th>
+                            <th style={{ textAlign: 'center' }}>AKSI</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {suppliersWithDebt.map(s => (
+                            <tr key={s.id}>
+                              <td style={{ fontWeight: 'bold' }}>{s.name}</td>
+                              <td>{s.contact} ({s.phone})</td>
+                              <td style={{ textAlign: 'right', fontWeight: 'bold', color: '#dc2626' }}>{formatIDR(s.totalPayable || 0)}</td>
+                              <td style={{ textAlign: 'center' }}>
+                                <button 
+                                  onClick={() => {
+                                    setPayingSupplier(s.id);
+                                    setPayAmount(String(s.totalPayable || 0));
+                                  }}
+                                  className="bo-btn" 
+                                  style={{ padding: '6px 12px', fontSize: '12px', backgroundColor: '#eff6ff', color: '#2563eb', border: 'none' }}
+                                >
+                                  Bayar Cicil / Lunas
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+
+                {/* Riwayat Pembayaran */}
+                <div style={{ flex: '1 1 500px' }}>
+                  <h3 style={{ fontSize: '16px', fontWeight: 'bold', color: '#374151', marginBottom: '16px' }}>Riwayat Pembayaran</h3>
+                  {paymentHistory.length === 0 ? (
+                    emptyState('Belum Ada Riwayat', 'Anda belum melakukan pembayaran hutang ke supplier manapun.', <DollarSign color="#9ca3af" />)
+                  ) : (
+                    <div className="bo-table-container">
+                      <table className="bo-table rpt-table" style={{ width: '100%' }}>
+                        <thead>
+                          <tr>
+                            <th>TANGGAL</th>
+                            <th>SUPPLIER</th>
+                            <th style={{ textAlign: 'right' }}>DIBAYARKAN</th>
+                            <th>CATATAN</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {paymentHistory.map(p => (
+                            <tr key={p.id}>
+                              <td style={{ fontSize: '12px', color: '#6b7280' }}>
+                                {new Date(p.created_at).toLocaleString('id-ID')}
+                              </td>
+                              <td style={{ fontWeight: 'bold' }}>{p.supplier?.name}</td>
+                              <td style={{ textAlign: 'right', fontWeight: 'bold', color: '#16a34a' }}>
+                                {formatIDR(p.amount)}
+                              </td>
+                              <td style={{ fontSize: '12px' }}>{p.note || '-'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           )}
         </div>

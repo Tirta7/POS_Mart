@@ -756,7 +756,177 @@ app.post('/api/saas/drafts/:key', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+// ==========================================
+// ENDPOINT SUPPLIER (SUPPLIERS)
+// ==========================================
+app.get('/api/saas/suppliers', async (req, res) => {
+  try {
+    const suppliers = await prisma.supplier.findMany({
+      where: { tenant_id: req.tenantId }
+    });
+    res.json(suppliers);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
+app.post('/api/saas/suppliers', async (req, res) => {
+  try {
+    const data = req.body;
+    const supplier = await prisma.supplier.create({
+      data: {
+        tenant_id: req.tenantId,
+        name: data.name,
+        contact: data.contact,
+        phone: data.phone,
+        payment_term_days: Number(data.payment_term_days || 0),
+        payable: Number(data.payable || 0)
+      }
+    });
+    notifyTenant(req.tenantId, 'suppliers');
+    res.json(supplier);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/saas/suppliers/:id', async (req, res) => {
+  try {
+    const data = req.body;
+    
+    // We only update the fields provided
+    const updateData = {};
+    if (data.name !== undefined) updateData.name = data.name;
+    if (data.contact !== undefined) updateData.contact = data.contact;
+    if (data.phone !== undefined) updateData.phone = data.phone;
+    if (data.payment_term_days !== undefined) updateData.payment_term_days = Number(data.payment_term_days);
+    if (data.payable !== undefined) updateData.payable = Number(data.payable);
+
+    const supplier = await prisma.supplier.update({
+      where: { id: req.params.id, tenant_id: req.tenantId },
+      data: updateData
+    });
+    notifyTenant(req.tenantId, 'suppliers');
+    res.json(supplier);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/saas/suppliers/:id', async (req, res) => {
+  try {
+    await prisma.supplier.delete({
+      where: { id: req.params.id, tenant_id: req.tenantId }
+    });
+    notifyTenant(req.tenantId, 'suppliers');
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// ENDPOINT SUPPLIER PAYMENTS (PEMBAYARAN HUTANG)
+// ==========================================
+app.get('/api/saas/supplier-payments', async (req, res) => {
+  try {
+    const payments = await prisma.supplierPayment.findMany({
+      where: { tenant_id: req.tenantId },
+      include: { supplier: true },
+      orderBy: { created_at: 'desc' }
+    });
+    res.json(payments);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/saas/supplier-payments', async (req, res) => {
+  try {
+    const data = req.body;
+    const payment = await prisma.supplierPayment.create({
+      data: {
+        tenant_id: req.tenantId,
+        supplier_id: data.supplierId,
+        amount: Number(data.amount),
+        payment_method: data.paymentMethod || "CASH",
+        note: data.note
+      }
+    });
+    
+    // Kurangi hutang supplier
+    await prisma.supplier.update({
+      where: { id: data.supplierId, tenant_id: req.tenantId },
+      data: {
+        payable: { decrement: Number(data.amount) }
+      }
+    });
+
+    notifyTenant(req.tenantId, 'suppliers'); // Trigger refresh to frontend
+    res.json(payment);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+// ==========================================
+// ENDPOINT STOCK TRANSACTIONS (MUTASI STOK)
+// ==========================================
+app.get('/api/saas/stock-transactions', async (req, res) => {
+  try {
+    const transactions = await prisma.stockTransaction.findMany({
+      where: { tenant_id: req.tenantId },
+      include: { items: true },
+      orderBy: { date: 'desc' },
+      take: 200 // Batasi 200 transaksi terakhir agar tidak lambat
+    });
+    res.json(transactions);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/saas/stock-transactions', async (req, res) => {
+  try {
+    const data = req.body;
+    const transaction = await prisma.stockTransaction.create({
+      data: {
+        id: data.id || undefined,
+        tenant_id: req.tenantId,
+        type: data.type,
+        date: data.date ? new Date(data.date) : new Date(),
+        document_no: data.documentNo,
+        supplier_id: data.supplierId || null,
+        employee_id: data.employeeId,
+        total_value: Number(data.totalValue || 0),
+        note: data.note,
+        customer_id: data.customerId || null,
+        customer_name: data.customerName || null,
+        items: {
+          create: data.items.map(item => ({
+            product_id: item.productId,
+            qty: Number(item.qty),
+            batch_no: item.batchNo || null,
+            expiry_date: item.expiryDate || null,
+            purchase_price: Number(item.purchasePrice || 0),
+            subtotal: Number(item.subtotal || 0)
+          }))
+        }
+      },
+      include: { items: true }
+    });
+    
+    // Notify clients that transactions updated
+    notifyTenant(req.tenantId, 'transactions');
+    // Also products since mutasi stok implies product stock changes
+    notifyTenant(req.tenantId, 'products');
+    
+    res.json(transaction);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 // Wrapper untuk middleware Vite
 export const saasApiMiddleware = (req, res, next) => {
   if (req.url && req.url.startsWith('/api/saas')) {

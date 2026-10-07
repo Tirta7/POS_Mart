@@ -7,7 +7,8 @@ interface SupplierState {
   addSupplier: (supplier: Omit<Supplier, 'id'>) => Promise<void>;
   updateSupplier: (id: string, supplier: Partial<Supplier>) => Promise<void>;
   deleteSupplier: (id: string) => Promise<void>;
-  updateSupplierPayable: (supplierId: string, amount: number) => void;
+  updateSupplierPayable: (supplierId: string, amount: number) => Promise<void>;
+  paySupplierDebt: (supplierId: string, amount: number, note: string) => Promise<void>;
 }
 
 export const useSupplierStore = create<SupplierState>()(
@@ -18,7 +19,8 @@ export const useSupplierStore = create<SupplierState>()(
           const res = await fetch('/api/saas/suppliers', { headers: { 'x-tenant-id': 'TID-DEMO-123' } });
           if (res.ok) {
             const data = await res.json();
-            set({ suppliers: data });
+            // Map `payable` from DB to `totalPayable` for frontend
+            set({ suppliers: data.map((s: any) => ({ ...s, totalPayable: s.payable })) });
           }
         } catch (err) {
           console.error('Failed to fetch suppliers:', err);
@@ -33,7 +35,7 @@ export const useSupplierStore = create<SupplierState>()(
           });
           if (res.ok) {
             const newSup = await res.json();
-            set((state) => ({ suppliers: [...state.suppliers, newSup] }));
+            set((state) => ({ suppliers: [...state.suppliers, { ...newSup, totalPayable: newSup.payable }] }));
           }
         } catch (err) {
           console.error(err);
@@ -48,7 +50,7 @@ export const useSupplierStore = create<SupplierState>()(
           });
           if (res.ok) {
             const updated = await res.json();
-            set((state) => ({ suppliers: state.suppliers.map(s => s.id === id ? updated : s) }));
+            set((state) => ({ suppliers: state.suppliers.map(s => s.id === id ? { ...updated, totalPayable: updated.payable } : s) }));
           }
         } catch (err) {
           console.error(err);
@@ -67,12 +69,52 @@ export const useSupplierStore = create<SupplierState>()(
           console.error(err);
         }
       },
-      updateSupplierPayable: (supplierId, amount) => set((state) => ({
-        suppliers: state.suppliers.map(s => 
-          s.id === supplierId 
-            ? { ...s, totalPayable: (s.totalPayable || 0) + amount }
-            : s
-        )
-      })),
+      updateSupplierPayable: async (supplierId, amount) => {
+        try {
+          // In a real app, you might want a specific endpoint to increment/decrement payable safely, 
+          // but for now we'll fetch the supplier, calculate, and PUT.
+          // Wait, actually we can just rely on the fact that `updateSupplier` exists.
+          set((state) => {
+            const supplier = state.suppliers.find(s => s.id === supplierId);
+            if (!supplier) return state;
+            const newPayable = (supplier.totalPayable || 0) + amount;
+            
+            // Fire and forget PUT
+            fetch(`/api/saas/suppliers/${supplierId}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json', 'x-tenant-id': 'TID-DEMO-123' },
+              body: JSON.stringify({ payable: newPayable })
+            }).catch(console.error);
+
+            return {
+              suppliers: state.suppliers.map(s => 
+                s.id === supplierId ? { ...s, totalPayable: newPayable } : s
+              )
+            };
+          });
+        } catch (err) {
+          console.error(err);
+        }
+      },
+      paySupplierDebt: async (supplierId, amount, note) => {
+        try {
+          const res = await fetch('/api/saas/supplier-payments', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-tenant-id': 'TID-DEMO-123' },
+            body: JSON.stringify({ supplierId, amount, note })
+          });
+          if (res.ok) {
+            set((state) => ({
+              suppliers: state.suppliers.map(s => 
+                s.id === supplierId 
+                  ? { ...s, totalPayable: Math.max(0, (s.totalPayable || 0) - amount) }
+                  : s
+              )
+            }));
+          }
+        } catch (err) {
+          console.error(err);
+        }
+      },
     })
 );
