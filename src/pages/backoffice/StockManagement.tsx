@@ -341,7 +341,7 @@ const StockManagement: React.FC = () => {
 
   const handleEditClick = (p: any) => {
     setEditingId(p.id);
-    setProductId(p.id);
+    setProductId(p.barcode && p.barcode !== p.id ? p.barcode : '');
     setSku(p.sku);
     setName(p.name);
     setCategory(p.category);
@@ -541,7 +541,7 @@ const StockManagement: React.FC = () => {
             <tbody>
               {filteredProducts.map(p => (
                 <tr key={p.id}>
-                  <td className="bo-table-sku" style={{ color: '#6b7280' }}>{p.barcode || p.id}</td>
+                  <td className="bo-table-sku" style={{ color: '#6b7280', fontSize: '11px', wordBreak: 'break-all' }}>{p.barcode && p.barcode !== p.id ? p.barcode : p.id}</td>
                   <td className="bo-table-sku">{p.sku}</td>
                   <td className="bo-table-bold r-card-title r-sheet-name">
                     {p.name}
