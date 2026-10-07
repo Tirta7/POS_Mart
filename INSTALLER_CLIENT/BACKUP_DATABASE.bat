@@ -34,7 +34,7 @@ if "!DB_URL!"=="" (
 
 :: Membuat nama file berdasarkan tanggal tanpa menggunakan wmic
 for /f "delims=" %%I in ('powershell -Command "Get-Date -Format yyyyMMdd_HHmmss"') do set DATETIME_STR=%%I
-set "BACKUP_FILE=backup_pos_!DATETIME_STR!.dump"
+set "BACKUP_FILE=backup_pos_!DATETIME_STR!.sql"
 
 echo  [..] Memulai proses backup dari Database Lokal...
 echo       Harap tunggu...
@@ -51,8 +51,8 @@ if "!DB_CONTAINER!"=="" (
 :: Mencari nama jaringan (network) yang digunakan oleh container 'db'
 for /f "tokens=*" %%i in ('docker inspect -f "{{range $k, $v := .NetworkSettings.Networks}}{{$k}}{{end}}" !DB_CONTAINER!') do set NET_NAME=%%i
 
-:: Menjalankan pg_dump menggunakan image postgres sementara di Docker dengan network yang sama
-docker run --rm --network "!NET_NAME!" -v "%INSTALL_DIR%:/backup" postgres:16-alpine pg_dump "!DB_URL!" -F c -f "/backup/!BACKUP_FILE!"
+:: Menjalankan pg_dump menggunakan image postgres sementara di Docker dengan format SQL murni
+docker run --rm --network "!NET_NAME!" -v "%INSTALL_DIR%:/backup" postgres:16-alpine pg_dump "!DB_URL!" -f "/backup/!BACKUP_FILE!"
 
 if errorlevel 1 (
     echo.
