@@ -178,11 +178,12 @@ const Purchases: React.FC = () => {
 
   const formatIDR = (num: number) => 'Rp ' + num.toLocaleString('id-ID');
 
-  const filteredProducts = products.filter(p => 
-    p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    p.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.barcode.includes(searchTerm)
-  );
+  const filteredProducts = products.filter(p => {
+    const q = searchTerm.toLowerCase();
+    return (p.name && p.name.toLowerCase().includes(q)) || 
+           (p.sku && p.sku.toLowerCase().includes(q)) ||
+           (p.barcode && p.barcode.toLowerCase().includes(q));
+  });
 
   return (
     <div className="bo-container">
@@ -248,7 +249,7 @@ const Purchases: React.FC = () => {
                   <div style={{ 
                     position: 'absolute', top: '100%', left: 0, right: 0, 
                     backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '8px', 
-                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', zIndex: 10, maxHeight: '250px', overflowY: 'auto', marginTop: '4px' 
+                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', zIndex: 50, maxHeight: '250px', overflowY: 'auto', marginTop: '4px' 
                   }}>
                     {filteredProducts.length === 0 ? (
                       <div style={{ padding: '16px', textAlign: 'center' }}>
