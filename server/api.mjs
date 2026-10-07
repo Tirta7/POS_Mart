@@ -239,6 +239,94 @@ app.delete('/api/saas/products/:id', async (req, res) => {
 });
 
 // ==========================================
+// ENDPOINT KATEGORI (CATEGORIES)
+// ==========================================
+app.get('/api/saas/categories', async (req, res) => {
+  try {
+    const categories = await prisma.category.findMany({
+      where: { tenant_id: req.tenantId }
+    });
+    res.json(categories);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/saas/categories', async (req, res) => {
+  try {
+    const data = req.body;
+    const existing = await prisma.category.findFirst({
+      where: { tenant_id: req.tenantId, name: data.name }
+    });
+    if (existing) return res.json(existing);
+    
+    const category = await prisma.category.create({
+      data: { tenant_id: req.tenantId, name: data.name }
+    });
+    notifyTenant(req.tenantId, 'categories');
+    res.json(category);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/saas/categories/by-name/:name', async (req, res) => {
+  try {
+    const data = req.body; // { newName: string }
+    const oldName = req.params.name;
+    
+    // First find the category by name
+    const category = await prisma.category.findFirst({
+      where: { name: oldName, tenant_id: req.tenantId }
+    });
+    
+    if (category) {
+      await prisma.category.update({
+        where: { id: category.id },
+        data: { name: data.newName }
+      });
+    } else {
+      // Create if it didn't exist
+      await prisma.category.create({
+        data: { tenant_id: req.tenantId, name: data.newName }
+      });
+    }
+    
+    notifyTenant(req.tenantId, 'categories');
+    notifyTenant(req.tenantId, 'products');
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/saas/categories/by-name/:name', async (req, res) => {
+  try {
+    const category = await prisma.category.findFirst({
+      where: { name: req.params.name, tenant_id: req.tenantId }
+    });
+    
+    if (category) {
+      // First update products that have this category to null or 'Uncategorized'
+      await prisma.product.updateMany({
+        where: { category_id: category.id, tenant_id: req.tenantId },
+        data: { category_id: null }
+      });
+      
+      await prisma.category.delete({
+        where: { id: category.id }
+      });
+    }
+    
+    notifyTenant(req.tenantId, 'categories');
+    notifyTenant(req.tenantId, 'products');
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
 // ENDPOINT PELANGGAN (CUSTOMERS)
 // ==========================================
 app.get('/api/saas/customers', async (req, res) => {

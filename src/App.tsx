@@ -33,7 +33,7 @@ function App() {
   const { appName } = useSettingsStore();
   const { currentUser, fetchEmployees } = useAuthStore();
 
-  const { fetchProducts, fetchTransactions } = useInventoryStore();
+  const { fetchProducts, fetchTransactions, fetchCategories } = useInventoryStore();
   const { fetchSales } = useSalesStore();
   const { fetchSettings } = useSettingsStore();
   const { fetchCustomers } = useCustomerStore();
@@ -54,6 +54,7 @@ function App() {
   useEffect(() => {
     if (currentUser) {
       fetchProducts();
+      fetchCategories();
       fetchTransactions();
       fetchSales();
       fetchSettings();
@@ -85,6 +86,7 @@ function App() {
     socket.on('data_updated', (entity) => {
       // Refresh secara efisien hanya data yang berubah untuk menghemat limit database!
       if (!entity || entity === 'products') fetchProducts();
+      if (!entity || entity === 'categories') fetchCategories();
       if (!entity || entity === 'transactions') fetchTransactions();
       if (!entity || entity === 'sales') fetchSales();
       if (!entity || entity === 'customers') fetchCustomers();

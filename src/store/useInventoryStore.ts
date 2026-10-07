@@ -7,6 +7,7 @@ interface InventoryState {
   error: string | null;
   fetchProducts: () => Promise<void>;
   fetchTransactions: () => Promise<void>;
+  fetchCategories: () => Promise<void>;
   transactions: StockTransaction[];
   categories: string[];
   addProduct: (product: Product) => Promise<Product>;
@@ -181,15 +182,58 @@ export const useInventoryStore = create<InventoryState>()(
           console.error(err);
         }
       },
-      addCategory: (category) => set((state) => ({
-        categories: state.categories.includes(category) ? state.categories : [...state.categories, category]
-      })),
-      deleteCategory: (category) => set((state) => ({
-        categories: state.categories.filter(c => c !== category)
-      })),
-      editCategory: (oldCategory, newCategory) => set((state) => ({
-        categories: state.categories.map(c => c === oldCategory ? newCategory : c),
-        products: state.products.map(p => p.category === oldCategory ? { ...p, category: newCategory } : p)
-      })),
+      fetchCategories: async () => {
+        try {
+          const res = await fetch('/api/saas/categories', { headers: getHeaders() });
+          if (res.ok) {
+            const data = await res.json();
+            set({ categories: data.map((c: any) => c.name) });
+          }
+        } catch (err: any) {
+          console.error('Failed to fetch categories:', err);
+        }
+      },
+      addCategory: async (category) => {
+        try {
+          await fetch('/api/saas/categories', {
+            method: 'POST',
+            headers: getHeaders(),
+            body: JSON.stringify({ name: category })
+          });
+          set((state) => ({
+            categories: state.categories.includes(category) ? state.categories : [...state.categories, category]
+          }));
+        } catch (err) {
+          console.error(err);
+        }
+      },
+      deleteCategory: async (category) => {
+        try {
+          await fetch(`/api/saas/categories/by-name/${encodeURIComponent(category)}`, {
+            method: 'DELETE',
+            headers: getHeaders()
+          });
+          set((state) => ({
+            categories: state.categories.filter(c => c !== category)
+          }));
+        } catch (err) {
+          console.error(err);
+        }
+      },
+      editCategory: async (oldCategory, newCategory) => {
+        try {
+          await fetch(`/api/saas/categories/by-name/${encodeURIComponent(oldCategory)}`, {
+            method: 'PUT',
+            headers: getHeaders(),
+            body: JSON.stringify({ newName: newCategory })
+          });
+          set((state) => ({
+            categories: state.categories.map(c => c === oldCategory ? newCategory : c),
+            products: state.products.map(p => p.category === oldCategory ? { ...p, category: newCategory } : p)
+          }));
+        } catch (err) {
+          console.error(err);
+        }
+      },
     })
 );
