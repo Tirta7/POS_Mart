@@ -74,6 +74,26 @@ function App() {
     return () => window.removeEventListener('storage', handleStorage);
   }, []);
 
+  // Polling Lisensi: Otomatis memblokir aplikasi (tanpa perlu refresh manual) jika lisensi habis/terkunci
+  useEffect(() => {
+    const checkLicenseStatus = async () => {
+      try {
+        const res = await fetch('/api/license-status');
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.allowed === false) {
+            window.location.reload(); // Paksa muat ulang agar dihadang oleh layar kunci
+          }
+        }
+      } catch (err) {
+        // Abaikan sementara jika gagal terhubung
+      }
+    };
+    // Periksa setiap 30 detik
+    const interval = setInterval(checkLicenseStatus, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
   // WebSockets Real-time Database Sync (Redis/Socket.IO)
   useEffect(() => {
     if (!currentUser) return;
