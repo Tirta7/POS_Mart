@@ -524,14 +524,24 @@ const Reports: React.FC = () => {
                   <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
                     <div style={{ flex: 1, minWidth: '200px' }}>
                       <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#166534', marginBottom: '6px' }}>Jumlah Pembayaran (Rp)</label>
-                      <input 
-                        type="number" 
-                        className="bo-input" 
-                        style={{ borderColor: '#bbf7d0', width: '100%' }}
-                        value={payAmount}
-                        onChange={e => setPayAmount(e.target.value)}
-                        placeholder="Contoh: 500000"
-                      />
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <input 
+                          type="number" 
+                          className="bo-input" 
+                          style={{ borderColor: '#bbf7d0', width: '100%' }}
+                          value={payAmount}
+                          onChange={e => setPayAmount(e.target.value)}
+                          placeholder="Ketik nominal..."
+                        />
+                        <button
+                          onClick={() => setPayAmount(String(suppliers.find(s => s.id === payingSupplier)?.totalPayable || 0))}
+                          className="bo-btn"
+                          style={{ padding: '6px 12px', fontSize: '12px', backgroundColor: '#dcfce7', color: '#166534', border: '1px solid #bbf7d0' }}
+                          title="Isi otomatis dengan total hutang (Bayar Lunas)"
+                        >
+                          Lunas
+                        </button>
+                      </div>
                     </div>
                     <div style={{ flex: 2, minWidth: '300px' }}>
                       <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#166534', marginBottom: '6px' }}>Catatan / Referensi</label>
@@ -588,7 +598,7 @@ const Reports: React.FC = () => {
                                 <button 
                                   onClick={() => {
                                     setPayingSupplier(s.id);
-                                    setPayAmount(String(s.totalPayable || 0));
+                                    setPayAmount('');
                                   }}
                                   className="bo-btn" 
                                   style={{ padding: '6px 12px', fontSize: '12px', backgroundColor: '#eff6ff', color: '#2563eb', border: 'none' }}
