@@ -36,6 +36,8 @@ export const useSalesStore = create<SalesState>()(
                 paymentMethod: t.payment_method,
                 tendered: t.total_amount, 
                 change: 0,
+                customerId: t.customer_id,
+                customerName: t.customer_name || 'Umum (Guest)',
                 employeeId: t.cashier_id,
                 employeeName: localEmp?.name || t.cashier_name || t.cashier_id,
                 items: t.items.map((i: any) => ({
@@ -65,6 +67,8 @@ export const useSalesStore = create<SalesState>()(
             payment_method: sale.paymentMethod,
             cashier_id: sale.employeeId || 'cashier-1',
             cashier_name: sale.employeeName || 'Unknown',
+            customer_id: sale.customerId || null,
+            customer_name: sale.customerName || null,
             items: sale.items.map(item => ({
               product_id: item.productId,
               quantity: item.qty,

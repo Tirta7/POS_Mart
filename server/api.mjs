@@ -426,7 +426,7 @@ app.get('/api/saas/transactions/:id', async (req, res) => {
 app.post('/api/saas/transactions', async (req, res) => {
   try {
     const data = req.body;
-    const { receipt_number, total_amount, payment_method, cashier_id, cashier_name, items } = data;
+    const { receipt_number, total_amount, payment_method, cashier_id, cashier_name, items, customer_id, customer_name } = data;
     
     const transaction = await prisma.$transaction(async (tx) => {
       // 1. Buat Header Transaksi
@@ -437,7 +437,9 @@ app.post('/api/saas/transactions', async (req, res) => {
           cashier_name: cashier_name || 'Unknown',
           receipt_number,
           total_amount: Number(total_amount),
-          payment_method
+          payment_method,
+          customer_id: customer_id || null,
+          customer_name: customer_name || null
         }
       });
 
@@ -449,7 +451,9 @@ app.post('/api/saas/transactions', async (req, res) => {
           document_no: receipt_number,
           employee_id: cashier_id || 'cashier-1',
           total_value: Number(total_amount),
-          note: 'Penjualan Kasir'
+          note: 'Penjualan Kasir',
+          customer_id: customer_id || null,
+          customer_name: customer_name || null
         }
       });
 

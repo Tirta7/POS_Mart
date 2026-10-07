@@ -140,6 +140,8 @@ model Transaction {
   receipt_number String
   total_amount   Float
   payment_method String
+  customer_id    String?
+  customer_name  String?
   created_at     DateTime @default(now())
 
   tenant Tenant            @relation(fields: [tenant_id], references: [id])

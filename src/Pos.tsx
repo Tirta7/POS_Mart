@@ -721,7 +721,8 @@ function App() {
                   paymentMethod: paymentMethod,
                   tendered: tendered,
                   change: change,
-                  customerId: selectedCustomer?.id,
+                  customerId: selectedCustomer?.id || null,
+                  customerName: selectedCustomer?.name || 'Umum (Guest)',
                   employeeId: currentUser?.id,
                   employeeName: currentUser?.name,
                   items: cart.map(item => ({
