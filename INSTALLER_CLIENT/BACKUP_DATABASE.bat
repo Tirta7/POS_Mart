@@ -17,7 +17,11 @@ echo  Mengekstrak URL Database dari docker-compose.yml...
 
 set "DB_URL="
 for /f "tokens=2,* delims==" %%a in ('findstr /c:"DATABASE_URL=" docker-compose.yml') do (
-    set "DB_URL=%%a=%%b"
+    if "%%b"=="" (
+        set "DB_URL=%%a"
+    ) else (
+        set "DB_URL=%%a=%%b"
+    )
 )
 :: Menghapus spasi awal jika ada
 set "DB_URL=%DB_URL: =%"
