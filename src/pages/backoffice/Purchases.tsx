@@ -8,7 +8,7 @@ import BarcodeScannerCamera from '../../components/BarcodeScannerCamera';
 
 const Purchases: React.FC = () => {
   const { products, updateProduct, addTransaction, addProduct, categories } = useInventoryStore();
-  const { suppliers, updateSupplierPayable } = useSupplierStore();
+  const { suppliers } = useSupplierStore();
   const { currentUser } = useAuthStore();
   
   const [selectedSupplier, setSelectedSupplier] = useState<string>('');
