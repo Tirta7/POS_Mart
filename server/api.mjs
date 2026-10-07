@@ -921,6 +921,21 @@ app.post('/api/saas/stock-transactions', async (req, res) => {
     notifyTenant(req.tenantId, 'transactions');
     // Also products since mutasi stok implies product stock changes
     notifyTenant(req.tenantId, 'products');
+
+    // JIKA INI PEMBELIAN DARI SUPPLIER, OTOMATIS TAMBAH HUTANG!
+    if (data.type === 'IN' && data.supplierId && data.totalValue > 0) {
+       try {
+         await prisma.supplier.update({
+           where: { id: data.supplierId, tenant_id: req.tenantId },
+           data: {
+             payable: { increment: Number(data.totalValue) }
+           }
+         });
+         notifyTenant(req.tenantId, 'suppliers');
+       } catch (err) {
+         console.error("Gagal menambah hutang supplier:", err);
+       }
+    }
     
     res.json(transaction);
   } catch (err) {

@@ -143,12 +143,10 @@ const Purchases: React.FC = () => {
       items: items.map(({ name, currentStock, ...rest }) => rest), // exclude extra fields
       totalValue
     };
+    // 1. Catat Transaksi (Ini otomatis akan menambah hutang supplier di backend)
     addTransaction(transaction);
 
-    // 2. Update Hutang ke Supplier
-    updateSupplierPayable(selectedSupplier, totalValue);
-
-    // 3. Update Stok dan HPP Produk
+    // 2. Update Stok dan HPP Produk
     items.forEach(item => {
       const product = products.find(p => p.id === item.productId);
       if (product) {
