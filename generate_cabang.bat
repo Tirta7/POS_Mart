@@ -88,12 +88,19 @@ del temp_tunnel_output.txt >nul 2>&1
 echo [OK] Konfigurasi berhasil disuntikkan!
 echo.
 
-echo [5/5] Membuat File Konfigurasi Token...
+echo [5/6] Membuat File Konfigurasi Token...
 (
     echo GITHUB_TOKEN=
     echo GITHUB_USERNAME=tirta7
 ) > "!TARGET_DIR!\.token"
 echo [OK] File .token disiapkan! Silakan isi token GitHub Anda sebelum dikirim ke klien.
+echo.
+
+echo [6/6] Menyuntikkan Identitas Cabang (Machine ID)...
+(
+    echo MACHINE_ID=CABANG-!BRANCH!
+) > "!TARGET_DIR!\.env"
+echo [OK] Identitas cabang berhasil didaftarkan sebagai CABANG-!BRANCH!
 echo.
 
 echo ============================================================
