@@ -46,10 +46,10 @@ if "!APP_CONTAINER!"=="" (
 )
 
 if not "!APP_CONTAINER!"=="" (
-    docker exec -it !APP_CONTAINER! npx prisma db push
+    docker exec -it !APP_CONTAINER! npx prisma db push --force-reset --accept-data-loss
 ) else (
     :: Fallback jika nama service tidak ditemukan, mencoba nama container langsung
-    docker exec -it swalayan_srikandi npx prisma db push
+    docker exec -it swalayan_srikandi npx prisma db push --force-reset --accept-data-loss
 )
 
 echo.
