@@ -48,12 +48,26 @@ export const useCustomerStore = create<CustomerState>()(
             headers: { 'Content-Type': 'application/json', 'x-tenant-id': 'TID-DEMO-123' },
             body: JSON.stringify(customer)
           });
-          if (res.ok) {
-            const newCust = await res.json();
-            set((state) => ({ customers: [...state.customers, { ...newCust, orders: [] }] }));
+          if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.error || `Gagal menyimpan pelanggan (HTTP ${res.status})`);
           }
+          const newCust = await res.json();
+          set((state) => {
+            const exists = state.customers.some(c => c.id === newCust.id);
+            if (exists) {
+              return {
+                customers: state.customers.map(c => c.id === newCust.id ? { ...c, ...newCust } : c)
+              };
+            }
+            return {
+              customers: [...state.customers, { ...newCust, orders: newCust.orders || [] }]
+            };
+          });
+          return newCust;
         } catch (err) {
-          console.error(err);
+          console.error('Failed to add customer:', err);
+          throw err;
         }
       },
       updateCustomer: async (customer) => {
@@ -63,14 +77,18 @@ export const useCustomerStore = create<CustomerState>()(
             headers: { 'Content-Type': 'application/json', 'x-tenant-id': 'TID-DEMO-123' },
             body: JSON.stringify(customer)
           });
-          if (res.ok) {
-            const updated = await res.json();
-            set((state) => ({ 
-              customers: state.customers.map(c => c.id === customer.id ? { ...updated, orders: c.orders } : c) 
-            }));
+          if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.error || `Gagal update pelanggan (HTTP ${res.status})`);
           }
+          const updated = await res.json();
+          set((state) => ({ 
+            customers: state.customers.map(c => c.id === customer.id ? { ...c, ...updated } : c) 
+          }));
+          return updated;
         } catch (err) {
-          console.error(err);
+          console.error('Failed to update customer:', err);
+          throw err;
         }
       },
       deleteCustomer: async (id) => {
@@ -79,13 +97,16 @@ export const useCustomerStore = create<CustomerState>()(
             method: 'DELETE',
             headers: { 'x-tenant-id': 'TID-DEMO-123' }
           });
-          if (res.ok) {
-            set((state) => ({ 
-              customers: state.customers.filter(c => c.id !== id) 
-            }));
+          if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.error || `Gagal menghapus pelanggan (HTTP ${res.status})`);
           }
+          set((state) => ({ 
+            customers: state.customers.filter(c => c.id !== id) 
+          }));
         } catch (err) {
-          console.error(err);
+          console.error('Failed to delete customer:', err);
+          throw err;
         }
       },
       addOrderToCustomer: (customerId, order) => set((state) => ({

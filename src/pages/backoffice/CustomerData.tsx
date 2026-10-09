@@ -24,6 +24,7 @@ export const CustomerData = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<'ADD' | 'EDIT'>('ADD');
   const [currentCustomer, setCurrentCustomer] = useState<Partial<Customer>>({});
+  const [isSaving, setIsSaving] = useState(false);
 
   // View History state
   const [historyModalOpen, setHistoryModalOpen] = useState(false);
@@ -224,21 +225,33 @@ export const CustomerData = () => {
     );
   });
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (modalMode === 'ADD') {
-      addCustomer({
-        id: currentCustomer.id || ('CUST-' + Date.now().toString()),
-        name: currentCustomer.name || '',
-        phone: currentCustomer.phone || '',
-        address: currentCustomer.address || '',
-        orders: []
-      });
-    } else if (modalMode === 'EDIT' && currentCustomer.id) {
-      updateCustomer(currentCustomer as Customer);
+    if (!currentCustomer.name || !currentCustomer.name.trim()) {
+      alert('Nama pelanggan wajib diisi!');
+      return;
     }
-    setIsModalOpen(false);
-    setCurrentCustomer({});
+
+    setIsSaving(true);
+    try {
+      if (modalMode === 'ADD') {
+        await addCustomer({
+          id: currentCustomer.id?.trim() || ('CUST-' + Date.now().toString()),
+          name: currentCustomer.name.trim(),
+          phone: currentCustomer.phone?.trim() || '',
+          address: currentCustomer.address?.trim() || '',
+          orders: []
+        });
+      } else if (modalMode === 'EDIT' && currentCustomer.id) {
+        await updateCustomer(currentCustomer as Customer);
+      }
+      setIsModalOpen(false);
+      setCurrentCustomer({});
+    } catch (err: any) {
+      alert(`Gagal menyimpan data pelanggan: ${err?.message || 'Terjadi kesalahan pada sistem'}`);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const formatIDR = (num: number) => {
@@ -527,7 +540,13 @@ export const CustomerData = () => {
                           {/* Tombol Hapus (tidak bisa hapus default Retail) */}
                           {!isRetail && (
                             <button 
-                              onClick={() => { if (window.confirm(`Hapus data pelanggan "${c.name}"?`)) deleteCustomer(c.id); }}
+                              onClick={() => { 
+                                if (window.confirm(`Hapus data pelanggan "${c.name}"?`)) {
+                                  deleteCustomer(c.id).catch((err: any) => {
+                                    alert(`Gagal menghapus: ${err?.message || 'Terjadi kesalahan'}`);
+                                  });
+                                }
+                              }}
                               style={{
                                 background: '#fef2f2', color: '#ef4444', border: '1px solid #fecaca',
                                 padding: '6px 8px', borderRadius: '6px', cursor: 'pointer'
@@ -610,9 +629,24 @@ export const CustomerData = () => {
 
               <button 
                 type="submit" 
-                style={{ width: '100%', padding: '12px', background: 'var(--primary, #ef4444)', color: 'white', fontWeight: 700, border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '14px' }}
+                disabled={isSaving}
+                style={{ 
+                  width: '100%', 
+                  padding: '12px', 
+                  background: isSaving ? '#9ca3af' : 'var(--primary, #ef4444)', 
+                  color: 'white', 
+                  fontWeight: 700, 
+                  border: 'none', 
+                  borderRadius: '8px', 
+                  cursor: isSaving ? 'not-allowed' : 'pointer', 
+                  fontSize: '14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px'
+                }}
               >
-                Simpan Data Pelanggan
+                {isSaving ? 'Menyimpan ke Database...' : 'Simpan Data Pelanggan'}
               </button>
             </form>
           </div>

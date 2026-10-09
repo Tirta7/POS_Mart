@@ -36,22 +36,28 @@ app.use('/api/saas', async (req, res, next) => {
     return res.status(200).end();
   }
 
-  const tenantId = req.headers['x-tenant-id'];
-  if (!tenantId) {
-    return res.status(401).json({ error: 'Missing x-tenant-id header.' });
-  }
-  
-  // Pastikan tenant ada di database untuk menghindari error foreign key
-  if (!knownTenants.has(tenantId)) {
-    try {
+  const tenantId = req.headers['x-tenant-id'] || 'TID-DEMO-123';
+  req.tenantId = tenantId;
+
+  // Pastikan tenant selalu ada di database (Self-Healing saat database di-reset/kosong)
+  try {
+    const existing = await prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { id: true }
+    });
+
+    if (!existing) {
       await prisma.tenant.upsert({
         where: { id: tenantId },
         update: {},
-        create: { id: tenantId, name: tenantId }
+        create: { 
+          id: tenantId, 
+          name: tenantId === 'TID-DEMO-123' ? 'VOC POS' : tenantId 
+        }
       });
       
       // Auto-seed admin user jika belum ada user sama sekali di tenant ini
-      const userCount = await prisma.user.count({ where: { tenant_id: tenantId } });
+      const userCount = await prisma.user.count({ where: { tenant_id: tenantId } }).catch(() => 0);
       if (userCount === 0) {
         await prisma.user.create({
           data: {
@@ -62,21 +68,15 @@ app.use('/api/saas', async (req, res, next) => {
             name: 'Administrator',
             is_active: true
           }
-        });
+        }).catch(() => {});
       }
-
-      knownTenants.add(tenantId);
-    } catch(err) {
-      if (err.code === 'P2002') {
-        // Race condition: tenant baru saja dimasukkan oleh request lain secara bersamaan
-        knownTenants.add(tenantId);
-      } else {
-        console.error("Gagal upsert tenant:", err);
-      }
+    }
+  } catch(err) {
+    if (err.code !== 'P2002') {
+      console.error("Gagal verifikasi/upsert tenant:", err.message);
     }
   }
   
-  req.tenantId = tenantId;
   next();
 });
 
@@ -85,10 +85,19 @@ app.use('/api/saas', async (req, res, next) => {
 // ==========================================
 app.get('/api/saas/settings', async (req, res) => {
   try {
-    const tenant = await prisma.tenant.findUnique({
+    let tenant = await prisma.tenant.findUnique({
       where: { id: req.tenantId }
     });
-    if (!tenant) return res.status(404).json({ error: "Tenant not found" });
+    if (!tenant) {
+      tenant = await prisma.tenant.upsert({
+        where: { id: req.tenantId },
+        update: {},
+        create: {
+          id: req.tenantId,
+          name: req.tenantId === 'TID-DEMO-123' ? 'VOC POS' : req.tenantId
+        }
+      });
+    }
     res.json({
       appName: tenant.name,
       taxEnabled: tenant.tax_enabled,
@@ -106,9 +115,9 @@ app.get('/api/saas/settings', async (req, res) => {
 app.put('/api/saas/settings', async (req, res) => {
   try {
     const data = req.body;
-    const tenant = await prisma.tenant.update({
+    const tenant = await prisma.tenant.upsert({
       where: { id: req.tenantId },
-      data: {
+      update: {
         name: data.appName !== undefined ? data.appName : undefined,
         tax_enabled: data.taxEnabled !== undefined ? data.taxEnabled : undefined,
         tax_rate: data.taxRate !== undefined ? Number(data.taxRate) : undefined,
@@ -116,6 +125,16 @@ app.put('/api/saas/settings', async (req, res) => {
         invoice_header: data.invoiceHeader !== undefined ? data.invoiceHeader : undefined,
         invoice_footer: data.invoiceFooter !== undefined ? data.invoiceFooter : undefined,
         app_logo: data.appLogo !== undefined ? data.appLogo : undefined
+      },
+      create: {
+        id: req.tenantId,
+        name: data.appName || 'VOC POS',
+        tax_enabled: data.taxEnabled !== undefined ? data.taxEnabled : true,
+        tax_rate: data.taxRate !== undefined ? Number(data.taxRate) : 11,
+        rounding_unit: data.roundingUnit !== undefined ? Number(data.roundingUnit) : 0,
+        invoice_header: data.invoiceHeader || null,
+        invoice_footer: data.invoiceFooter || null,
+        app_logo: data.appLogo || null
       }
     });
     notifyTenant(req.tenantId, 'settings');
@@ -440,17 +459,53 @@ app.get('/api/saas/customers', async (req, res) => {
 app.post('/api/saas/customers', async (req, res) => {
   try {
     const data = req.body;
-    const customer = await prisma.customer.create({
-      data: {
-        tenant_id: req.tenantId,
-        name: data.name,
-        phone: data.phone,
-        address: data.address
+    if (!data.name || !data.name.trim()) {
+      return res.status(400).json({ error: 'Nama pelanggan wajib diisi.' });
+    }
+
+    // Pastikan tenant selalu ada di database untuk mencegah foreign key violation
+    await prisma.tenant.upsert({
+      where: { id: req.tenantId },
+      update: {},
+      create: {
+        id: req.tenantId,
+        name: req.tenantId === 'TID-DEMO-123' ? 'VOC POS' : req.tenantId
       }
+    }).catch(() => {});
+
+    const custId = (data.id && String(data.id).trim()) ? String(data.id).trim() : ('CUST-' + Date.now().toString());
+
+    // Cek apakah ID sudah ada
+    const existing = await prisma.customer.findUnique({
+      where: { id: custId }
     });
+
+    let customer;
+    if (existing) {
+      customer = await prisma.customer.update({
+        where: { id: custId },
+        data: {
+          name: data.name.trim(),
+          phone: data.phone ? String(data.phone).trim() : '',
+          address: data.address ? String(data.address).trim() : ''
+        }
+      });
+    } else {
+      customer = await prisma.customer.create({
+        data: {
+          id: custId,
+          tenant_id: req.tenantId,
+          name: data.name.trim(),
+          phone: data.phone ? String(data.phone).trim() : '',
+          address: data.address ? String(data.address).trim() : ''
+        }
+      });
+    }
+
     notifyTenant(req.tenantId, 'customers');
     res.json(customer);
   } catch (err) {
+    console.error("Gagal tambah customer:", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -459,16 +514,17 @@ app.put('/api/saas/customers/:id', async (req, res) => {
   try {
     const data = req.body;
     const customer = await prisma.customer.update({
-      where: { id: req.params.id, tenant_id: req.tenantId },
+      where: { id: req.params.id },
       data: {
-        name: data.name !== undefined ? data.name : undefined,
-        phone: data.phone !== undefined ? data.phone : undefined,
-        address: data.address !== undefined ? data.address : undefined
+        name: data.name !== undefined ? String(data.name).trim() : undefined,
+        phone: data.phone !== undefined ? String(data.phone).trim() : undefined,
+        address: data.address !== undefined ? String(data.address).trim() : undefined
       }
     });
     notifyTenant(req.tenantId, 'customers');
     res.json(customer);
   } catch (err) {
+    console.error("Gagal update customer:", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -476,11 +532,12 @@ app.put('/api/saas/customers/:id', async (req, res) => {
 app.delete('/api/saas/customers/:id', async (req, res) => {
   try {
     await prisma.customer.delete({
-      where: { id: req.params.id, tenant_id: req.tenantId }
+      where: { id: req.params.id }
     });
     notifyTenant(req.tenantId, 'customers');
     res.json({ success: true });
   } catch (err) {
+    console.error("Gagal delete customer:", err);
     res.status(500).json({ error: err.message });
   }
 });
