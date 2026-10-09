@@ -16,6 +16,18 @@ app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 const knownTenants = new Set();
 
+// Bersihkan dummy/test tenant jika pernah dibuat saat testing agar database bersih
+(async () => {
+  try {
+    await prisma.customer.deleteMany({
+      where: { tenant_id: { in: ['TID-TEST-12345', 'TID-UNKNOWN'] } }
+    }).catch(() => {});
+    await prisma.tenant.deleteMany({
+      where: { id: { in: ['TID-TEST-12345', 'TID-UNKNOWN'] } }
+    }).catch(() => {});
+  } catch (e) {}
+})();
+
 const notifyTenant = (tenantId, entity) => {
   const io = getIo();
   if (io) {
@@ -1419,12 +1431,19 @@ export const saasApiMiddleware = (req, res, next) => {
 
 export const manifestMiddleware = (req, res, next) => {
   if (req.url === '/manifest.webmanifest' || req.url === '/manifest.json') {
-    prisma.tenant.findFirst().then(tenant => {
-      const appName = tenant?.name || 'VOC POS';
+    prisma.tenant.findUnique({ where: { id: 'TID-DEMO-123' } }).then(async (mainTenant) => {
+      let tenant = mainTenant;
+      if (!tenant || tenant.name.startsWith('TID-')) {
+        const customTenant = await prisma.tenant.findFirst({
+          where: { NOT: { name: { startsWith: 'TID-' } } }
+        });
+        if (customTenant) tenant = customTenant;
+      }
+      const appName = tenant?.name || 'VELCO PRO SHOP';
       const manifest = {
         name: appName,
         short_name: appName,
-        description: "Aplikasi Point of Sale & Back-Office swalayan.",
+        description: `Aplikasi Point of Sale & Back-Office ${appName}.`,
         lang: "id",
         start_url: "/",
         scope: "/",

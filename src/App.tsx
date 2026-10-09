@@ -45,8 +45,9 @@ function App() {
     document.title = appName;
   }, [appName]);
 
-  // Initial fetch for employees (needed before login)
+  // Initial fetch for settings and employees (needed on startup & before login)
   useEffect(() => {
+    fetchSettings();
     fetchEmployees();
   }, []);
 
