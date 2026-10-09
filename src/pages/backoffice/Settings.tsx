@@ -154,7 +154,7 @@ const Settings: React.FC = () => {
   const active = TABS.find(t => t.id === activeTab)!;
 
   return (
-    <div className="bo-container">
+    <div className="bo-container" style={{ overflowY: 'auto' }}>
       <div className="bo-page-header">
         <div>
           <h1 className="bo-page-title">Pengaturan Sistem</h1>

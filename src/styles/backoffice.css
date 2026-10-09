@@ -28,9 +28,8 @@
   min-height: 0;
   min-width: 0;
   height: 100%;
-  padding: 24px 32px;
-  overflow-y: auto !important;
-  overflow-x: hidden;
+  padding: 18px 28px;
+  overflow: hidden; /* Konten luar dan header halaman tetap diam, tidak ikut terscroll */
   display: flex;
   flex-direction: column;
   background-color: var(--bg-main);
@@ -40,11 +39,13 @@
 .bo-container {
   width: 100%;
   min-width: 0;
+  height: 100%;
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 24px;
-  flex: 1 0 auto;
-  padding-bottom: 40px; /* Ruang agar bagian bawah tabel dan aksi tidak terpotong */
+  gap: 14px;
+  overflow: hidden; /* Halaman header & stats tetap diam di tempat */
 }
 
 /* Kustomisasi scrollbar untuk bo-content */
@@ -316,6 +317,11 @@
   border: 1px solid var(--border-color);
   box-shadow: 0 1px 3px rgba(0,0,0,0.02);
   overflow: hidden;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
 }
 
 .bo-card-header {
@@ -391,8 +397,10 @@
   width: 100%;
   max-width: 100%;
   min-width: 0;
-  overflow-x: auto !important;
-  overflow-y: visible;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto !important; /* Hanya tabel saja yang terscroll secara vertikal */
+  overflow-x: auto !important; /* Tabel juga bisa di-scroll horizontal */
   -webkit-overflow-scrolling: touch;
   display: block;
   position: relative;

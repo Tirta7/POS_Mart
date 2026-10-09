@@ -361,7 +361,7 @@ const StockMutation: React.FC = () => {
           ))}
         </div>
 
-        <div className="bo-table-container" style={{ width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+        <div className="bo-table-container" style={{ width: '100%', flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
           <style>{`
             .mut-table th { padding: 9px 14px !important; font-size: 11px !important; letter-spacing: 0.4px; position: sticky; top: 0; z-index: 1; background: #f9fafb; }
             .mut-table td { padding: 8px 14px !important; font-size: 13px; line-height: 1.35; }

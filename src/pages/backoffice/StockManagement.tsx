@@ -522,7 +522,7 @@ const StockManagement: React.FC = () => {
             </button>
           ))}
         </div>
-        <div className="bo-table-container" style={{ width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+        <div className="bo-table-container" style={{ width: '100%', flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
           <table className="bo-table r-sheet" style={{ width: '100%', minWidth: '980px' }}>
             <thead>
               <tr>

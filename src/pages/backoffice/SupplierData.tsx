@@ -71,14 +71,14 @@ const SupplierData: React.FC = () => {
         </div>
       </div>
 
-      <div className="bo-card">
-        <div className="bo-card-header">
+      <div className="bo-card" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+        <div className="bo-card-header" style={{ flexShrink: 0 }}>
           <h3 className="bo-card-title">
             <Building2 size={20} style={{ color: 'var(--primary)' }} /> 
             Daftar Supplier Aktif
           </h3>
         </div>
-        <div className="bo-table-container" style={{ width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+        <div className="bo-table-container" style={{ width: '100%', flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
           <table className="bo-table" style={{ width: '100%', minWidth: '750px' }}>
             <thead>
               <tr>

@@ -236,7 +236,7 @@ const Reports: React.FC = () => {
         ))}
       </div>
 
-      <div className="bo-card r-kiosk-card" style={{ marginBottom: '0', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+      <div className="bo-card" style={{ marginBottom: '0', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
         <div className="r-tabs" style={{ display: 'flex', borderBottom: '1px solid #e5e7eb', flexShrink: 0 }}>
           {tabBtn('sales', 'Laporan Penjualan', filteredSales.length, 'var(--primary)')}
           {tabBtn('low-stock', 'Peringatan Stok Tipis', lowStockItems.length, '#ef4444')}
@@ -314,7 +314,7 @@ const Reports: React.FC = () => {
                 </div>
               </div>
 
-              <div className="bo-table-container" style={{ width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+              <div className="bo-table-container" style={{ width: '100%', flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
                 {filteredSales.length === 0 ? (
                   emptyState('Data penjualan tidak ditemukan', 'Coba ubah rentang tanggal, metode pembayaran, atau kata kunci pencarian.', <FileText size={26} color="#9ca3af" />)
                 ) : (
@@ -437,7 +437,7 @@ const Reports: React.FC = () => {
 
           {activeTab === 'low-stock' && (
             <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-              <div className="bo-table-container" style={{ width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+              <div className="bo-table-container" style={{ width: '100%', flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
                 {lowStockItems.length === 0 ? (
                   emptyState('Semua stok aman', 'Tidak ada produk yang berada di bawah atau sama dengan batas minimum.', <CheckCircle2 size={26} color="#10b981" />)
                 ) : (
