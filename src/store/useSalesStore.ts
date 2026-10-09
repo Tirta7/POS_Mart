@@ -4,6 +4,8 @@ import type { SalesTransaction } from '../types';
 import { useAuthStore } from './useAuthStore';
 import { useInventoryStore } from './useInventoryStore';
 
+import { useCustomerStore } from './useCustomerStore';
+
 interface SalesState {
   sales: SalesTransaction[];
   fetchSales: () => Promise<void>;
@@ -60,7 +62,30 @@ export const useSalesStore = create<SalesState>()(
         // 1. Simpan di local storage (untuk offline / UI cepat)
         set((state) => ({ sales: [...state.sales, sale] }));
 
-        // 2. Kirim ke Backend API (SaaS)
+        // 2. Hubungkan langsung ke store pelanggan agar rekap langsung bertambah instan
+        try {
+          const custStore = useCustomerStore.getState();
+          const retailCust = custStore.customers.find(c => (c.name || '').trim().toLowerCase() === 'retail');
+          const targetCustId = sale.customerId || (sale.customerName?.toLowerCase() === 'retail' || sale.customerName === 'Umum (Guest)' || !sale.customerName ? retailCust?.id : null);
+          if (targetCustId) {
+            custStore.addOrderToCustomer(targetCustId, {
+              orderId: sale.id,
+              date: sale.date,
+              total: sale.total,
+              items: sale.items.map(item => ({
+                productId: item.productId,
+                name: item.name,
+                qty: item.qty,
+                price: item.price,
+                subtotal: item.subtotal
+              }))
+            });
+          }
+        } catch (e) {
+          console.error("Gagal link order ke customer lokal:", e);
+        }
+
+        // 3. Kirim ke Backend API (SaaS)
         try {
           const apiPayload = {
             receipt_number: sale.id,
@@ -89,6 +114,7 @@ export const useSalesStore = create<SalesState>()(
           if (res.ok) {
             useInventoryStore.getState().fetchTransactions();
             useInventoryStore.getState().fetchProducts();
+            useCustomerStore.getState().fetchCustomers();
           }
         } catch (error) {
           console.error("Gagal sinkronisasi transaksi ke server:", error);

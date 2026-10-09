@@ -18,7 +18,24 @@ export const useCustomerStore = create<CustomerState>()(
           const res = await fetch('/api/saas/customers', { headers: { 'x-tenant-id': 'TID-DEMO-123' } });
           if (res.ok) {
             const data = await res.json();
-            set({ customers: data.map((c: any) => ({ ...c, orders: [] })) });
+            set((state) => ({
+              customers: data.map((c: any) => {
+                const prev = state.customers.find(p => p.id === c.id);
+                const serverOrders = c.orders || [];
+                const mergedOrders = [...serverOrders];
+                if (prev && prev.orders) {
+                  for (const po of prev.orders) {
+                    if (!mergedOrders.some(mo => mo.orderId === po.orderId)) {
+                      mergedOrders.push(po);
+                    }
+                  }
+                }
+                return {
+                  ...c,
+                  orders: mergedOrders
+                };
+              })
+            }));
           }
         } catch (err) {
           console.error('Failed to fetch customers:', err);
@@ -73,8 +90,14 @@ export const useCustomerStore = create<CustomerState>()(
       },
       addOrderToCustomer: (customerId, order) => set((state) => ({
         customers: state.customers.map(c => {
-          if (c.id === customerId) {
-            return { ...c, orders: [order, ...c.orders] };
+          const isTarget = c.id === customerId || 
+            (c.name.trim().toLowerCase() === 'retail' && (customerId === 'retail' || customerId === c.id));
+          if (isTarget) {
+            const existingOrders = c.orders || [];
+            if (existingOrders.some(o => o.orderId === order.orderId)) {
+              return c;
+            }
+            return { ...c, orders: [order, ...existingOrders] };
           }
           return c;
         })

@@ -65,6 +65,8 @@ export interface CustomerOrder {
   orderId: string;
   date: string;
   total: number;
+  paymentMethod?: string;
+  cashier?: string;
   items: {
     productId: string;
     name: string;

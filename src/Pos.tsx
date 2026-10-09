@@ -361,7 +361,6 @@ function App() {
             className={`type-btn ${orderType === 'DINE_IN' ? 'active' : ''}`}
             onClick={() => {
               setOrderType('DINE_IN');
-              setSelectedCustomer(null);
             }}
           >
             <ShoppingCart size={16} /> REGULER
@@ -379,7 +378,6 @@ function App() {
             className={`type-btn ${orderType === 'DRIVETHRU' ? 'active' : ''}`}
             onClick={() => {
               setOrderType('DRIVETHRU');
-              setSelectedCustomer(null);
             }}
           >
             <Truck size={16} /> DELIVERY
@@ -521,8 +519,27 @@ function App() {
               <div className="order-info">
                 <h2>Pesanan #{orderCounter.toString().padStart(3, '0')} <span className="order-type-badge">{orderType === 'TAKEAWAY' ? 'GROSIR / PARTAI' : 'REGULER'}</span></h2>
                 <div className="order-meta">
-                  {cart.length} Item • 12:48 WIB • Kasir: Sari
-                  {selectedCustomer && <span style={{ color: 'var(--primary)', fontWeight: 'bold', marginLeft: '8px' }}>• Plg: {selectedCustomer.name}</span>}
+                  {cart.length} Item • Kasir: {currentUser?.name || 'Kasir'}
+                  {selectedCustomer ? (
+                    <span style={{ color: 'var(--primary)', fontWeight: 'bold', marginLeft: '8px' }}>
+                      • Plg: {selectedCustomer.name}{' '}
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setSelectedCustomer(null); }}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: '11px', textDecoration: 'underline', padding: '0 2px' }}
+                      >
+                        (Ganti)
+                      </button>
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setCustomerSelectPopupOpen(true)}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--primary)', fontWeight: 'bold', marginLeft: '8px', fontSize: '12px' }}
+                    >
+                      • + Pilih Pelanggan
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -693,10 +710,14 @@ function App() {
               className={`checkout-btn ${tendered < total && paymentMethod === 'TUNAI' ? 'disabled' : ''}`}
               disabled={tendered < total && paymentMethod === 'TUNAI'}
               onClick={() => {
-                // Here we process the payment and record the order if a customer is selected
-                if (selectedCustomer && orderType === 'TAKEAWAY') {
+                const retailCustomer = customers.find(c => (c.name || '').trim().toLowerCase() === 'retail');
+                const effectiveCustomer = selectedCustomer || retailCustomer;
+                const saleId = 'INV-' + Date.now();
+
+                // Catat orderan ke data pelanggan jika ada pelanggan terpilih atau pesanan retail
+                if (effectiveCustomer) {
                   const order = {
-                    orderId: 'ORD-' + Date.now(),
+                    orderId: saleId,
                     date: new Date().toISOString(),
                     total: total,
                     items: cart.map(item => ({
@@ -707,12 +728,12 @@ function App() {
                       subtotal: item.price * item.qty
                     }))
                   };
-                  addOrderToCustomer(selectedCustomer.id, order);
+                  addOrderToCustomer(effectiveCustomer.id, order);
                 }
 
                 // Add to Global Sales
                 const sale = {
-                  id: 'INV-' + Date.now(),
+                  id: saleId,
                   date: new Date().toISOString(),
                   total: total,
                   subtotal: subtotal,
@@ -721,8 +742,8 @@ function App() {
                   paymentMethod: paymentMethod,
                   tendered: tendered,
                   change: change,
-                  customerId: selectedCustomer?.id || null,
-                  customerName: selectedCustomer?.name || 'Umum (Guest)',
+                  customerId: effectiveCustomer?.id || null,
+                  customerName: effectiveCustomer?.name || (orderType === 'TAKEAWAY' ? 'Grosir' : 'Retail'),
                   employeeId: currentUser?.id,
                   employeeName: currentUser?.name,
                   items: cart.map(item => ({

@@ -331,10 +331,107 @@ app.delete('/api/saas/categories/by-name/:name', async (req, res) => {
 // ==========================================
 app.get('/api/saas/customers', async (req, res) => {
   try {
-    const customers = await prisma.customer.findMany({
-      where: { tenant_id: req.tenantId }
+    let customers = await prisma.customer.findMany({
+      where: { tenant_id: req.tenantId },
+      orderBy: { name: 'asc' }
     });
-    res.json(customers);
+
+    // Pastikan pelanggan default "Retail" selalu ada untuk menampung transaksi kasir reguler/eceran
+    const hasRetail = customers.some(c => (c.name || '').trim().toLowerCase() === 'retail');
+    if (!hasRetail) {
+      try {
+        const retailCust = await prisma.customer.create({
+          data: {
+            tenant_id: req.tenantId,
+            name: 'Retail',
+            phone: '0',
+            address: 'Pelanggan Umum / Eceran Kasir'
+          }
+        });
+        customers = [retailCust, ...customers];
+      } catch (e) {
+        console.error('Failed to auto-create Retail customer:', e);
+      }
+    }
+
+    const transactions = await prisma.transaction.findMany({
+      where: { tenant_id: req.tenantId },
+      include: { items: { include: { product: true } } },
+      orderBy: { created_at: 'desc' }
+    });
+
+    const stockTransactions = await prisma.stockTransaction.findMany({
+      where: { tenant_id: req.tenantId, type: 'OUT' },
+      include: { items: { include: { product: true } } },
+      orderBy: { date: 'desc' }
+    });
+
+    // Gabungkan order dari tabel transaksi & mutasi keluar (deduplikasi berdasarkan nomor dokumen/nota)
+    const txMap = new Map();
+    for (const t of transactions) {
+      const docNo = t.receipt_number;
+      if (!docNo) continue;
+      txMap.set(docNo, {
+        orderId: docNo,
+        date: t.created_at,
+        total: Number(t.total_amount || 0),
+        paymentMethod: t.payment_method || 'TUNAI',
+        cashier: t.cashier_name || t.cashier_id || 'Kasir',
+        customerId: t.customer_id,
+        customerName: t.customer_name,
+        items: (t.items || []).map(i => ({
+          productId: i.product_id,
+          name: i.product?.name || 'Produk',
+          qty: i.quantity,
+          price: Number(i.price_at_time || 0),
+          subtotal: Number(i.subtotal || 0)
+        }))
+      });
+    }
+
+    for (const st of stockTransactions) {
+      const docNo = st.document_no;
+      if (!docNo || txMap.has(docNo)) continue;
+      txMap.set(docNo, {
+        orderId: docNo,
+        date: st.date,
+        total: Number(st.total_value || 0),
+        paymentMethod: 'TUNAI',
+        cashier: st.employee_id || 'Kasir',
+        customerId: st.customer_id,
+        customerName: st.customer_name,
+        items: (st.items || []).map(i => ({
+          productId: i.product_id,
+          name: i.product?.name || 'Produk',
+          qty: i.qty,
+          price: Number(i.purchase_price || 0),
+          subtotal: Number(i.subtotal || 0)
+        }))
+      });
+    }
+
+    const allOrders = Array.from(txMap.values());
+
+    const customersWithOrders = customers.map(c => {
+      const isRetail = (c.name || '').trim().toLowerCase() === 'retail';
+      const custOrders = allOrders.filter(t => {
+        if (t.customerId && t.customerId === c.id) return true;
+        if (t.customerName && t.customerName.trim().toLowerCase() === (c.name || '').trim().toLowerCase()) return true;
+        if (isRetail && (!t.customerId || t.customerName === 'Umum (Guest)' || (t.customerName || '').trim().toLowerCase() === 'retail')) {
+          return true;
+        }
+        return false;
+      });
+
+      return {
+        ...c,
+        orders: custOrders,
+        totalOrder: custOrders.length,
+        totalSpent: custOrders.reduce((sum, o) => sum + (o.total || 0), 0)
+      };
+    });
+
+    res.json(customersWithOrders);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -505,7 +602,8 @@ app.post('/api/saas/transactions', async (req, res) => {
     notifyTenant(req.tenantId, 'sales');
     notifyTenant(req.tenantId, 'products'); // Because stock changed
     notifyTenant(req.tenantId, 'stock-transactions'); // Mutasi stok otomatis ter-update
-    
+    notifyTenant(req.tenantId, 'customers'); // Pelanggan orders re-sync otomatis
+
     // Explicit notification for incoming sale & stock mutation
     const io = getIo();
     if (io) {
@@ -513,13 +611,20 @@ app.post('/api/saas/transactions', async (req, res) => {
         amount: Number(total_amount),
         cashier: cashier_name || 'Unknown',
         receiptNumber: receipt_number,
-        paymentMethod: payment_method
+        paymentMethod: payment_method,
+        customerId: customer_id || null,
+        customerName: customer_name || null
       });
       io.to(req.tenantId).emit('stock_mutation_updated', {
         type: 'OUT',
         documentNo: receipt_number,
         totalValue: Number(total_amount),
         note: 'Penjualan Kasir'
+      });
+      io.to(req.tenantId).emit('customer_orders_updated', {
+        customerId: customer_id || null,
+        customerName: customer_name || null,
+        receiptNumber: receipt_number
       });
     }
 

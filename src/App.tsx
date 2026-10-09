@@ -114,7 +114,7 @@ function App() {
       if (!entity || entity === 'sales' || entity === 'transactions') {
         fetchSales();
       }
-      if (!entity || entity === 'customers') {
+      if (!entity || entity === 'customers' || entity === 'sales' || entity === 'transactions') {
         fetchCustomers();
       }
       if (!entity || entity === 'suppliers') {
@@ -132,11 +132,16 @@ function App() {
       fetchTransactions();
       fetchProducts();
       fetchSales();
+      fetchCustomers();
     };
 
     const handleStockMutation = () => {
       fetchTransactions();
       fetchProducts();
+    };
+
+    const handleCustomerOrdersUpdated = () => {
+      fetchCustomers();
     };
 
     const handleGrDrafts = (draftsArr: any) => {
@@ -150,6 +155,7 @@ function App() {
     socket.on('data_updated', handleDataUpdated);
     socket.on('sale_completed', handleSaleCompleted);
     socket.on('stock_mutation_updated', handleStockMutation);
+    socket.on('customer_orders_updated', handleCustomerOrdersUpdated);
     socket.on('draft_updated_grDrafts', handleGrDrafts);
     socket.on('draft_updated_posHold', handlePosHold);
 
@@ -157,6 +163,7 @@ function App() {
       socket.off('data_updated', handleDataUpdated);
       socket.off('sale_completed', handleSaleCompleted);
       socket.off('stock_mutation_updated', handleStockMutation);
+      socket.off('customer_orders_updated', handleCustomerOrdersUpdated);
       socket.off('draft_updated_grDrafts', handleGrDrafts);
       socket.off('draft_updated_posHold', handlePosHold);
     };
