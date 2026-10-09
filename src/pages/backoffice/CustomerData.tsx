@@ -425,8 +425,8 @@ export const CustomerData = () => {
         </div>
 
         {/* TABLE */}
-        <div className="bo-table-container" style={{ overflowX: 'auto' }}>
-          <table className="bo-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+        <div className="bo-table-container" style={{ width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+          <table className="bo-table" style={{ width: '100%', minWidth: '850px', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
               <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
                 <th style={{ padding: '14px 16px', color: '#4b5563', fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>ID</th>
@@ -763,12 +763,12 @@ export const CustomerData = () => {
                         </div>
 
                         {/* ORDER ITEMS TABLE */}
-                        <div style={{ padding: '14px 18px' }}>
+                        <div style={{ padding: '14px 18px', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
                           <div style={{ fontSize: '12px', fontWeight: 700, color: '#4b5563', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
                             Daftar Barang yang Dipesan ({order.items?.length || 0} Item):
                           </div>
 
-                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                          <table style={{ width: '100%', minWidth: '480px', borderCollapse: 'collapse', fontSize: '13px' }}>
                             <thead>
                               <tr style={{ color: '#6b7280', borderBottom: '1px solid #e5e7eb', textAlign: 'left' }}>
                                 <th style={{ padding: '6px 8px', width: '36px' }}>No</th>

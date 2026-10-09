@@ -5,6 +5,7 @@
   display: flex;
   flex-direction: column;
   height: 100vh;
+  height: 100dvh;
   width: 100vw;
   font-family: 'Inter', sans-serif;
   background-color: var(--bg-main);
@@ -15,36 +16,50 @@
 .bo-main-area {
   display: flex;
   flex: 1;
+  min-height: 0;
+  min-width: 0;
+  height: calc(100vh - 64px);
+  height: calc(100dvh - 64px);
   overflow: hidden;
 }
 
 .bo-content {
   flex: 1;
+  min-height: 0;
+  min-width: 0;
+  height: 100%;
   padding: 24px 32px;
-  overflow: hidden;
+  overflow-y: auto !important;
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
   background-color: var(--bg-main);
+  -webkit-overflow-scrolling: touch;
 }
 
 .bo-container {
   width: 100%;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 24px;
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto; /* Memungkinkan halaman untuk di-scroll */
-  padding-right: 8px; /* Ruang untuk scrollbar */
+  flex: 1 0 auto;
+  padding-bottom: 40px; /* Ruang agar bagian bawah tabel dan aksi tidak terpotong */
 }
 
-/* Kustomisasi scrollbar untuk bo-container */
-.bo-container::-webkit-scrollbar {
-  width: 6px;
+/* Kustomisasi scrollbar untuk bo-content */
+.bo-content::-webkit-scrollbar {
+  width: 8px;
 }
-.bo-container::-webkit-scrollbar-thumb {
+.bo-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+.bo-content::-webkit-scrollbar-thumb {
   background: #cbd5e1;
   border-radius: 4px;
+}
+.bo-content::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
 
 /* Header */
@@ -374,9 +389,30 @@
 /* Tables */
 .bo-table-container {
   width: 100%;
-  overflow: auto;
-  flex: 1;
-  min-height: 0;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto !important;
+  overflow-y: visible;
+  -webkit-overflow-scrolling: touch;
+  display: block;
+  position: relative;
+}
+
+/* Scrollbar horizontal modern untuk tabel */
+.bo-table-container::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+.bo-table-container::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+.bo-table-container::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+.bo-table-container::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
 
 .bo-table {

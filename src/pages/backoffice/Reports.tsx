@@ -207,7 +207,7 @@ const Reports: React.FC = () => {
   const initials = (name: string) => name.trim().split(/\s+/).slice(0, 2).map(s => s[0]?.toUpperCase() || '').join('') || '?';
 
   return (
-    <div className="bo-container r-kiosk" style={{ overflowY: 'hidden' }}>
+    <div className="bo-container">
       <style>{`
         .rpt-table th { padding: 9px 14px !important; font-size: 11px !important; letter-spacing: 0.4px; white-space: nowrap; position: sticky; top: 0; z-index: 1; background: #f9fafb; }
         .rpt-table td { padding: 8px 14px !important; font-size: 13px; line-height: 1.35; }
@@ -314,11 +314,11 @@ const Reports: React.FC = () => {
                 </div>
               </div>
 
-              <div className="bo-table-container" style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+              <div className="bo-table-container" style={{ width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
                 {filteredSales.length === 0 ? (
                   emptyState('Data penjualan tidak ditemukan', 'Coba ubah rentang tanggal, metode pembayaran, atau kata kunci pencarian.', <FileText size={26} color="#9ca3af" />)
                 ) : (
-                  <table className="bo-table rpt-table r-sheet">
+                  <table className="bo-table rpt-table r-sheet" style={{ width: '100%', minWidth: '1000px' }}>
                     <thead>
                       <tr>
                         <th className="r-sheet-name">ID & WAKTU</th>
@@ -437,11 +437,11 @@ const Reports: React.FC = () => {
 
           {activeTab === 'low-stock' && (
             <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-              <div className="bo-table-container" style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+              <div className="bo-table-container" style={{ width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
                 {lowStockItems.length === 0 ? (
                   emptyState('Semua stok aman', 'Tidak ada produk yang berada di bawah atau sama dengan batas minimum.', <CheckCircle2 size={26} color="#10b981" />)
                 ) : (
-                  <table className="bo-table rpt-table r-sheet">
+                  <table className="bo-table rpt-table r-sheet" style={{ width: '100%', minWidth: '850px' }}>
                     <thead>
                       <tr>
                         <th>SKU</th>
@@ -578,8 +578,8 @@ const Reports: React.FC = () => {
                   {suppliersWithDebt.length === 0 ? (
                     emptyState('Tidak Ada Hutang', 'Saat ini tidak ada hutang tagihan aktif ke supplier.', <CheckCircle2 color="#10b981" />)
                   ) : (
-                    <div className="bo-table-container">
-                      <table className="bo-table rpt-table" style={{ width: '100%' }}>
+                    <div className="bo-table-container" style={{ width: '100%', overflowX: 'auto' }}>
+                      <table className="bo-table rpt-table" style={{ width: '100%', minWidth: '550px' }}>
                         <thead>
                           <tr>
                             <th>SUPPLIER</th>
@@ -620,8 +620,8 @@ const Reports: React.FC = () => {
                   {paymentHistory.length === 0 ? (
                     emptyState('Belum Ada Riwayat', 'Anda belum melakukan pembayaran hutang ke supplier manapun.', <DollarSign color="#9ca3af" />)
                   ) : (
-                    <div className="bo-table-container">
-                      <table className="bo-table rpt-table" style={{ width: '100%' }}>
+                    <div className="bo-table-container" style={{ width: '100%', overflowX: 'auto' }}>
+                      <table className="bo-table rpt-table" style={{ width: '100%', minWidth: '550px' }}>
                         <thead>
                           <tr>
                             <th>TANGGAL</th>

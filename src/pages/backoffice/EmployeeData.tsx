@@ -80,8 +80,8 @@ const EmployeeData: React.FC = () => {
             Daftar Karyawan Aktif
           </h3>
         </div>
-        <div className="bo-table-container">
-          <table className="bo-table">
+        <div className="bo-table-container" style={{ width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+          <table className="bo-table" style={{ width: '100%', minWidth: '750px' }}>
             <thead>
               <tr>
                 <th>ID / NIK</th>

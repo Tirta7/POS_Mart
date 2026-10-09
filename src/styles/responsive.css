@@ -63,11 +63,16 @@ body {
 
 
 /* Tinggi layar dinamis (mengikuti address-bar mobile yang muncul/hilang) */
-.app-container,
-.bo-layout {
+.app-container {
   width: 100%;
   height: 100%;
   overflow-y: auto; /* Allow scrolling inside the container */
+}
+
+.bo-layout {
+  width: 100%;
+  height: 100%;
+  overflow: hidden; /* Kontainer luar fixed, scroll dilakukan oleh .bo-content */
 }
 
 /* Header menghormati safe-area kiri/kanan (landscape iPhone dengan notch) */
@@ -758,7 +763,8 @@ body {
   }
   .bo-container .bo-table-container {
     flex: none !important;
-    overflow: visible !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
   }
 
   /* ---------- Judul halaman (Large Title iOS) ---------- */

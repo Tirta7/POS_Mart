@@ -297,8 +297,8 @@ const Purchases: React.FC = () => {
               </div>
             </div>
 
-            <div className="bo-table-container" style={{ marginTop: '20px', border: '1px solid #e5e7eb', borderRadius: '8px' }}>
-              <table className="bo-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <div className="bo-table-container" style={{ marginTop: '20px', border: '1px solid #e5e7eb', borderRadius: '8px', width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+              <table className="bo-table" style={{ width: '100%', minWidth: '650px', borderCollapse: 'collapse' }}>
                 <thead style={{ backgroundColor: '#f9fafb' }}>
                   <tr>
                     <th>Produk</th>

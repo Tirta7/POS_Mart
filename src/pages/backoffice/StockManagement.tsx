@@ -431,7 +431,7 @@ const StockManagement: React.FC = () => {
   );
 
   return (
-    <div className="bo-container r-kiosk">
+    <div className="bo-container">
       
       {/* Header */}
       <div className="bo-page-header" style={{ flexShrink: 0 }}>
@@ -468,7 +468,7 @@ const StockManagement: React.FC = () => {
 
       {/* Tabel sekarang langsung muncul di bawah header - form dipindah ke popup */}
       {/* Data Table */}
-      <div className="bo-card r-kiosk-card" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, marginBottom: 0 }}>
+      <div className="bo-card" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, marginBottom: 0 }}>
         <div className="bo-card-header" style={{ flexShrink: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <h3 className="bo-card-title" style={{ margin: 0 }}>
@@ -522,8 +522,8 @@ const StockManagement: React.FC = () => {
             </button>
           ))}
         </div>
-        <div className="bo-table-container">
-          <table className="bo-table r-sheet">
+        <div className="bo-table-container" style={{ width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+          <table className="bo-table r-sheet" style={{ width: '100%', minWidth: '980px' }}>
             <thead>
               <tr>
                 <th>ID</th>
