@@ -13,9 +13,153 @@ interface SalesState {
   clearSales: () => void;
 }
 
+const initialMockSales: SalesTransaction[] = [
+  {
+    id: 'INV-1791534129916',
+    date: '2026-10-09T15:22:00.000Z',
+    total: 45000000,
+    subtotal: 45000000,
+    tax: 0,
+    rounding: 0,
+    paymentMethod: 'TUNAI',
+    tendered: 45000000,
+    change: 0,
+    customerId: 'CUST-BUDI-01',
+    customerName: 'Budi Santoso',
+    employeeId: 'dd242b65',
+    employeeName: 'Administrator',
+    items: [
+      {
+        productId: 'cd38cdd0-0151-4e2a-a3c9-7051300f717d',
+        name: 'Meja Billiard 9 Feet Tournament',
+        qty: 1,
+        price: 45000000,
+        subtotal: 45000000
+      }
+    ]
+  },
+  {
+    id: 'INV-1791534129917',
+    date: '2026-10-09T14:15:00.000Z',
+    total: 52000000,
+    subtotal: 52000000,
+    tax: 0,
+    rounding: 0,
+    paymentMethod: 'QRIS',
+    tendered: 52000000,
+    change: 0,
+    customerId: 'CUST-BUDI-01',
+    customerName: 'Budi Santoso',
+    employeeId: 'dd242b65',
+    employeeName: 'Administrator',
+    items: [
+      {
+        productId: 'PROD-BLL-02',
+        name: 'Aramith Tournament TV Pro Cue Ball Set',
+        qty: 4,
+        price: 9000000,
+        subtotal: 36000000
+      },
+      {
+        productId: 'PROD-BLL-03',
+        name: 'Predator Revo Carbon Shaft 12.4mm',
+        qty: 2,
+        price: 8000000,
+        subtotal: 16000000
+      }
+    ]
+  },
+  {
+    id: 'INV-1791534129918',
+    date: '2026-10-09T12:40:00.000Z',
+    total: 38000000,
+    subtotal: 38000000,
+    tax: 0,
+    rounding: 0,
+    paymentMethod: 'KARTU DEBIT',
+    tendered: 38000000,
+    change: 0,
+    customerId: 'CUST-02',
+    customerName: 'Arena Billiard Club',
+    employeeId: 'dd242b65',
+    employeeName: 'Administrator',
+    items: [
+      {
+        productId: 'PROD-BLL-04',
+        name: 'Simonis 860 Cloth Tournament Green',
+        qty: 6,
+        price: 4500000,
+        subtotal: 27000000
+      },
+      {
+        productId: 'PROD-BLL-05',
+        name: 'Taom Pyro Chalk V10 Original',
+        qty: 22,
+        price: 500000,
+        subtotal: 11000000
+      }
+    ]
+  },
+  {
+    id: 'INV-1791534129919',
+    date: '2026-10-09T10:10:00.000Z',
+    total: 41000000,
+    subtotal: 41000000,
+    tax: 0,
+    rounding: 0,
+    paymentMethod: 'TUNAI',
+    tendered: 41000000,
+    change: 0,
+    customerId: 'CUST-03',
+    customerName: 'Master Pool Hall',
+    employeeId: 'dd242b65',
+    employeeName: 'Administrator',
+    items: [
+      {
+        productId: 'PROD-BLL-06',
+        name: 'Meja Billiard Minirack 7 Feet Club',
+        qty: 1,
+        price: 32000000,
+        subtotal: 32000000
+      },
+      {
+        productId: 'PROD-BLL-07',
+        name: 'Cuetec Cynergy Break Cue',
+        qty: 1,
+        price: 9000000,
+        subtotal: 9000000
+      }
+    ]
+  },
+  {
+    id: 'INV-1791534129920',
+    date: '2026-10-09T09:05:00.000Z',
+    total: 40000000,
+    subtotal: 40000000,
+    tax: 0,
+    rounding: 0,
+    paymentMethod: 'KARTU KREDIT',
+    tendered: 40000000,
+    change: 0,
+    customerId: 'CUST-04',
+    customerName: 'Billiard Center Jakarta',
+    employeeId: 'dd242b65',
+    employeeName: 'Administrator',
+    items: [
+      {
+        productId: 'PROD-BLL-08',
+        name: 'Paket Stik Billiard Maple Wood 10 Set',
+        qty: 2,
+        price: 20000000,
+        subtotal: 40000000
+      }
+    ]
+  }
+];
+
 export const useSalesStore = create<SalesState>()(
   (set) => ({
-      sales: [],
+      sales: initialMockSales,
       fetchSales: async () => {
         try {
           const res = await fetch('/api/saas/transactions', {
@@ -26,6 +170,7 @@ export const useSalesStore = create<SalesState>()(
           });
           if (res.ok) {
             const data = await res.json();
+            if (Array.isArray(data) && data.length > 0) {
             const employees = useAuthStore.getState().employees;
             const mapped = data.map((t: any) => {
               const localEmp = employees.find((e: any) => e.id === t.cashier_id);
@@ -53,6 +198,7 @@ export const useSalesStore = create<SalesState>()(
               };
             });
             set({ sales: mapped });
+            }
           }
         } catch (error) {
           console.error("Gagal mengambil data transaksi:", error);

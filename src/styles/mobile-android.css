@@ -1,0 +1,912 @@
+/* =====================================================================
+   SWALAYAN APPS — STYLING KHUSUS MOBILE ANDROID (Google Material Design 3)
+   ---------------------------------------------------------------------
+   File ini dibuat khusus untuk perangkat Android:
+   - Google Material You / Material Design 3 (MD3) Guidelines
+   - Tipografi Roboto & Google Sans
+   - Material Elevation & Surface Container Cards
+   - Material Filter Chips & Outlined Action Buttons
+   - Android Status Bar & Gesture Navigation Bar padding
+   - Sentuhan responsif dengan ripple feel & elevated shadow
+   ===================================================================== */
+
+@media (max-width: 768px) {
+  /* Berlaku khusus pada Android atau saat simulator Android aktif */
+  html.platform-android,
+  html.platform-android body {
+    font-family: 'Roboto', 'Google Sans', 'Noto Sans', -apple-system, sans-serif !important;
+    background-color: #f8f9fa !important; /* MD3 Surface Background */
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: rgba(0, 0, 0, 0.08);
+  }
+
+  html.platform-android input,
+  html.platform-android textarea,
+  html.platform-android select {
+    font-family: 'Roboto', 'Google Sans', sans-serif !important;
+  }
+
+  /* -------------------------------------------------------------------
+     1. LAYOUT & SAFE AREA ANDROID
+     ------------------------------------------------------------------- */
+  html.platform-android .bo-layout {
+    background-color: #f8f9fa !important;
+    height: 100dvh;
+    overflow: hidden;
+  }
+
+  html.platform-android .bo-main-area {
+    height: calc(100dvh - 56px - env(safe-area-inset-top, 0px));
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  html.platform-android .bo-content {
+    background-color: #f8f9fa !important;
+    padding: 12px max(14px, env(safe-area-inset-right, 14px)) calc(20px + env(safe-area-inset-bottom, 12px)) max(14px, env(safe-area-inset-left, 14px)) !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    height: 100% !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  html.platform-android .bo-container {
+    height: auto !important;
+    min-height: 100% !important;
+    overflow: visible !important;
+    flex: none !important;
+    gap: 14px !important;
+    padding-bottom: calc(24px + env(safe-area-inset-bottom, 12px)) !important;
+  }
+
+  /* -------------------------------------------------------------------
+     2. ANDROID TOP APP BAR
+     ------------------------------------------------------------------- */
+  html.platform-android .bo-header {
+    background-color: #ffffff !important;
+    border-bottom: 1px solid #e0e0e0 !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08) !important;
+    padding-top: max(8px, env(safe-area-inset-top, 0px)) !important;
+    padding-left: max(14px, env(safe-area-inset-left, 14px)) !important;
+    padding-right: max(14px, env(safe-area-inset-right, 14px)) !important;
+    min-height: calc(56px + env(safe-area-inset-top, 0px)) !important;
+  }
+
+  html.platform-android .bo-header-title {
+    font-weight: 700;
+    font-size: 18px;
+    color: #1f1f1f;
+  }
+
+  html.platform-android .bo-menu-toggle {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background-color: transparent;
+    color: #1f1f1f;
+    transition: background-color 0.2s;
+  }
+
+  html.platform-android .bo-menu-toggle:active {
+    background-color: rgba(0, 0, 0, 0.08);
+  }
+
+  /* -------------------------------------------------------------------
+     3. PAGE TITLE & HEADER ACTIONS ANDROID
+     ------------------------------------------------------------------- */
+  html.platform-android .bo-page-header {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 10px !important;
+    margin-bottom: 4px !important;
+  }
+
+  html.platform-android .bo-page-title {
+    font-size: 22px !important;
+    font-weight: 700 !important;
+    color: #1f1f1f !important;
+    line-height: 1.25 !important;
+    margin: 0 !important;
+  }
+
+  html.platform-android .bo-page-subtitle {
+    font-size: 13px !important;
+    color: #5f6368 !important;
+    margin-top: 2px !important;
+  }
+
+  html.platform-android .bo-header-actions,
+  html.platform-android .customer-header-actions {
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    width: 100% !important;
+    overflow-x: auto !important;
+    scrollbar-width: none !important;
+  }
+
+  html.platform-android .bo-header-actions .bo-btn,
+  html.platform-android .customer-header-actions .bo-btn {
+    flex: 1 1 auto !important;
+    min-height: 40px !important;
+    height: 40px !important;
+    padding: 0 16px !important;
+    border-radius: 20px !important; /* MD3 pill button */
+    font-size: 13.5px !important;
+    font-weight: 600 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 6px !important;
+    border: none !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15) !important;
+  }
+
+  html.platform-android .bo-header-actions .bo-btn-secondary {
+    background-color: #f1f3f4 !important;
+    color: #3c4043 !important;
+    box-shadow: none !important;
+    border: 1px solid #dadce0 !important;
+  }
+
+  html.platform-android .bo-header-actions .bo-btn-primary {
+    background-color: var(--primary, #d93025) !important;
+    color: #ffffff !important;
+  }
+
+  html.platform-android .bo-btn:active,
+  html.platform-android .bo-action-btn:active {
+    filter: brightness(0.92);
+  }
+
+  /* -------------------------------------------------------------------
+     4. KPI & STATS CAROUSEL ANDROID
+     ------------------------------------------------------------------- */
+  html.platform-android .r-stats,
+  html.platform-android .customer-stats {
+    display: flex !important;
+    flex-direction: row !important;
+    gap: 10px !important;
+    overflow-x: auto !important;
+    scroll-snap-type: x mandatory !important;
+    scrollbar-width: none !important;
+    padding: 2px 2px 6px 2px !important;
+  }
+
+  html.platform-android .r-stat,
+  html.platform-android .customer-stat-card {
+    flex: 0 0 200px !important;
+    width: 200px !important;
+    max-width: 75vw !important;
+    scroll-snap-align: start !important;
+    background: #ffffff !important;
+    border-radius: 14px !important;
+    padding: 12px 14px !important;
+    border: 1px solid #e0e0e0 !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08) !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 12px !important;
+  }
+
+  /* -------------------------------------------------------------------
+     5. MATERIAL 3 FILTER CHIPS
+     ------------------------------------------------------------------- */
+  html.platform-android .categories-bar,
+  html.platform-android .customer-filter-tabs,
+  html.platform-android .ios-segmented-control {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 8px !important;
+    overflow-x: auto !important;
+    scrollbar-width: none !important;
+    padding: 4px 0 !important;
+    background: transparent !important;
+  }
+
+  html.platform-android .cat-btn,
+  html.platform-android .customer-filter-tabs button {
+    flex: 0 0 auto !important;
+    border: 1px solid #79747e !important;
+    border-radius: 8px !important; /* MD3 Chip radius */
+    padding: 6px 14px !important;
+    font-size: 13px !important;
+    font-weight: 500 !important;
+    color: #49454f !important;
+    background-color: transparent !important;
+    white-space: nowrap !important;
+  }
+
+  html.platform-android .cat-btn.active,
+  html.platform-android .customer-filter-tabs button.active,
+  html.platform-android .customer-filter-tabs button[style*='background: var'] {
+    background-color: #e8def8 !important;
+    border-color: transparent !important;
+    color: #1d192b !important;
+    font-weight: 700 !important;
+  }
+
+  /* -------------------------------------------------------------------
+     6. MATERIAL SEARCH BAR
+     ------------------------------------------------------------------- */
+  html.platform-android .bo-card-header .bo-input,
+  html.platform-android input[placeholder*='Cari'] {
+    background-color: #f1f3f4 !important;
+    border: 1px solid #dadce0 !important;
+    border-radius: 24px !important; /* MD3 Search bar pill */
+    height: 42px !important;
+    font-size: 14px !important;
+    padding-left: 38px !important;
+  }
+
+  html.platform-android .r-wrap-mobile {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 8px !important;
+    width: 100% !important;
+  }
+
+  html.platform-android .r-wrap-mobile .r-full-mobile {
+    flex: 1 1 auto !important;
+    width: auto !important;
+  }
+
+  html.platform-android .r-wrap-mobile > button {
+    flex: 0 0 auto !important;
+    height: 42px !important;
+    border-radius: 20px !important;
+    padding: 0 16px !important;
+  }
+
+  /* -------------------------------------------------------------------
+     7. MATERIAL 3 CARDS (TABEL MENJADI KARTU ANDROID)
+     ------------------------------------------------------------------- */
+  html.platform-android .bo-card {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+  }
+
+  html.platform-android .bo-card-header {
+    background: #ffffff !important;
+    border-radius: 12px !important;
+    border: 1px solid #e0e0e0 !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+    padding: 12px 14px !important;
+    margin-bottom: 10px !important;
+  }
+
+  html.platform-android .bo-table-container {
+    background: transparent !important;
+    overflow: visible !important;
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  html.platform-android table.bo-table,
+  html.platform-android table.bo-table.r-sheet {
+    display: block !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    border: none !important;
+    background: transparent !important;
+  }
+
+  html.platform-android table.bo-table > thead,
+  html.platform-android table.bo-table.r-sheet > thead {
+    display: none !important;
+  }
+
+  html.platform-android table.bo-table > tbody,
+  html.platform-android table.bo-table.r-sheet > tbody {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 12px !important;
+    padding: 0 !important;
+  }
+
+  html.platform-android table.bo-table > tbody > tr,
+  html.platform-android table.bo-table.r-sheet > tbody > tr {
+    display: flex !important;
+    flex-direction: column !important;
+    background: #ffffff !important;
+    border-radius: 14px !important;
+    padding: 14px 16px !important;
+    border: 1px solid #e0e0e0 !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08) !important;
+    margin: 0 !important;
+  }
+
+  html.platform-android table.bo-table > tbody > tr > td,
+  html.platform-android table.bo-table.r-sheet > tbody > tr > td {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    width: 100% !important;
+    max-width: none !important;
+    padding: 8px 0 !important;
+    border: none !important;
+    border-bottom: 1px solid #f1f3f4 !important;
+    background: transparent !important;
+    font-size: 13.5px !important;
+    color: #1f1f1f !important;
+  }
+
+  html.platform-android table.bo-table > tbody > tr > td:last-child,
+  html.platform-android table.bo-table.r-sheet > tbody > tr > td:last-child {
+    border-bottom: none !important;
+    padding-top: 10px !important;
+  }
+
+  html.platform-android table.bo-table > tbody > tr > td::before,
+  html.platform-android table.bo-table.r-sheet > tbody > tr > td::before {
+    content: attr(data-label);
+    font-size: 12.5px !important;
+    font-weight: 500 !important;
+    color: #5f6368 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.3px !important;
+  }
+
+  html.platform-android table.bo-table > tbody > tr > td[data-label='Aksi']::before,
+  html.platform-android table.bo-table > tbody > tr > td[data-label='AKSI']::before,
+  html.platform-android table.bo-table > tbody > tr > td.cust-cell-actions::before {
+    display: none !important;
+  }
+
+  html.platform-android table.bo-table > tbody > tr > td.r-card-title,
+  html.platform-android table.bo-table > tbody > tr > td.cust-cell-name {
+    order: -2 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    font-size: 16px !important;
+    font-weight: 700 !important;
+    color: #1f1f1f !important;
+    padding: 2px 0 10px 0 !important;
+    border-bottom: 1px solid #e0e0e0 !important;
+  }
+
+  html.platform-android table.bo-table > tbody > tr > td.r-card-title::before,
+  html.platform-android table.bo-table > tbody > tr > td.cust-cell-name::before {
+    display: none !important;
+  }
+
+  html.platform-android table.bo-table > tbody > tr > td.bo-table-sku,
+  html.platform-android table.bo-table > tbody > tr > td.cust-cell-id {
+    order: -1 !important;
+    padding: 4px 0 !important;
+    font-family: monospace !important;
+    font-size: 12px !important;
+    color: #5f6368 !important;
+  }
+
+  html.platform-android table.bo-table > tbody > tr > td:last-child {
+    display: flex !important;
+    justify-content: flex-end !important;
+    gap: 8px !important;
+  }
+
+  html.platform-android table.bo-table .bo-action-btn,
+  html.platform-android table.bo-table button[title] {
+    min-width: 38px !important;
+    height: 38px !important;
+    border-radius: 8px !important;
+    background-color: #f1f3f4 !important;
+    border: 1px solid #dadce0 !important;
+    color: #1f1f1f !important;
+  }
+
+  html.platform-android .modal-content,
+  html.platform-android .pf-sheet {
+    border-radius: 16px 16px 0 0 !important;
+    box-shadow: 0 -2px 16px rgba(0, 0, 0, 0.18) !important;
+    border: none !important;
+    padding-bottom: calc(16px + env(safe-area-inset-bottom, 12px)) !important;
+  }
+
+  /* -------------------------------------------------------------------
+     9. KARTU PROPORSI MATERIAL 3 (CUSTOMER & GOODS RECEIPT)
+     ------------------------------------------------------------------- */
+  html.platform-android .customer-mobile-list,
+  html.platform-android .stock-mobile-list {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 12px !important;
+    padding: 8px 0 16px 0 !important;
+    width: 100% !important;
+  }
+
+  html.platform-android .mobile-customer-card,
+  html.platform-android .mobile-stock-card {
+    background: #ffffff !important;
+    border-radius: 14px !important;
+    padding: 14px 16px !important;
+    border: 1px solid #e0e0e0 !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08) !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 10px !important;
+  }
+
+  html.platform-android .mobile-card-head {
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+    width: 100% !important;
+  }
+
+  html.platform-android .mobile-card-avatar {
+    width: 40px !important;
+    height: 40px !important;
+    border-radius: 50% !important;
+    background: #e8f0fe !important;
+    color: #1a73e8 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex-shrink: 0 !important;
+  }
+
+  html.platform-android .mobile-card-avatar.stock-avatar {
+    background: #fce8e6 !important;
+    color: #d93025 !important;
+  }
+
+  html.platform-android .mobile-card-title {
+    font-size: 15.5px !important;
+    font-weight: 700 !important;
+    color: #1f1f1f !important;
+    line-height: 1.25 !important;
+  }
+
+  html.platform-android .mobile-card-id {
+    font-size: 11.5px !important;
+    color: #5f6368 !important;
+    font-family: monospace !important;
+    margin-top: 2px !important;
+  }
+
+  html.platform-android .mobile-badge {
+    font-size: 11px !important;
+    font-weight: 700 !important;
+    padding: 3px 8px !important;
+    border-radius: 8px !important;
+    letter-spacing: 0.2px !important;
+    flex-shrink: 0 !important;
+  }
+
+  html.platform-android .mobile-badge-retail {
+    background: #fce8e6 !important;
+    color: #c5221f !important;
+  }
+
+  html.platform-android .mobile-badge-grosir {
+    background: #fef7e0 !important;
+    color: #b06000 !important;
+  }
+
+  html.platform-android .mobile-badge-cat {
+    background: #f1f3f4 !important;
+    color: #3c4043 !important;
+  }
+
+  html.platform-android .mobile-badge-draft {
+    background: #feefc3 !important;
+    color: #7c4a03 !important;
+  }
+
+  html.platform-android .mobile-card-contact {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 5px !important;
+    padding: 8px 0 !important;
+    border-top: 1px solid #f1f3f4 !important;
+    border-bottom: 1px solid #f1f3f4 !important;
+  }
+
+  html.platform-android .mobile-contact-row {
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    font-size: 13px !important;
+    color: #3c4043 !important;
+    text-decoration: none !important;
+  }
+
+  html.platform-android .mobile-card-metrics {
+    display: flex !important;
+    align-items: center !important;
+    background: #f8f9fa !important;
+    border-radius: 10px !important;
+    padding: 10px 14px !important;
+    border: 1px solid #e8eaed !important;
+  }
+
+  html.platform-android .mobile-metric-item {
+    flex: 1 1 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 2px !important;
+  }
+
+  html.platform-android .mobile-metric-divider {
+    width: 1px !important;
+    height: 30px !important;
+    background: #dadce0 !important;
+    margin: 0 14px !important;
+  }
+
+  html.platform-android .mobile-metric-label {
+    font-size: 10.5px !important;
+    font-weight: 600 !important;
+    color: #5f6368 !important;
+    letter-spacing: 0.3px !important;
+    text-transform: uppercase !important;
+  }
+
+  html.platform-android .mobile-metric-val {
+    font-size: 14.5px !important;
+    font-weight: 700 !important;
+    color: #202124 !important;
+  }
+
+  html.platform-android .mobile-metric-val.text-green {
+    color: #137333 !important;
+    font-weight: 800 !important;
+  }
+
+  html.platform-android .mobile-stock-grid {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr 1fr !important;
+    gap: 8px !important;
+    background: #f8f9fa !important;
+    border-radius: 10px !important;
+    padding: 10px 12px !important;
+    border: 1px solid #e8eaed !important;
+  }
+
+  html.platform-android .mobile-stock-stat {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 2px !important;
+  }
+
+  html.platform-android .mobile-stock-stat-label {
+    font-size: 10px !important;
+    font-weight: 600 !important;
+    color: #5f6368 !important;
+    text-transform: uppercase !important;
+  }
+
+  html.platform-android .mobile-stock-stat-val {
+    font-size: 13.5px !important;
+    font-weight: 700 !important;
+    color: #202124 !important;
+  }
+
+  html.platform-android .mobile-stock-extra {
+    grid-column: span 3 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    padding-top: 8px !important;
+    margin-top: 4px !important;
+    border-top: 1px solid #e8eaed !important;
+    font-size: 12px !important;
+  }
+
+  html.platform-android .mobile-card-actions {
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    padding-top: 2px !important;
+  }
+
+  html.platform-android .mobile-action-primary {
+    flex: 1 1 auto !important;
+    height: 40px !important;
+    border-radius: 20px !important;
+    background: #e8f0fe !important;
+    color: #1a73e8 !important;
+    border: 1px solid #d2e3fc !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 6px !important;
+    font-size: 13.5px !important;
+    font-weight: 600 !important;
+    cursor: pointer !important;
+  }
+
+  html.platform-android .mobile-action-icon {
+    width: 40px !important;
+    height: 40px !important;
+    border-radius: 50% !important;
+    background: #f1f3f4 !important;
+    color: #3c4043 !important;
+    border: 1px solid #dadce0 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    cursor: pointer !important;
+  }
+
+  html.platform-android .mobile-action-icon.text-red {
+    background: #fce8e6 !important;
+    color: #d93025 !important;
+    border-color: #fad2cf !important;
+  }
+
+  /* -------------------------------------------------------------------
+     10. FITUR PEMBELIAN (PURCHASE ORDER) MATERIAL 3 ANDROID
+     ------------------------------------------------------------------- */
+  html.platform-android .po-page-wrapper {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 12px !important;
+    width: 100% !important;
+  }
+
+  /* KPI Stats Strip */
+  html.platform-android .po-stats-strip {
+    display: flex !important;
+    gap: 8px !important;
+    overflow-x: auto !important;
+    scrollbar-width: none !important;
+    padding-bottom: 2px !important;
+  }
+  html.platform-android .po-stats-strip::-webkit-scrollbar {
+    display: none !important;
+  }
+
+  html.platform-android .po-stat-tile {
+    flex: 1 1 calc(33.333% - 6px) !important;
+    min-width: 110px !important;
+    background: #ffffff !important;
+    border-radius: 12px !important;
+    padding: 10px 12px !important;
+    border: 1px solid #e0e0e0 !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 3px !important;
+  }
+  html.platform-android .po-stat-tile .stat-label {
+    font-size: 10.5px !important;
+    font-weight: 600 !important;
+    color: #5f6368 !important;
+    text-transform: uppercase !important;
+  }
+  html.platform-android .po-stat-tile .stat-value {
+    font-size: 15px !important;
+    font-weight: 800 !important;
+    color: #202124 !important;
+    white-space: nowrap !important;
+  }
+  html.platform-android .po-stat-tile .stat-sub {
+    font-size: 11px !important;
+    color: #1a73e8 !important;
+    font-weight: 500 !important;
+  }
+
+  /* Segmented Tab Pill MD3 */
+  html.platform-android .po-segmented-tabs {
+    display: flex !important;
+    background: #f1f3f4 !important;
+    padding: 4px !important;
+    border-radius: 10px !important;
+    gap: 4px !important;
+    width: 100% !important;
+    border: 1px solid #dadce0 !important;
+  }
+  html.platform-android .po-tab-button {
+    flex: 1 1 0 !important;
+    border: none !important;
+    background: transparent !important;
+    padding: 8px 6px !important;
+    border-radius: 8px !important;
+    font-size: 12.5px !important;
+    font-weight: 600 !important;
+    color: #49454f !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 5px !important;
+    white-space: nowrap !important;
+    cursor: pointer !important;
+  }
+  html.platform-android .po-tab-button.active {
+    background: #ffffff !important;
+    color: #1d192b !important;
+    font-weight: 700 !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12) !important;
+  }
+  html.platform-android .po-tab-badge {
+    background: var(--primary, #da291c) !important;
+    color: #ffffff !important;
+    font-size: 10px !important;
+    font-weight: 700 !important;
+    border-radius: 4px !important;
+    padding: 1px 5px !important;
+    line-height: 1.2 !important;
+  }
+
+  /* Section Cards MD3 */
+  html.platform-android .po-card-section {
+    background: #ffffff !important;
+    border-radius: 12px !important;
+    padding: 14px 16px !important;
+    border: 1px solid #e0e0e0 !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 12px !important;
+  }
+
+  /* Native Mobile PO Item Cards MD3 */
+  html.platform-android .po-mobile-list {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 12px !important;
+    width: 100% !important;
+  }
+
+  html.platform-android .po-item-card {
+    background: #ffffff !important;
+    border-radius: 12px !important;
+    padding: 14px 15px !important;
+    border: 1px solid #e0e0e0 !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 10px !important;
+  }
+
+  html.platform-android .po-item-head {
+    display: flex !important;
+    align-items: flex-start !important;
+    justify-content: space-between !important;
+    gap: 10px !important;
+  }
+
+  html.platform-android .po-item-title {
+    font-size: 15px !important;
+    font-weight: 700 !important;
+    color: #202124 !important;
+    line-height: 1.3 !important;
+  }
+
+  html.platform-android .po-item-badges {
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    flex-wrap: wrap !important;
+    margin-top: 3px !important;
+  }
+
+  html.platform-android .po-badge-pill {
+    font-size: 11px !important;
+    font-weight: 500 !important;
+    padding: 2px 8px !important;
+    border-radius: 4px !important;
+    background: #f1f3f4 !important;
+    color: #3c4043 !important;
+  }
+
+  html.platform-android .po-badge-stock {
+    background: #e8f0fe !important;
+    color: #1a73e8 !important;
+  }
+
+  /* Interactive Stepper MD3 */
+  html.platform-android .po-stepper-box {
+    display: flex !important;
+    align-items: center !important;
+    background: #f1f3f4 !important;
+    border-radius: 8px !important;
+    padding: 2px !important;
+    width: fit-content !important;
+    border: 1px solid #dadce0 !important;
+  }
+
+  html.platform-android .po-stepper-btn {
+    width: 36px !important;
+    height: 36px !important;
+    border: none !important;
+    background: #ffffff !important;
+    border-radius: 6px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 17px !important;
+    font-weight: 700 !important;
+    color: #3c4043 !important;
+    cursor: pointer !important;
+  }
+
+  html.platform-android .po-stepper-input {
+    width: 52px !important;
+    text-align: center !important;
+    font-size: 15px !important;
+    font-weight: 700 !important;
+    border: none !important;
+    background: transparent !important;
+    color: #202124 !important;
+    padding: 0 !important;
+  }
+
+  /* Preset Qty Pills MD3 */
+  html.platform-android .po-preset-pill {
+    border: 1px solid #dadce0 !important;
+    background: #ffffff !important;
+    color: #3c4043 !important;
+    font-size: 11.5px !important;
+    font-weight: 500 !important;
+    padding: 4px 8px !important;
+    border-radius: 6px !important;
+    cursor: pointer !important;
+  }
+
+  html.platform-android .po-preset-pill:active {
+    background: #e8f0fe !important;
+    color: #1a73e8 !important;
+  }
+
+  /* Price & Margin Indicators MD3 */
+  html.platform-android .po-price-row {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 8px !important;
+    padding-top: 8px !important;
+    border-top: 1px solid #f1f3f4 !important;
+  }
+
+  html.platform-android .po-margin-tag {
+    font-size: 11px !important;
+    font-weight: 700 !important;
+    padding: 2px 7px !important;
+    border-radius: 4px !important;
+  }
+
+  /* Sticky Summary Bar MD3 */
+  html.platform-android .po-sticky-summary-bar {
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    z-index: 99 !important;
+    background: #ffffff !important;
+    border-top: 1px solid #dadce0 !important;
+    padding: 10px 16px !important;
+    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.08) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 12px !important;
+  }
+
+  html.platform-android .po-sticky-submit-btn {
+    flex: 1 1 auto !important;
+    height: 44px !important;
+    border-radius: 8px !important;
+    background: var(--primary, #da291c) !important;
+    color: #ffffff !important;
+    font-size: 15px !important;
+    font-weight: 700 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 8px !important;
+    border: none !important;
+    cursor: pointer !important;
+  }
+}

@@ -38,6 +38,13 @@ const StockManagement: React.FC = () => {
   const [cameraScannerOpen, setCameraScannerOpen] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [drawerClosing, setDrawerClosing] = useState(false);
+  const [isMobileScreen, setIsMobileScreen] = useState(() => (typeof window !== 'undefined' ? window.innerWidth <= 768 : false));
+
+  React.useEffect(() => {
+    const checkScreen = () => setIsMobileScreen(window.innerWidth <= 768);
+    window.addEventListener('resize', checkScreen);
+    return () => window.removeEventListener('resize', checkScreen);
+  }, []);
 
   // Tutup drawer dengan animasi slide keluar ke kanan
   const closeDrawer = () => {
@@ -400,9 +407,6 @@ const StockManagement: React.FC = () => {
     setRestockProduct(null);
   };
 
-  // Jika kategori aktif sudah dihapus/diganti nama, kembali ke 'Semua'
-  const currentCategory = activeCategory === 'all' || categories.includes(activeCategory) ? activeCategory : 'all';
-
   // Combine database products with pending draft items
   const pendingDisplayProducts = draftItems.map(si => ({
     id: si.id,
@@ -422,6 +426,15 @@ const StockManagement: React.FC = () => {
   }));
 
   const allDisplayProducts = [...pendingDisplayProducts, ...products];
+
+  // Dynamic list of categories from both store categories and active products
+  const displayCategories = Array.from(new Set([
+    ...categories,
+    ...allDisplayProducts.map(p => p.category).filter(Boolean)
+  ]));
+
+  // Jika kategori aktif sudah dihapus/diganti nama, kembali ke 'Semua'
+  const currentCategory = activeCategory === 'all' || displayCategories.includes(activeCategory) ? activeCategory : 'all';
 
   const filteredProducts = allDisplayProducts.filter(p =>
     (currentCategory === 'all' || p.category === currentCategory) &&
@@ -481,7 +494,7 @@ const StockManagement: React.FC = () => {
           </div>
           
           <div className="r-wrap-mobile" style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-            <div className="r-full-mobile" style={{ position: 'relative', width: '220px' }}>
+            <div className="r-full-mobile" style={{ position: 'relative', width: '260px' }}>
               <Search size={16} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }} />
               <input
                 type="text"
@@ -489,8 +502,20 @@ const StockManagement: React.FC = () => {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="bo-input"
-                style={{ paddingLeft: '32px', backgroundColor: '#f9fafb', border: '1px solid #e5e7eb', height: '36px' }}
+                style={{ paddingLeft: '32px', paddingRight: searchQuery ? '30px' : '10px', backgroundColor: '#f9fafb', border: '1px solid #e5e7eb', height: '36px' }}
               />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  style={{
+                    position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)',
+                    background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer', padding: 0
+                  }}
+                >
+                  <X size={14} />
+                </button>
+              )}
             </div>
             <button
               className="bo-btn bo-btn-primary"
@@ -509,100 +534,462 @@ const StockManagement: React.FC = () => {
             onClick={() => setActiveCategory('all')}
           >
             <LayoutGrid size={16} /> SEMUA (ALL)
-            <span style={{ opacity: 0.75, fontSize: '0.75rem' }}>{products.length}</span>
+            <span style={{ opacity: 0.75, fontSize: '0.75rem' }}>{allDisplayProducts.length}</span>
           </button>
-          {categories.map(cat => (
+          {displayCategories.map(cat => (
             <button
               key={cat}
               className={`cat-btn ${currentCategory === cat ? 'active' : ''}`}
               onClick={() => setActiveCategory(cat)}
             >
               <Package size={16} /> {cat.toUpperCase()}
-              <span style={{ opacity: 0.75, fontSize: '0.75rem' }}>{products.filter(p => p.category === cat).length}</span>
+              <span style={{ opacity: 0.75, fontSize: '0.75rem' }}>{allDisplayProducts.filter(p => p.category === cat).length}</span>
             </button>
           ))}
         </div>
-        <div className="bo-table-container" style={{ width: '100%', flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-          <table className="bo-table r-sheet" style={{ width: '100%', minWidth: '980px' }}>
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>SKU</th>
-                <th className="r-sheet-name">Nama Produk</th>
-                <th>Kategori</th>
-                <th style={{ textAlign: 'center' }}>Qty</th>
-                <th style={{ textAlign: 'right' }}>Harga Beli</th>
-                <th style={{ textAlign: 'right' }}>Harga Jual</th>
-                <th style={{ textAlign: 'right' }}>Harga Grosir</th>
-                <th style={{ textAlign: 'center' }}>Profit Margin</th>
-                <th style={{ textAlign: 'center' }}>Aksi</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredProducts.map(p => (
-                <tr key={p.id}>
-                  <td className="bo-table-sku" style={{ color: '#6b7280', fontSize: '11px', wordBreak: 'break-all' }}>{p.barcode && p.barcode !== p.id ? p.barcode : p.id}</td>
-                  <td className="bo-table-sku">{p.sku}</td>
-                  <td className="bo-table-bold r-card-title r-sheet-name">
-                    {p.name}
-                    {p.isPending && <span style={{ marginLeft: '8px', fontSize: '10px', backgroundColor: '#fbbf24', color: '#fff', padding: '2px 6px', borderRadius: '4px' }}>DRAF</span>}
-                  </td>
-                  <td>
-                    <span className="bo-badge bo-badge-gray">
-                      {p.category}
-                    </span>
-                  </td>
-                  <td style={{ textAlign: 'center', fontWeight: '800' }}>
-                    {p.stock} <span style={{ fontSize: '12px', fontWeight: 'normal', color: '#666' }}>{p.unit || 'Pcs'}</span>
-                  </td>
-                  <td style={{ textAlign: 'right', fontWeight: '600', color: 'var(--text-muted)' }}>{formatIDR(p.purchasePrice)}</td>
-                  <td style={{ textAlign: 'right', fontWeight: '800', color: 'var(--green)' }}>{formatIDR(p.sellingPrice)}</td>
-                  <td style={{ textAlign: 'right', fontWeight: '800', color: 'var(--primary)' }}>{p.wholesalePrice ? formatIDR(p.wholesalePrice) : '-'}</td>
-                  <td style={{ textAlign: 'center', minWidth: '120px' }}>
-                    {(() => {
-                      const profit = p.sellingPrice - p.purchasePrice;
-                      const marginPercent = p.sellingPrice > 0 ? (profit / p.sellingPrice) * 100 : 0;
-                      let marginColor = '#10b981';
-                      if (marginPercent < 0) marginColor = '#ef4444';
-                      else if (marginPercent < 15) marginColor = '#f59e0b';
-                      const barFill = Math.min(Math.max((marginPercent / 50) * 100, 0), 100) + '%';
-                      
-                      return (
-                        <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                          <div style={{ display: 'flex', justifyContent: 'center', fontSize: '11px', fontWeight: 'bold', color: marginColor }}>
-                            {marginPercent > 0 ? '+' : ''}{marginPercent.toFixed(1)}%
+
+        {/* =====================================================================
+            MAIN CONTENT: DESKTOP TABLE VIEW vs MOBILE NATIVE CARDS
+            ===================================================================== */}
+        {!isMobileScreen ? (
+          /* ===================================================================
+             DESKTOP VIEW: CLEAN ERP DATA TABLE
+             =================================================================== */
+          <div
+            className="desktop-table-view"
+            style={{
+              width: '100%',
+              flex: 1,
+              minHeight: 0,
+              overflowY: 'auto',
+              overflowX: 'auto',
+              WebkitOverflowScrolling: 'touch',
+              background: '#ffffff',
+              display: 'block'
+            }}
+          >
+            <table
+              style={{
+                width: '100%',
+                minWidth: '1080px',
+                borderCollapse: 'collapse',
+                textAlign: 'left',
+                display: 'table',
+                tableLayout: 'auto'
+              }}
+            >
+              <thead>
+                <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', position: 'sticky', top: 0, zIndex: 10 }}>
+                  <th style={{ padding: '12px 14px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', width: '130px', verticalAlign: 'middle' }}>ID / BARCODE</th>
+                  <th style={{ padding: '12px 14px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', width: '120px', verticalAlign: 'middle' }}>SKU</th>
+                  <th style={{ padding: '12px 14px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', verticalAlign: 'middle' }}>NAMA PRODUK</th>
+                  <th style={{ padding: '12px 14px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', width: '130px', verticalAlign: 'middle' }}>KATEGORI</th>
+                  <th style={{ padding: '12px 14px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', width: '90px', verticalAlign: 'middle' }}>QTY</th>
+                  <th style={{ padding: '12px 14px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right', width: '130px', verticalAlign: 'middle' }}>HARGA BELI</th>
+                  <th style={{ padding: '12px 14px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right', width: '130px', verticalAlign: 'middle' }}>HARGA JUAL</th>
+                  <th style={{ padding: '12px 14px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right', width: '130px', verticalAlign: 'middle' }}>HARGA GROSIR</th>
+                  <th style={{ padding: '12px 14px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', width: '125px', verticalAlign: 'middle' }}>PROFIT MARGIN</th>
+                  <th style={{ padding: '12px 14px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', width: '155px', verticalAlign: 'middle' }}>AKSI</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredProducts.length === 0 ? (
+                  <tr>
+                    <td colSpan={10} style={{ textAlign: 'center', padding: '64px 20px', color: '#64748b', verticalAlign: 'middle' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+                        <PackageCheck size={44} style={{ opacity: 0.25, color: 'var(--primary)' }} />
+                        <div style={{ fontSize: '15px', fontWeight: 700, color: '#1e293b' }}>Belum ada rincian barang diterima</div>
+                        <div style={{ fontSize: '13px', color: '#9ca3af' }}>Tekan tombol Tambah Produk Baru di atas untuk memasukkan barang atau simpan draf</div>
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  filteredProducts.map((p, idx) => {
+                    const cost = Number(p.purchasePrice) || 0;
+                    const sell = Number(p.sellingPrice) || 0;
+                    const profit = sell - cost;
+                    const marginPercent = sell > 0 ? (profit / sell) * 100 : 0;
+                    let marginColor = '#10b981';
+                    let marginBg = '#dcfce7';
+                    if (marginPercent < 0) {
+                      marginColor = '#ef4444';
+                      marginBg = '#fee2e2';
+                    } else if (marginPercent < 15) {
+                      marginColor = '#d97706';
+                      marginBg = '#fef3c7';
+                    }
+                    const barFill = Math.min(Math.max((marginPercent / 50) * 100, 0), 100) + '%';
+                    const barcodeVal = p.barcode && p.barcode !== p.id ? p.barcode : p.id;
+
+                    return (
+                      <tr
+                        key={p.id}
+                        style={{
+                          borderBottom: '1px solid #f1f5f9',
+                          background: idx % 2 === 1 ? '#fafbfc' : '#ffffff',
+                          transition: 'background-color 0.15s ease'
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
+                        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = idx % 2 === 1 ? '#fafbfc' : '#ffffff')}
+                      >
+                        {/* ID / Barcode */}
+                        <td style={{ padding: '10px 14px', verticalAlign: 'middle' }}>
+                          <span
+                            title={barcodeVal}
+                            style={{
+                              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                              fontSize: '11px',
+                              color: '#64748b',
+                              background: '#f1f5f9',
+                              padding: '2px 7px',
+                              borderRadius: '4px',
+                              display: 'inline-block',
+                              maxWidth: '120px',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap'
+                            }}
+                          >
+                            {barcodeVal}
+                          </span>
+                        </td>
+
+                        {/* SKU */}
+                        <td style={{ padding: '10px 14px', verticalAlign: 'middle' }}>
+                          <span
+                            style={{
+                              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                              fontSize: '12px',
+                              fontWeight: 700,
+                              color: 'var(--primary, #da291c)'
+                            }}
+                          >
+                            {p.sku || '-'}
+                          </span>
+                        </td>
+
+                        {/* Nama Produk */}
+                        <td style={{ padding: '10px 14px', verticalAlign: 'middle' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>
+                              {p.name}
+                            </span>
+                            {p.isPending && (
+                              <span
+                                style={{
+                                  fontSize: '10px',
+                                  fontWeight: 800,
+                                  backgroundColor: '#fef3c7',
+                                  color: '#b45309',
+                                  border: '1px solid #fde68a',
+                                  padding: '1px 6px',
+                                  borderRadius: '999px',
+                                  letterSpacing: '0.3px'
+                                }}
+                              >
+                                DRAF
+                              </span>
+                            )}
                           </div>
-                          <div style={{ width: '100%', height: '6px', backgroundColor: '#e5e7eb', borderRadius: '3px', overflow: 'hidden' }}>
-                            <div style={{ width: barFill, height: '100%', backgroundColor: marginColor }}></div>
+                        </td>
+
+                        {/* Kategori */}
+                        <td style={{ padding: '10px 14px', verticalAlign: 'middle' }}>
+                          <span
+                            style={{
+                              display: 'inline-block',
+                              padding: '3px 9px',
+                              borderRadius: '6px',
+                              fontSize: '11.5px',
+                              fontWeight: 600,
+                              background: '#f1f5f9',
+                              color: '#475569',
+                              maxWidth: '120px',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap'
+                            }}
+                          >
+                            {p.category}
+                          </span>
+                        </td>
+
+                        {/* Qty */}
+                        <td style={{ padding: '10px 14px', verticalAlign: 'middle', textAlign: 'center' }}>
+                          <span style={{ fontSize: '13.5px', fontWeight: 800, color: Number(p.stock) > 0 ? '#0f172a' : '#ef4444' }}>
+                            {p.stock}
+                          </span>{' '}
+                          <span style={{ fontSize: '11.5px', color: '#64748b' }}>
+                            {p.unit || 'Pcs'}
+                          </span>
+                        </td>
+
+                        {/* Harga Beli */}
+                        <td style={{ padding: '10px 14px', verticalAlign: 'middle', textAlign: 'right' }}>
+                          <span style={{ fontSize: '12.5px', fontWeight: 600, color: '#64748b' }}>
+                            {formatIDR(p.purchasePrice)}
+                          </span>
+                        </td>
+
+                        {/* Harga Jual */}
+                        <td style={{ padding: '10px 14px', verticalAlign: 'middle', textAlign: 'right' }}>
+                          <span style={{ fontSize: '13px', fontWeight: 800, color: '#16a34a' }}>
+                            {formatIDR(p.sellingPrice)}
+                          </span>
+                        </td>
+
+                        {/* Harga Grosir */}
+                        <td style={{ padding: '10px 14px', verticalAlign: 'middle', textAlign: 'right' }}>
+                          <span style={{ fontSize: '12.5px', fontWeight: 700, color: p.wholesalePrice ? 'var(--primary, #da291c)' : '#94a3b8' }}>
+                            {p.wholesalePrice ? formatIDR(p.wholesalePrice) : '-'}
+                          </span>
+                        </td>
+
+                        {/* Profit Margin */}
+                        <td style={{ padding: '10px 14px', verticalAlign: 'middle' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px' }}>
+                            <span
+                              style={{
+                                fontSize: '11px',
+                                fontWeight: 800,
+                                color: marginColor,
+                                background: marginBg,
+                                padding: '1px 7px',
+                                borderRadius: '999px',
+                                lineHeight: '1.4'
+                              }}
+                            >
+                              {marginPercent > 0 ? '+' : ''}{marginPercent.toFixed(1)}%
+                            </span>
+                            <div style={{ width: '64px', height: '4px', backgroundColor: '#e2e8f0', borderRadius: '2px', overflow: 'hidden' }}>
+                              <div style={{ width: barFill, height: '100%', backgroundColor: marginColor, borderRadius: '2px' }} />
+                            </div>
                           </div>
-                        </div>
-                      );
-                    })()}
-                  </td>
-                  <td style={{ textAlign: 'center', display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                        </td>
+
+                        {/* Aksi */}
+                        <td style={{ padding: '10px 14px', verticalAlign: 'middle', textAlign: 'center' }}>
+                          <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                            {p.isPending ? (
+                              <>
+                                <button
+                                  type="button"
+                                  title="Cetak Label Barcode"
+                                  onClick={() => { setLabelCopies(Math.max(1, Math.ceil(Number(p.stock)))); setLabelProduct(p); }}
+                                  style={{
+                                    width: '30px', height: '30px', borderRadius: '7px', border: '1px solid #bfdbfe',
+                                    background: '#eff6ff', color: '#2563eb', display: 'inline-flex', alignItems: 'center',
+                                    justifyContent: 'center', cursor: 'pointer', transition: 'all 0.15s'
+                                  }}
+                                  onMouseEnter={(e) => { e.currentTarget.style.background = '#2563eb'; e.currentTarget.style.color = '#fff'; }}
+                                  onMouseLeave={(e) => { e.currentTarget.style.background = '#eff6ff'; e.currentTarget.style.color = '#2563eb'; }}
+                                >
+                                  <Printer size={14} />
+                                </button>
+                                <button
+                                  type="button"
+                                  title="Batal Tambah (Hapus Draf)"
+                                  onClick={() => {
+                                    const nextItems = draftItems.filter(si => si.id !== p.id);
+                                    const newDraft = [{ grNumber: 'GLOBAL-DRAFT', savedAt: new Date().toISOString(), draftId: 'DRAFT-GLOBAL', items: nextItems }];
+                                    saveDrafts(newDraft);
+                                  }}
+                                  style={{
+                                    width: '30px', height: '30px', borderRadius: '7px', border: '1px solid #fecaca',
+                                    background: '#fef2f2', color: '#ef4444', display: 'inline-flex', alignItems: 'center',
+                                    justifyContent: 'center', cursor: 'pointer', transition: 'all 0.15s'
+                                  }}
+                                  onMouseEnter={(e) => { e.currentTarget.style.background = '#ef4444'; e.currentTarget.style.color = '#fff'; }}
+                                  onMouseLeave={(e) => { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.color = '#ef4444'; }}
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <button
+                                  type="button"
+                                  title="Restock / Barang Masuk"
+                                  onClick={() => openRestockModal(p)}
+                                  style={{
+                                    width: '30px', height: '30px', borderRadius: '7px', border: '1px solid #bbf7d0',
+                                    background: '#f0fdf4', color: '#10b981', display: 'inline-flex', alignItems: 'center',
+                                    justifyContent: 'center', cursor: 'pointer', transition: 'all 0.15s'
+                                  }}
+                                  onMouseEnter={(e) => { e.currentTarget.style.background = '#10b981'; e.currentTarget.style.color = '#fff'; }}
+                                  onMouseLeave={(e) => { e.currentTarget.style.background = '#f0fdf4'; e.currentTarget.style.color = '#10b981'; }}
+                                >
+                                  <ArrowDownToLine size={14} />
+                                </button>
+                                <button
+                                  type="button"
+                                  title="Cetak Label Barcode"
+                                  onClick={() => { setLabelCopies(1); setLabelProduct(p); }}
+                                  style={{
+                                    width: '30px', height: '30px', borderRadius: '7px', border: '1px solid #bfdbfe',
+                                    background: '#eff6ff', color: '#2563eb', display: 'inline-flex', alignItems: 'center',
+                                    justifyContent: 'center', cursor: 'pointer', transition: 'all 0.15s'
+                                  }}
+                                  onMouseEnter={(e) => { e.currentTarget.style.background = '#2563eb'; e.currentTarget.style.color = '#fff'; }}
+                                  onMouseLeave={(e) => { e.currentTarget.style.background = '#eff6ff'; e.currentTarget.style.color = '#2563eb'; }}
+                                >
+                                  <Printer size={14} />
+                                </button>
+                                <button
+                                  type="button"
+                                  title="Edit Master Data"
+                                  onClick={() => handleEditClick(p)}
+                                  style={{
+                                    width: '30px', height: '30px', borderRadius: '7px', border: '1px solid #e2e8f0',
+                                    background: '#f8fafc', color: '#475569', display: 'inline-flex', alignItems: 'center',
+                                    justifyContent: 'center', cursor: 'pointer', transition: 'all 0.15s'
+                                  }}
+                                  onMouseEnter={(e) => { e.currentTarget.style.background = '#0f172a'; e.currentTarget.style.color = '#fff'; }}
+                                  onMouseLeave={(e) => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.color = '#475569'; }}
+                                >
+                                  <Edit2 size={14} />
+                                </button>
+                                <button
+                                  type="button"
+                                  title="Hapus Produk"
+                                  onClick={() => deleteProduct(p.id)}
+                                  style={{
+                                    width: '30px', height: '30px', borderRadius: '7px', border: '1px solid #fecaca',
+                                    background: '#fef2f2', color: '#ef4444', display: 'inline-flex', alignItems: 'center',
+                                    justifyContent: 'center', cursor: 'pointer', transition: 'all 0.15s'
+                                  }}
+                                  onMouseEnter={(e) => { e.currentTarget.style.background = '#ef4444'; e.currentTarget.style.color = '#fff'; }}
+                                  onMouseLeave={(e) => { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.color = '#ef4444'; }}
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          /* ===================================================================
+             MOBILE CARD LIST (KHUSUS IOS & ANDROID)
+             =================================================================== */
+          <div className="mobile-cards-view stock-mobile-list" style={{ overflowY: 'auto', WebkitOverflowScrolling: 'touch', padding: '12px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          {filteredProducts.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '48px 16px', background: 'white', borderRadius: '16px', border: '0.5px solid rgba(60,60,67,0.12)' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+                <PackageCheck size={42} style={{ opacity: 0.35, color: 'var(--primary)' }} />
+                <div style={{ fontSize: '15px', fontWeight: 700, color: '#1f2937' }}>Belum ada rincian barang diterima</div>
+                <div style={{ fontSize: '13px', color: '#9ca3af' }}>Tekan tombol Tambah di atas untuk memasukkan barang atau simpan draf</div>
+              </div>
+            </div>
+          ) : (
+            filteredProducts.map(p => {
+              const cost = Number(p.purchasePrice) || 0;
+              const sell = Number(p.sellingPrice) || 0;
+              const profit = sell - cost;
+              const marginPercent = sell > 0 ? ((profit / sell) * 100).toFixed(1) : '0';
+
+              return (
+                <div key={p.id} className="mobile-stock-card">
+                  {/* Card Header: Avatar + Product Name + Badges */}
+                  <div className="mobile-card-head">
+                    <div className="mobile-card-avatar stock-avatar">
+                      <Package size={18} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div className="mobile-card-title">{p.name}</div>
+                      <div className="mobile-card-id">
+                        SKU: {p.sku || '-'} • ID: {p.barcode || p.id}
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                      <span className="mobile-badge mobile-badge-cat">{p.category}</span>
+                      {p.isPending && (
+                        <span className="mobile-badge mobile-badge-draft">DRAF</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Stock & Pricing 3-Column Grid */}
+                  <div className="mobile-stock-grid">
+                    <div className="mobile-stock-stat">
+                      <span className="mobile-stock-stat-label">STOK FISIK</span>
+                      <span className="mobile-stock-stat-val">{p.stock} <span style={{ fontSize: '11px', color: '#64748b' }}>{p.unit || 'Pcs'}</span></span>
+                    </div>
+                    <div className="mobile-stock-stat">
+                      <span className="mobile-stock-stat-label">HARGA BELI</span>
+                      <span className="mobile-stock-stat-val" style={{ color: '#64748b' }}>{formatIDR(p.purchasePrice)}</span>
+                    </div>
+                    <div className="mobile-stock-stat">
+                      <span className="mobile-stock-stat-label">HARGA JUAL</span>
+                      <span className="mobile-stock-stat-val text-green">{formatIDR(p.sellingPrice)}</span>
+                    </div>
+                    <div className="mobile-stock-extra">
+                      <span style={{ color: '#475569' }}>
+                        Grosir: <strong>{p.wholesalePrice ? formatIDR(p.wholesalePrice) : '-'}</strong>
+                      </span>
+                      <span style={{ 
+                        fontWeight: 700, 
+                        color: profit > 0 ? '#15803d' : '#b91c1c',
+                        background: profit > 0 ? '#dcfce7' : '#fee2e2',
+                        padding: '1px 6px',
+                        borderRadius: '4px',
+                        fontSize: '11px'
+                      }}>
+                        Margin: {profit > 0 ? '+' : ''}{marginPercent}% (+{formatIDR(profit)})
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Card Actions */}
+                  <div className="mobile-card-actions">
                     {p.isPending ? (
                       <>
-                        <button className="bo-action-btn" title="Cetak Label Barcode" onClick={() => { setLabelCopies(Math.max(1, Math.ceil(Number(p.stock)))); setLabelProduct(p); }} style={{ color: '#2563eb' }}><Printer size={16} /></button>
-                        <button className="bo-action-btn" title="Batal Tambah (Hapus Draf)" onClick={() => {
-                          const nextItems = draftItems.filter(si => si.id !== p.id);
-                          const newDraft = [{ grNumber: 'GLOBAL-DRAFT', savedAt: new Date().toISOString(), draftId: 'DRAFT-GLOBAL', items: nextItems }];
-                          saveDrafts(newDraft);
-                        }} style={{ color: '#ef4444' }}><Trash2 size={16} /></button>
+                        <button className="mobile-action-primary" onClick={() => { setLabelCopies(Math.max(1, Math.ceil(Number(p.stock)))); setLabelProduct(p); }}>
+                          <Printer size={15} />
+                          <span>Cetak Label Barcode</span>
+                        </button>
+                        <button 
+                          className="mobile-action-icon text-red"
+                          onClick={() => {
+                            const nextItems = draftItems.filter(si => si.id !== p.id);
+                            const newDraft = [{ grNumber: 'GLOBAL-DRAFT', savedAt: new Date().toISOString(), draftId: 'DRAFT-GLOBAL', items: nextItems }];
+                            saveDrafts(newDraft);
+                          }}
+                          title="Hapus Draf"
+                        >
+                          <Trash2 size={16} />
+                        </button>
                       </>
                     ) : (
                       <>
-                        <button className="bo-action-btn" title="Restock / Barang Masuk" onClick={() => openRestockModal(p)} style={{ color: '#10b981' }}><ArrowDownToLine size={16} /></button>
-                        <button className="bo-action-btn" title="Cetak Label Barcode" onClick={() => { setLabelCopies(1); setLabelProduct(p); }} style={{ color: '#2563eb' }}><Printer size={16} /></button>
-                        <button className="bo-action-btn" title="Edit Master Data" onClick={() => handleEditClick(p)}><Edit2 size={16} /></button>
-                        <button className="bo-action-btn" title="Hapus Produk" onClick={() => deleteProduct(p.id)}><Trash2 size={16} /></button>
+                        <button className="mobile-action-primary" style={{ background: 'rgba(16, 185, 129, 0.1)', color: '#059669' }} onClick={() => openRestockModal(p)}>
+                          <ArrowDownToLine size={15} />
+                          <span>Restock</span>
+                        </button>
+                        <button className="mobile-action-icon" onClick={() => { setLabelCopies(1); setLabelProduct(p); }} title="Cetak Barcode">
+                          <Printer size={16} color="#2563eb" />
+                        </button>
+                        <button className="mobile-action-icon" onClick={() => handleEditClick(p)} title="Edit">
+                          <Edit2 size={16} />
+                        </button>
+                        <button className="mobile-action-icon text-red" onClick={() => deleteProduct(p.id)} title="Hapus">
+                          <Trash2 size={16} />
+                        </button>
                       </>
                     )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </div>
+                </div>
+              );
+            })
+          )}
         </div>
+      )}
       </div>
 
 

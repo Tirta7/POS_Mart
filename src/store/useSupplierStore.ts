@@ -13,14 +13,24 @@ interface SupplierState {
 
 export const useSupplierStore = create<SupplierState>()(
   (set) => ({
-      suppliers: [],
+      suppliers: [
+        {
+          id: 'SUPP-BILLIARD-01',
+          name: 'CV Billiard Supplies Indonesia',
+          contact: 'Bpk Hendra',
+          phone: '081377889900',
+          paymentTermDays: 14,
+          totalPayable: 5000000
+        }
+      ],
       fetchSuppliers: async () => {
         try {
           const res = await fetch('/api/saas/suppliers', { headers: { 'x-tenant-id': 'TID-DEMO-123' } });
           if (res.ok) {
             const data = await res.json();
-            // Map `payable` from DB to `totalPayable` for frontend
-            set({ suppliers: data.map((s: any) => ({ ...s, totalPayable: s.payable })) });
+            if (Array.isArray(data) && data.length > 0) {
+              set({ suppliers: data.map((s: any) => ({ ...s, totalPayable: s.payable ?? s.totalPayable ?? 0 })) });
+            }
           }
         } catch (err) {
           console.error('Failed to fetch suppliers:', err);
