@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { SalesTransaction } from '../types';
 
 import { useAuthStore } from './useAuthStore';
+import { useInventoryStore } from './useInventoryStore';
 
 interface SalesState {
   sales: SalesTransaction[];
@@ -77,7 +78,7 @@ export const useSalesStore = create<SalesState>()(
             }))
           };
 
-          await fetch('/api/saas/transactions', {
+          const res = await fetch('/api/saas/transactions', {
             method: 'POST',
             headers: { 
               'Content-Type': 'application/json',
@@ -85,6 +86,10 @@ export const useSalesStore = create<SalesState>()(
             },
             body: JSON.stringify(apiPayload)
           });
+          if (res.ok) {
+            useInventoryStore.getState().fetchTransactions();
+            useInventoryStore.getState().fetchProducts();
+          }
         } catch (error) {
           console.error("Gagal sinkronisasi transaksi ke server:", error);
           // TODO: Simpan di queue offline untuk dikirim ulang nanti

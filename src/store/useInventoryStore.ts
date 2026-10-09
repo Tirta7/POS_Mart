@@ -175,8 +175,9 @@ export const useInventoryStore = create<InventoryState>()(
             await res.json();
             // Optional: you can add it to local state if needed
             set((state) => ({ transactions: [...state.transactions, transaction] }));
-            // IMPORTANT: Refetch products so the new stock shows up everywhere!
+            // IMPORTANT: Refetch products & transactions so the new stock shows up everywhere!
             get().fetchProducts(); 
+            get().fetchTransactions(); 
           }
         } catch(err) {
           console.error(err);

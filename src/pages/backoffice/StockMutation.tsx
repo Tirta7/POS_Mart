@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useInventoryStore } from '../../store/useInventoryStore';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useSalesStore } from '../../store/useSalesStore';
@@ -6,6 +6,7 @@ import { useCustomerStore } from '../../store/useCustomerStore';
 import { useSupplierStore } from '../../store/useSupplierStore';
 import type { StockTransaction } from '../../types';
 import { Package, ArrowUpRight, ArrowDownRight, RefreshCcw, Search, FileText, X, User, Truck } from 'lucide-react';
+import { getSocket } from '../../utils/socket';
 
 type MutType = 'IN' | 'OUT' | 'ADJUSTMENT';
 
@@ -20,15 +21,81 @@ const idr = (n: number) => 'Rp ' + Number(n || 0).toLocaleString('id-ID');
 const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
 
 const StockMutation: React.FC = () => {
-  const { transactions, products } = useInventoryStore();
+  const { transactions, products, fetchProducts, fetchTransactions } = useInventoryStore();
   const { employees } = useAuthStore();
-  const { sales } = useSalesStore();
-  const { customers } = useCustomerStore();
-  const { suppliers } = useSupplierStore();
+  const { sales, fetchSales } = useSalesStore();
+  const { customers, fetchCustomers } = useCustomerStore();
+  const { suppliers, fetchSuppliers } = useSupplierStore();
 
   const [filterType, setFilterType] = useState<'ALL' | MutType>('ALL');
   const [period, setPeriod] = useState<'ALL' | 'TODAY' | '7D' | '30D'>('ALL');
   const [query, setQuery] = useState('');
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [socketConnected, setSocketConnected] = useState(false);
+  const [newlyAddedDoc, setNewlyAddedDoc] = useState<string | null>(null);
+
+  const refreshData = async () => {
+    setIsRefreshing(true);
+    try {
+      await Promise.all([
+        fetchTransactions(),
+        fetchProducts(),
+        fetchSales(),
+        fetchCustomers(),
+        fetchSuppliers(),
+      ]);
+    } catch (err) {
+      console.error('Failed to refresh stock mutation data:', err);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  // Muat data saat pertama kali halaman dibuka & pasang listener real-time Socket.IO
+  useEffect(() => {
+    refreshData();
+
+    const socket = getSocket();
+    setSocketConnected(socket.connected);
+
+    const onConnect = () => setSocketConnected(true);
+    const onDisconnect = () => setSocketConnected(false);
+
+    const handleDataUpdated = (entity?: string) => {
+      console.log('[StockMutation] Realtime update event:', entity);
+      if (!entity || entity === 'transactions' || entity === 'stock-transactions' || entity === 'sales' || entity === 'products') {
+        fetchTransactions();
+        fetchProducts();
+        fetchSales();
+      }
+    };
+
+    const handleMutationEvent = (data?: any) => {
+      console.log('[StockMutation] Realtime mutation event:', data);
+      fetchTransactions();
+      fetchProducts();
+      fetchSales();
+      const doc = data?.documentNo || data?.receiptNumber;
+      if (doc) {
+        setNewlyAddedDoc(doc);
+        setTimeout(() => setNewlyAddedDoc(null), 5000);
+      }
+    };
+
+    socket.on('connect', onConnect);
+    socket.on('disconnect', onDisconnect);
+    socket.on('data_updated', handleDataUpdated);
+    socket.on('sale_completed', handleMutationEvent);
+    socket.on('stock_mutation_updated', handleMutationEvent);
+
+    return () => {
+      socket.off('connect', onConnect);
+      socket.off('disconnect', onDisconnect);
+      socket.off('data_updated', handleDataUpdated);
+      socket.off('sale_completed', handleMutationEvent);
+      socket.off('stock_mutation_updated', handleMutationEvent);
+    };
+  }, []);
 
   const getProduct = (id: string) => products.find(p => p.id === id);
   const getProductName = (id: string, fallback?: string) => getProduct(id)?.name || fallback || id;
@@ -134,10 +201,60 @@ const StockMutation: React.FC = () => {
 
   return (
     <div className="bo-container">
-      <div className="bo-page-header" style={{ flexShrink: 0 }}>
+      <div className="bo-page-header" style={{ flexShrink: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
         <div>
           <h1 className="bo-page-title">Mutasi Stok</h1>
           <p className="bo-page-subtitle">Pantau pergerakan stok (Barang Masuk, Keluar, dan Penyesuaian).</p>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          {/* Status Socket.IO Real-Time */}
+          <div style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '6px 14px',
+            borderRadius: '999px',
+            fontSize: '12px',
+            fontWeight: 700,
+            background: socketConnected ? '#ecfdf5' : '#fffbeb',
+            color: socketConnected ? '#059669' : '#b45309',
+            border: `1px solid ${socketConnected ? '#a7f3d0' : '#fde68a'}`,
+            transition: 'all 0.2s ease'
+          }}>
+            <span style={{
+              width: '8px',
+              height: '8px',
+              borderRadius: '50%',
+              background: socketConnected ? '#10b981' : '#f59e0b',
+              boxShadow: socketConnected ? '0 0 0 2px rgba(16, 185, 129, 0.3)' : 'none',
+              display: 'inline-block'
+            }} />
+            <span>{socketConnected ? 'Real-Time Aktif (Socket.IO)' : 'Menghubungkan Socket...'}</span>
+          </div>
+
+          {/* Tombol Segarkan Manual */}
+          <button
+            onClick={refreshData}
+            disabled={isRefreshing}
+            className="bo-btn"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 14px',
+              fontSize: '12px',
+              fontWeight: 700,
+              backgroundColor: '#f3f4f6',
+              color: '#374151',
+              border: '1px solid #d1d5db',
+              borderRadius: '8px',
+              cursor: isRefreshing ? 'wait' : 'pointer'
+            }}
+            title="Segarkan data mutasi stok dari server"
+          >
+            <RefreshCcw size={14} style={{ animation: isRefreshing ? 'spin 1s linear infinite' : 'none' }} />
+            {isRefreshing ? 'Memuat...' : 'Segarkan'}
+          </button>
         </div>
       </div>
 
@@ -288,9 +405,10 @@ const StockMutation: React.FC = () => {
                   const meta = TYPE_META[t.type as MutType];
                   const span = t.items.length;
                   const d = new Date(t.date);
-                  const zebra = ti % 2 === 1 ? '#fcfcfd' : 'transparent';
-                  const cellTop: React.CSSProperties = { verticalAlign: 'top', borderTop: '1px solid #e5e7eb', background: zebra };
-                  const itemBorder = (first: boolean) => (first ? '1px solid #e5e7eb' : '1px dashed #eee');
+                  const isNew = newlyAddedDoc && t.documentNo === newlyAddedDoc;
+                  const zebra = isNew ? '#ecfdf5' : ti % 2 === 1 ? '#fcfcfd' : 'transparent';
+                  const cellTop: React.CSSProperties = { verticalAlign: 'top', borderTop: isNew ? '2px solid #10b981' : '1px solid #e5e7eb', background: zebra, transition: 'background-color 0.5s ease' };
+                  const itemBorder = (first: boolean) => (first ? (isNew ? '2px solid #10b981' : '1px solid #e5e7eb') : '1px dashed #eee');
                   const employeeName = getEmployeeName(t.employeeId);
                   const party = getParty(t);
                   const partyStyle = party

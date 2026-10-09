@@ -504,8 +504,9 @@ app.post('/api/saas/transactions', async (req, res) => {
     notifyTenant(req.tenantId, 'transactions');
     notifyTenant(req.tenantId, 'sales');
     notifyTenant(req.tenantId, 'products'); // Because stock changed
+    notifyTenant(req.tenantId, 'stock-transactions'); // Mutasi stok otomatis ter-update
     
-    // Explicit notification for incoming sale
+    // Explicit notification for incoming sale & stock mutation
     const io = getIo();
     if (io) {
       io.to(req.tenantId).emit('sale_completed', {
@@ -513,6 +514,12 @@ app.post('/api/saas/transactions', async (req, res) => {
         cashier: cashier_name || 'Unknown',
         receiptNumber: receipt_number,
         paymentMethod: payment_method
+      });
+      io.to(req.tenantId).emit('stock_mutation_updated', {
+        type: 'OUT',
+        documentNo: receipt_number,
+        totalValue: Number(total_amount),
+        note: 'Penjualan Kasir'
       });
     }
 
@@ -603,7 +610,17 @@ app.post('/api/saas/stock-transactions', async (req, res) => {
     }
 
     notifyTenant(req.tenantId, 'stock-transactions');
+    notifyTenant(req.tenantId, 'transactions');
     notifyTenant(req.tenantId, 'products'); // Because stock changed
+    const io = getIo();
+    if (io) {
+      io.to(req.tenantId).emit('stock_mutation_updated', {
+        type,
+        documentNo,
+        totalValue: Number(totalValue),
+        note
+      });
+    }
     res.json(transaction);
   } catch (err) {
     res.status(500).json({ error: err.message });

@@ -13,6 +13,11 @@ function getMachineId() {
   }
   
   try {
+    if (process.platform === 'darwin') {
+      const result = execSync('ioreg -rd1 -c IOPlatformExpertDevice | awk \'/IOPlatformUUID/ { split($0, line, "\\\""); printf("%s\\n", line[4]); }\'');
+      const id = result.toString().trim();
+      if (id) return id;
+    }
     const scriptPath = path.resolve(__dirname, 'get-machine-id.ps1'); 
     const result = execSync(`powershell.exe -ExecutionPolicy Bypass -NoProfile -File "${scriptPath}"`);
     return result.toString().trim();
@@ -33,6 +38,12 @@ let checkTimer = null;
 async function verifikasiAplikasi() {
   const machineId = getMachineId();
   console.log('[License] Mengecek lisensi untuk Machine ID:', machineId);
+
+  if (process.env.SKIP_LICENSE === 'true') {
+    licenseState = { allowed: true, status: 'active', reason: 'Lisensi lokal diaktifkan (SKIP_LICENSE=true)', machineId };
+    console.log('[License] SKIP_LICENSE aktif. Akses diizinkan untuk Machine ID:', machineId);
+    return;
+  }
 
   const lisensi = await checkLicense({
     serverUrl: 'https://vocml.vocpos.id',

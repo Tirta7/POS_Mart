@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { AlertTriangle, CheckCircle2, X } from 'lucide-react';
+import { getSocket } from '../utils/socket';
 
 interface NotificationData {
   id: string;
@@ -12,8 +13,7 @@ const GlobalNotification: React.FC = () => {
   const [notifications, setNotifications] = useState<NotificationData[]>([]);
 
   useEffect(() => {
-    const socket = (window as any).socketInstance;
-    if (!socket) return;
+    const socket = getSocket();
 
     const handleSale = (data: any) => {
       const id = Date.now().toString() + Math.random().toString();

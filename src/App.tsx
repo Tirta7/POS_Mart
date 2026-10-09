@@ -19,7 +19,7 @@ import { useSalesStore } from './store/useSalesStore';
 import { useHoldStore } from './store/useHoldStore';
 import { useSupplierStore } from './store/useSupplierStore';
 import { useDraftStore } from './store/useDraftStore';
-import { io } from 'socket.io-client';
+import { getSocket } from './utils/socket';
 import GlobalNotification from './components/GlobalNotification';
 
 // Route guard — jika belum login, redirect ke /login
@@ -98,35 +98,67 @@ function App() {
   useEffect(() => {
     if (!currentUser) return;
     
-    // Default tenant for demo (TID-DEMO-123)
-    const socket = io('/');
-    (window as any).socketInstance = socket;
-    socket.emit('join_tenant', 'TID-DEMO-123');
+    const socket = getSocket();
     
-    socket.on('data_updated', (entity) => {
+    const handleDataUpdated = (entity: string) => {
       // Refresh secara efisien hanya data yang berubah untuk menghemat limit database!
-      if (!entity || entity === 'products') fetchProducts();
-      if (!entity || entity === 'categories') fetchCategories();
-      if (!entity || entity === 'transactions') fetchTransactions();
-      if (!entity || entity === 'sales') fetchSales();
-      if (!entity || entity === 'customers') fetchCustomers();
-      if (!entity || entity === 'suppliers') fetchSuppliers();
-      if (!entity || entity === 'settings') fetchSettings();
-      if (!entity || entity === 'users') fetchEmployees();
-    });
+      if (!entity || entity === 'products' || entity === 'transactions' || entity === 'stock-transactions' || entity === 'sales') {
+        fetchProducts();
+      }
+      if (!entity || entity === 'categories') {
+        fetchCategories();
+      }
+      if (!entity || entity === 'transactions' || entity === 'stock-transactions' || entity === 'sales') {
+        fetchTransactions();
+      }
+      if (!entity || entity === 'sales' || entity === 'transactions') {
+        fetchSales();
+      }
+      if (!entity || entity === 'customers') {
+        fetchCustomers();
+      }
+      if (!entity || entity === 'suppliers') {
+        fetchSuppliers();
+      }
+      if (!entity || entity === 'settings') {
+        fetchSettings();
+      }
+      if (!entity || entity === 'users') {
+        fetchEmployees();
+      }
+    };
 
-    socket.on('draft_updated_grDrafts', (draftsArr) => {
-      // Data already parsed in API response JSON
+    const handleSaleCompleted = () => {
+      fetchTransactions();
+      fetchProducts();
+      fetchSales();
+    };
+
+    const handleStockMutation = () => {
+      fetchTransactions();
+      fetchProducts();
+    };
+
+    const handleGrDrafts = (draftsArr: any) => {
       useDraftStore.setState({ drafts: Array.isArray(draftsArr) ? draftsArr : [] });
-    });
-    
-    socket.on('draft_updated_posHold', (heldArr) => {
+    };
+
+    const handlePosHold = (heldArr: any) => {
       useHoldStore.setState({ heldOrders: Array.isArray(heldArr) ? heldArr : [] });
-    });
+    };
+
+    socket.on('data_updated', handleDataUpdated);
+    socket.on('sale_completed', handleSaleCompleted);
+    socket.on('stock_mutation_updated', handleStockMutation);
+    socket.on('draft_updated_grDrafts', handleGrDrafts);
+    socket.on('draft_updated_posHold', handlePosHold);
 
     return () => {
-      socket.disconnect();
-      delete (window as any).socketInstance;
+      socket.off('data_updated', handleDataUpdated);
+      socket.off('sale_completed', handleSaleCompleted);
+      socket.off('stock_mutation_updated', handleStockMutation);
+      socket.off('draft_updated_grDrafts', handleGrDrafts);
+      socket.off('draft_updated_posHold', handlePosHold);
     };
   }, [currentUser]);
 
