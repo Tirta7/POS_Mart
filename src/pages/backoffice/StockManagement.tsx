@@ -427,17 +427,26 @@ const StockManagement: React.FC = () => {
 
   const allDisplayProducts = [...pendingDisplayProducts, ...products];
 
-  // Dynamic list of categories from both store categories and active products
-  const displayCategories = Array.from(new Set([
-    ...categories,
-    ...allDisplayProducts.map(p => p.category).filter(Boolean)
-  ]));
+  // Dynamic list of categories from both store categories and active products with case-insensitive deduplication
+  const categoryMap = new Map<string, string>();
+  [...categories, ...allDisplayProducts.map(p => p.category).filter(Boolean)].forEach(cat => {
+    if (cat && typeof cat === 'string') {
+      const trimmed = cat.trim();
+      const lower = trimmed.toLowerCase();
+      if (lower && !categoryMap.has(lower)) {
+        categoryMap.set(lower, trimmed);
+      }
+    }
+  });
+  const displayCategories = Array.from(categoryMap.values());
 
   // Jika kategori aktif sudah dihapus/diganti nama, kembali ke 'Semua'
-  const currentCategory = activeCategory === 'all' || displayCategories.includes(activeCategory) ? activeCategory : 'all';
+  const currentCategory = activeCategory === 'all' || displayCategories.some(c => c.toLowerCase() === activeCategory.toLowerCase()) 
+    ? activeCategory 
+    : 'all';
 
   const filteredProducts = allDisplayProducts.filter(p =>
-    (currentCategory === 'all' || p.category === currentCategory) &&
+    (currentCategory === 'all' || (p.category && p.category.toLowerCase() === currentCategory.toLowerCase())) &&
     (p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
      (p.sku && p.sku.toLowerCase().includes(searchQuery.toLowerCase())) ||
      p.id.toLowerCase().includes(searchQuery.toLowerCase()))
@@ -539,11 +548,13 @@ const StockManagement: React.FC = () => {
           {displayCategories.map(cat => (
             <button
               key={cat}
-              className={`cat-btn ${currentCategory === cat ? 'active' : ''}`}
+              className={`cat-btn ${currentCategory.toLowerCase() === cat.toLowerCase() ? 'active' : ''}`}
               onClick={() => setActiveCategory(cat)}
             >
               <Package size={16} /> {cat.toUpperCase()}
-              <span style={{ opacity: 0.75, fontSize: '0.75rem' }}>{allDisplayProducts.filter(p => p.category === cat).length}</span>
+              <span style={{ opacity: 0.75, fontSize: '0.75rem' }}>
+                {allDisplayProducts.filter(p => p.category && p.category.toLowerCase() === cat.toLowerCase()).length}
+              </span>
             </button>
           ))}
         </div>

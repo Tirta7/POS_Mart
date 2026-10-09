@@ -65,176 +65,9 @@ const getHeaders = () => {
   return { 'Content-Type': 'application/json', 'x-tenant-id': 'TID-DEMO-123' };
 };
 
-const initialMockProducts: Product[] = [
-  {
-    id: 'cd38cdd0-0151-4e2a-a3c9-7051300f717d',
-    sku: 'BLL-9FT-01',
-    barcode: '899100100201',
-    name: 'Meja Billiard 9 Feet Tournament',
-    category: 'Meja Billiard',
-    location: 'Gudang Utama',
-    unit: 'Pcs',
-    stock: 0,
-    minStock: 1,
-    baseUnitMultiplier: 1,
-    purchasePrice: 24000000,
-    sellingPrice: 45000000,
-    wholesalePrice: 42000000,
-    image: ''
-  },
-  {
-    id: 'PROD-BLL-02',
-    sku: 'BLL-ARM-02',
-    barcode: '899100100202',
-    name: 'Aramith Tournament TV Pro Cue Ball Set',
-    category: 'Bola & Aksesoris',
-    location: 'Gudang Utama',
-    unit: 'Set',
-    stock: 8,
-    minStock: 2,
-    baseUnitMultiplier: 1,
-    purchasePrice: 4800000,
-    sellingPrice: 9000000,
-    wholesalePrice: 8500000,
-    image: ''
-  },
-  {
-    id: 'PROD-BLL-03',
-    sku: 'BLL-PRD-03',
-    barcode: '899100100203',
-    name: 'Predator Revo Carbon Shaft 12.4mm',
-    category: 'Stik Billiard',
-    location: 'Gudang Utama',
-    unit: 'Pcs',
-    stock: 5,
-    minStock: 2,
-    baseUnitMultiplier: 1,
-    purchasePrice: 4200000,
-    sellingPrice: 8000000,
-    wholesalePrice: 7500000,
-    image: ''
-  }
-];
-
-const initialMockTransactions: StockTransaction[] = [
-  {
-    id: 'MUT-01',
-    type: 'OUT',
-    date: '2026-10-09T15:22:00.000Z',
-    documentNo: 'INV-1791534129916',
-    customerId: 'CUST-BUDI-01',
-    customerName: 'Budi Santoso',
-    employeeId: 'dd242b65',
-    totalValue: 135000000,
-    note: 'Penjualan Kasir',
-    items: [
-      {
-        productId: 'cd38cdd0-0151-4e2a-a3c9-7051300f717d',
-        qty: -3,
-        batchNo: '',
-        expiryDate: '',
-        purchasePrice: 45000000,
-        subtotal: 135000000
-      }
-    ]
-  },
-  {
-    id: 'MUT-02',
-    type: 'OUT',
-    date: '2026-10-09T14:15:00.000Z',
-    documentNo: 'INV-1791534129917',
-    customerId: 'CUST-BUDI-01',
-    customerName: 'Budi Santoso',
-    employeeId: 'dd242b65',
-    totalValue: 52000000,
-    note: 'Penjualan Kasir',
-    items: [
-      {
-        productId: 'PROD-BLL-02',
-        qty: -4,
-        batchNo: '',
-        expiryDate: '',
-        purchasePrice: 9000000,
-        subtotal: 36000000
-      },
-      {
-        productId: 'PROD-BLL-03',
-        qty: -2,
-        batchNo: '',
-        expiryDate: '',
-        purchasePrice: 8000000,
-        subtotal: 16000000
-      }
-    ]
-  },
-  {
-    id: 'MUT-03',
-    type: 'OUT',
-    date: '2026-10-09T12:40:00.000Z',
-    documentNo: 'INV-1791534129918',
-    customerId: 'CUST-02',
-    customerName: 'Arena Billiard Club',
-    employeeId: 'dd242b65',
-    totalValue: 38000000,
-    note: 'Penjualan Kasir',
-    items: [
-      {
-        productId: 'PROD-BLL-02',
-        qty: -2,
-        batchNo: '',
-        expiryDate: '',
-        purchasePrice: 9000000,
-        subtotal: 18000000
-      }
-    ]
-  },
-  {
-    id: 'MUT-04',
-    type: 'OUT',
-    date: '2026-10-09T10:10:00.000Z',
-    documentNo: 'INV-1791534129919',
-    customerId: 'CUST-03',
-    customerName: 'Master Pool Hall',
-    employeeId: 'dd242b65',
-    totalValue: 41000000,
-    note: 'Penjualan Kasir',
-    items: [
-      {
-        productId: 'cd38cdd0-0151-4e2a-a3c9-7051300f717d',
-        qty: -1,
-        batchNo: '',
-        expiryDate: '',
-        purchasePrice: 41000000,
-        subtotal: 41000000
-      }
-    ]
-  },
-  {
-    id: 'MUT-05',
-    type: 'OUT',
-    date: '2026-10-09T09:05:00.000Z',
-    documentNo: 'INV-1791534129920',
-    customerId: 'CUST-BUDI-01',
-    customerName: 'Budi Santoso',
-    employeeId: 'dd242b65',
-    totalValue: 40000000,
-    note: 'Penjualan Kasir',
-    items: [
-      {
-        productId: 'PROD-BLL-03',
-        qty: -5,
-        batchNo: '',
-        expiryDate: '',
-        purchasePrice: 8000000,
-        subtotal: 40000000
-      }
-    ]
-  }
-];
-
 export const useInventoryStore = create<InventoryState>()(
   (set, get) => ({
-      products: initialMockProducts,
+      products: [],
       isLoading: false,
       error: null,
       fetchProducts: async () => {
@@ -243,7 +76,7 @@ export const useInventoryStore = create<InventoryState>()(
           const res = await fetch('/api/saas/products', { headers: getHeaders() });
           if (!res.ok) throw new Error('Gagal mengambil data produk dari server');
           const data = await res.json();
-          if (Array.isArray(data) && data.length > 0) {
+          if (Array.isArray(data)) {
             set({ products: data.map(mapProduct), isLoading: false });
           } else {
             set({ isLoading: false });
@@ -257,7 +90,7 @@ export const useInventoryStore = create<InventoryState>()(
           const res = await fetch('/api/saas/stock-transactions', { headers: getHeaders() });
           if (res.ok) {
             const data = await res.json();
-            if (Array.isArray(data) && data.length > 0) {
+            if (Array.isArray(data)) {
               set({ transactions: data.map(mapTransaction) });
             }
           }
@@ -265,7 +98,7 @@ export const useInventoryStore = create<InventoryState>()(
           console.error('Failed to fetch transactions:', err);
         }
       },
-      transactions: initialMockTransactions,
+      transactions: [],
       categories: ['Sembako', 'Combo', 'Rokok', 'Minuman'],
       
       addProduct: async (product) => {

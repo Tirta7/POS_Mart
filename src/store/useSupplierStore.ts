@@ -13,22 +13,13 @@ interface SupplierState {
 
 export const useSupplierStore = create<SupplierState>()(
   (set) => ({
-      suppliers: [
-        {
-          id: 'SUPP-BILLIARD-01',
-          name: 'CV Billiard Supplies Indonesia',
-          contact: 'Bpk Hendra',
-          phone: '081377889900',
-          paymentTermDays: 14,
-          totalPayable: 5000000
-        }
-      ],
+      suppliers: [],
       fetchSuppliers: async () => {
         try {
           const res = await fetch('/api/saas/suppliers', { headers: { 'x-tenant-id': 'TID-DEMO-123' } });
           if (res.ok) {
             const data = await res.json();
-            if (Array.isArray(data) && data.length > 0) {
+            if (Array.isArray(data)) {
               set({ suppliers: data.map((s: any) => ({ ...s, totalPayable: s.payable ?? s.totalPayable ?? 0 })) });
             }
           }

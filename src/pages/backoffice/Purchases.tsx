@@ -219,11 +219,11 @@ const Purchases: React.FC = () => {
       handleAddItem(products[0]);
     } else {
       const sample = {
-        id: `DEMO-${Date.now()}`,
-        name: 'Billiard Cue Ball Pro 2-1/4"',
-        stock: 12,
-        purchasePrice: 125000,
-        sellingPrice: 175000,
+        id: `SAMPLE-${Date.now()}`,
+        name: 'Produk Sampel',
+        stock: 10,
+        purchasePrice: 10000,
+        sellingPrice: 15000,
         unit: 'Pcs'
       };
       handleAddItem(sample);
@@ -1679,7 +1679,7 @@ const Purchases: React.FC = () => {
                           {supp.name}
                         </div>
                         <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
-                          PIC: {supp.contact || 'Bpk Hendra'} • Telp: {supp.phone || '-'}
+                          PIC: {supp.contact || '-'} • Telp: {supp.phone || '-'}
                         </div>
                       </div>
 
