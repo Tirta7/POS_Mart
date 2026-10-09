@@ -641,7 +641,7 @@ app.get('/api/saas/stock-transactions', async (req, res) => {
   try {
     const txs = await prisma.stockTransaction.findMany({
       where: { tenant_id: req.tenantId },
-      include: { items: true },
+      include: { items: { include: { product: true } } },
       orderBy: { date: 'desc' }
     });
     res.json(txs);
@@ -941,6 +941,406 @@ app.post('/api/saas/supplier-payments', async (req, res) => {
 
     notifyTenant(req.tenantId, 'suppliers'); // Trigger refresh to frontend
     res.json(payment);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// ENDPOINTS EXPORT & IMPORT DATA (EXCEL)
+// ==========================================
+app.get('/api/saas/export/all', async (req, res) => {
+  try {
+    const tenantId = req.tenantId;
+
+    // 1. Settings & Tenant info
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId }
+    });
+
+    // 2. Products with category
+    const products = await prisma.product.findMany({
+      where: { tenant_id: tenantId },
+      include: { category: true },
+      orderBy: { name: 'asc' }
+    });
+
+    // 3. Categories
+    const categories = await prisma.category.findMany({
+      where: { tenant_id: tenantId },
+      orderBy: { name: 'asc' }
+    });
+
+    // 4. Stock Transactions (Mutasi Stok)
+    const stockTransactions = await prisma.stockTransaction.findMany({
+      where: { tenant_id: tenantId },
+      include: { items: { include: { product: true } } },
+      orderBy: { date: 'desc' }
+    });
+
+    // 5. Sales Transactions (Kasir)
+    const transactions = await prisma.transaction.findMany({
+      where: { tenant_id: tenantId },
+      include: { items: { include: { product: true } } },
+      orderBy: { created_at: 'desc' }
+    });
+
+    // 6. Customers
+    const customers = await prisma.customer.findMany({
+      where: { tenant_id: tenantId },
+      orderBy: { name: 'asc' }
+    });
+
+    // 7. Suppliers with payments
+    const suppliers = await prisma.supplier.findMany({
+      where: { tenant_id: tenantId },
+      include: { payments: true },
+      orderBy: { name: 'asc' }
+    });
+
+    // 8. Employees / Users
+    const users = await prisma.user.findMany({
+      where: { tenant_id: tenantId },
+      select: {
+        id: true,
+        username: true,
+        name: true,
+        role: true,
+        is_active: true,
+        created_at: true
+      },
+      orderBy: { name: 'asc' }
+    });
+
+    // 9. Drafts (Purchase Orders / Penerimaan Barang)
+    const drafts = await prisma.draft.findMany({
+      where: { tenant_id: tenantId }
+    });
+
+    // 10. Hitung Riwayat Order Pelanggan Rinci (Cross-reference dari transactions & stock mutations)
+    const txMap = new Map();
+    for (const t of transactions) {
+      const docNo = t.receipt_number;
+      if (!docNo) continue;
+      txMap.set(docNo, {
+        orderId: docNo,
+        date: t.created_at,
+        total: Number(t.total_amount || 0),
+        paymentMethod: t.payment_method || 'TUNAI',
+        cashier: t.cashier_name || t.cashier_id || 'Kasir',
+        customerId: t.customer_id,
+        customerName: t.customer_name,
+        items: (t.items || []).map(i => ({
+          productId: i.product_id,
+          name: i.product?.name || 'Produk',
+          qty: i.quantity,
+          price: Number(i.price_at_time || 0),
+          subtotal: Number(i.subtotal || 0)
+        }))
+      });
+    }
+
+    for (const st of stockTransactions) {
+      if (st.type !== 'OUT') continue;
+      const docNo = st.document_no;
+      if (!docNo || txMap.has(docNo)) continue;
+      txMap.set(docNo, {
+        orderId: docNo,
+        date: st.date,
+        total: Number(st.total_value || 0),
+        paymentMethod: 'TUNAI',
+        cashier: st.employee_id || 'Kasir',
+        customerId: st.customer_id,
+        customerName: st.customer_name,
+        items: (st.items || []).map(i => ({
+          productId: i.product_id,
+          name: i.product?.name || 'Produk',
+          qty: i.qty,
+          price: Number(i.purchase_price || 0),
+          subtotal: Number(i.subtotal || 0)
+        }))
+      });
+    }
+
+    const allCustomerOrders = Array.from(txMap.values());
+
+    const customersWithOrders = customers.map(c => {
+      const isRetail = (c.name || '').trim().toLowerCase() === 'retail';
+      const custOrders = allCustomerOrders.filter(t => {
+        if (t.customerId && t.customerId === c.id) return true;
+        if (t.customerName && t.customerName.trim().toLowerCase() === (c.name || '').trim().toLowerCase()) return true;
+        if (isRetail && (!t.customerId || t.customerName === 'Umum (Guest)' || (t.customerName || '').trim().toLowerCase() === 'retail')) {
+          return true;
+        }
+        return false;
+      });
+
+      return {
+        ...c,
+        orders: custOrders,
+        totalOrder: custOrders.length,
+        totalSpent: custOrders.reduce((sum, o) => sum + (o.total || 0), 0)
+      };
+    });
+
+    // Calculate Financial & Sales Analytics
+    const totalSalesAmount = transactions.reduce((acc, t) => acc + (t.total_amount || 0), 0);
+    const totalStockCost = products.reduce((acc, p) => acc + ((p.stock || 0) * (p.purchase_price || 0)), 0);
+    const totalStockRetailValue = products.reduce((acc, p) => acc + ((p.stock || 0) * (p.selling_price || 0)), 0);
+    const totalSupplierDebt = suppliers.reduce((acc, s) => acc + (s.payable || 0), 0);
+
+    const paymentMethodsMap = {};
+    for (const t of transactions) {
+      const pm = t.payment_method || 'TUNAI';
+      paymentMethodsMap[pm] = (paymentMethodsMap[pm] || 0) + (t.total_amount || 0);
+    }
+
+    const productSalesMap = {};
+    for (const t of transactions) {
+      for (const item of (t.items || [])) {
+        const pName = item.product?.name || 'Produk';
+        if (!productSalesMap[pName]) {
+          productSalesMap[pName] = { name: pName, qty: 0, revenue: 0 };
+        }
+        productSalesMap[pName].qty += (item.quantity || 0);
+        productSalesMap[pName].revenue += (item.subtotal || 0);
+      }
+    }
+    const topProducts = Object.values(productSalesMap).sort((a, b) => b.qty - a.qty).slice(0, 20);
+
+    res.json({
+      storeName: tenant?.name || 'POS Mart',
+      exportedAt: new Date().toISOString(),
+      analytics: {
+        totalSalesAmount,
+        totalTransactions: transactions.length,
+        averageBasketSize: transactions.length > 0 ? Math.round(totalSalesAmount / transactions.length) : 0,
+        totalProductsCount: products.length,
+        totalStockCost,
+        totalStockRetailValue,
+        estimatedProfitValue: totalStockRetailValue - totalStockCost,
+        totalSupplierDebt,
+        paymentMethods: paymentMethodsMap,
+        topSellingProducts: topProducts
+      },
+      products,
+      categories,
+      stockTransactions,
+      transactions,
+      customers: customersWithOrders,
+      customerOrders: allCustomerOrders,
+      suppliers,
+      users,
+      drafts
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/saas/import/master', async (req, res) => {
+  try {
+    const tenantId = req.tenantId;
+    const { products, customers, suppliers, users } = req.body;
+    const stats = { products: 0, customers: 0, suppliers: 0, users: 0, updatedProducts: 0 };
+
+    // 1. Import Produk
+    if (Array.isArray(products) && products.length > 0) {
+      for (const p of products) {
+        if (!p.name && !p.nama) continue;
+        const pName = String(p.name || p.nama || '').trim();
+        const pBarcode = p.barcode ? String(p.barcode).trim() : null;
+        const pCategory = p.category || p.kategori ? String(p.category || p.kategori).trim() : null;
+        const pSellPrice = Number(p.selling_price || p.harga_jual || p.hargaJual || 0);
+        const pBuyPrice = Number(p.purchase_price || p.harga_beli || p.hargaBeli || 0);
+        const pWholesalePrice = Number(p.wholesale_price || p.harga_grosir || p.hargaGrosir || pSellPrice);
+        const pStock = Number(p.stock || p.stok || 0);
+        const pMinStock = Number(p.min_stock || p.min_stok || 0);
+
+        let categoryId = null;
+        if (pCategory) {
+          let cat = await prisma.category.findFirst({
+            where: { tenant_id: tenantId, name: { equals: pCategory, mode: 'insensitive' } }
+          });
+          if (!cat) {
+            cat = await prisma.category.create({
+              data: { tenant_id: tenantId, name: pCategory }
+            });
+          }
+          categoryId = cat.id;
+        }
+
+        let existing = null;
+        if (pBarcode) {
+          existing = await prisma.product.findFirst({
+            where: { tenant_id: tenantId, barcode: pBarcode }
+          });
+        }
+        if (!existing) {
+          existing = await prisma.product.findFirst({
+            where: { tenant_id: tenantId, name: { equals: pName, mode: 'insensitive' } }
+          });
+        }
+
+        if (existing) {
+          await prisma.product.update({
+            where: { id: existing.id },
+            data: {
+              name: pName,
+              barcode: pBarcode || existing.barcode,
+              category_id: categoryId || existing.category_id,
+              selling_price: pSellPrice > 0 ? pSellPrice : existing.selling_price,
+              purchase_price: pBuyPrice > 0 ? pBuyPrice : existing.purchase_price,
+              wholesale_price: pWholesalePrice > 0 ? pWholesalePrice : existing.wholesale_price,
+              stock: pStock !== undefined && !isNaN(pStock) ? pStock : existing.stock,
+              min_stock: pMinStock >= 0 ? pMinStock : existing.min_stock
+            }
+          });
+          stats.updatedProducts++;
+        } else {
+          await prisma.product.create({
+            data: {
+              tenant_id: tenantId,
+              name: pName,
+              barcode: pBarcode,
+              category_id: categoryId,
+              selling_price: pSellPrice,
+              purchase_price: pBuyPrice,
+              wholesale_price: pWholesalePrice,
+              stock: pStock,
+              min_stock: pMinStock
+            }
+          });
+          stats.products++;
+        }
+      }
+      notifyTenant(tenantId, 'products');
+      notifyTenant(tenantId, 'categories');
+    }
+
+    // 2. Import Pelanggan
+    if (Array.isArray(customers) && customers.length > 0) {
+      for (const c of customers) {
+        if (!c.name && !c.nama) continue;
+        const cName = String(c.name || c.nama || '').trim();
+        const cPhone = String(c.phone || c.telepon || c.no_telp || c.no_telepon || '0').trim();
+        const cAddress = String(c.address || c.alamat || '').trim();
+
+        const existing = await prisma.customer.findFirst({
+          where: {
+            tenant_id: tenantId,
+            OR: [
+              { name: { equals: cName, mode: 'insensitive' } },
+              ...(cPhone && cPhone !== '0' ? [{ phone: cPhone }] : [])
+            ]
+          }
+        });
+
+        if (existing) {
+          await prisma.customer.update({
+            where: { id: existing.id },
+            data: {
+              phone: cPhone || existing.phone,
+              address: cAddress || existing.address
+            }
+          });
+        } else {
+          await prisma.customer.create({
+            data: {
+              tenant_id: tenantId,
+              name: cName,
+              phone: cPhone,
+              address: cAddress
+            }
+          });
+          stats.customers++;
+        }
+      }
+      notifyTenant(tenantId, 'customers');
+    }
+
+    // 3. Import Supplier
+    if (Array.isArray(suppliers) && suppliers.length > 0) {
+      for (const s of suppliers) {
+        if (!s.name && !s.nama) continue;
+        const sName = String(s.name || s.nama || '').trim();
+        const sContact = String(s.contact || s.kontak || '').trim();
+        const sPhone = String(s.phone || s.telepon || '').trim();
+        const sTerm = Number(s.payment_term_days || s.termin || 0);
+        const sPayable = Number(s.payable || s.hutang || 0);
+
+        const existing = await prisma.supplier.findFirst({
+          where: { tenant_id: tenantId, name: { equals: sName, mode: 'insensitive' } }
+        });
+
+        if (existing) {
+          await prisma.supplier.update({
+            where: { id: existing.id },
+            data: {
+              contact: sContact || existing.contact,
+              phone: sPhone || existing.phone,
+              payment_term_days: sTerm >= 0 ? sTerm : existing.payment_term_days,
+              payable: sPayable >= 0 ? sPayable : existing.payable
+            }
+          });
+        } else {
+          await prisma.supplier.create({
+            data: {
+              tenant_id: tenantId,
+              name: sName,
+              contact: sContact,
+              phone: sPhone,
+              payment_term_days: sTerm,
+              payable: sPayable
+            }
+          });
+          stats.suppliers++;
+        }
+      }
+      notifyTenant(tenantId, 'suppliers');
+    }
+
+    // 4. Import Karyawan (Users)
+    if (Array.isArray(users) && users.length > 0) {
+      for (const u of users) {
+        if (!u.username) continue;
+        const username = String(u.username).trim().toLowerCase();
+        const name = String(u.name || u.nama || username).trim();
+        const role = String(u.role || u.peran || 'Cashier').trim();
+        const pin = String(u.pin || '123456');
+
+        const existing = await prisma.user.findFirst({
+          where: { tenant_id: tenantId, username }
+        });
+
+        if (existing) {
+          await prisma.user.update({
+            where: { id: existing.id },
+            data: { name, role, pin }
+          });
+        } else {
+          await prisma.user.create({
+            data: {
+              tenant_id: tenantId,
+              username,
+              name,
+              password_hash: u.password || 'admin',
+              pin,
+              role,
+              is_active: true
+            }
+          });
+          stats.users++;
+        }
+      }
+      notifyTenant(tenantId, 'users');
+    }
+
+    res.json({
+      success: true,
+      message: 'Import data berhasil diproses',
+      stats
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useSettingsStore, DEFAULT_INVOICE_FOOTER, defaultInvoiceHeader } from '../../store/useSettingsStore';
-import { Settings as SettingsIcon, Save, Percent, RefreshCw, Receipt, Bell, ShieldCheck, AlertTriangle, XOctagon } from 'lucide-react';
+import { Settings as SettingsIcon, Save, Percent, RefreshCw, Receipt, Bell, ShieldCheck, AlertTriangle, XOctagon, FileSpreadsheet } from 'lucide-react';
 import NotificationSettings from './NotificationSettings';
+import ExportImportSettings from './ExportImportSettings';
 
 const ROUNDING_OPTIONS = [
   { label: 'Tanpa Pembulatan', value: 0 },
@@ -10,7 +11,7 @@ const ROUNDING_OPTIONS = [
   { label: 'Bulatkan ke 1.000', value: 1000 },
 ];
 
-type TabId = 'general' | 'tax' | 'rounding' | 'invoice' | 'notification' | 'license';
+type TabId = 'general' | 'tax' | 'rounding' | 'invoice' | 'notification' | 'license' | 'export_import';
 
 const TABS: { id: TabId; label: string; desc: string; Icon: React.ElementType }[] = [
   { id: 'general', label: 'Umum', desc: 'Nama aplikasi', Icon: SettingsIcon },
@@ -19,6 +20,7 @@ const TABS: { id: TabId; label: string; desc: string; Icon: React.ElementType }[
   { id: 'invoice', label: 'Invoice', desc: 'Header & footer struk', Icon: Receipt },
   { id: 'notification', label: 'Notifikasi', desc: 'Push uang masuk', Icon: Bell },
   { id: 'license', label: 'Lisensi', desc: 'Detail lisensi aktif', Icon: ShieldCheck },
+  { id: 'export_import', label: 'Export & Import', desc: 'Backup data Excel', Icon: FileSpreadsheet },
 ];
 
 const Settings: React.FC = () => {
@@ -496,23 +498,28 @@ const Settings: React.FC = () => {
                   )}
                 </div>
               )}
+
+              {/* Export & Import Data */}
+              {activeTab === 'export_import' && <ExportImportSettings />}
             </div>
           </div>
         </div>
 
-        {/* Save Button — selalu terlihat */}
-        <div style={{ position: 'sticky', bottom: 0, display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 14px', background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(4px)', border: '1px solid #e5e7eb', borderRadius: '12px' }}>
-          <button type="submit" className="bo-btn bo-btn-primary" disabled={!hasChanges && !isSaved} style={{ opacity: !hasChanges && !isSaved ? 0.6 : 1 }}>
-            <Save size={18} /> Simpan Semua Pengaturan
-          </button>
-          {isSaved ? (
-            <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--green)' }}>
-              ✅ Perubahan berhasil disimpan!
-            </span>
-          ) : hasChanges ? (
-            <span style={{ fontSize: '0.8rem', color: '#d97706', fontWeight: 600 }}>● Ada perubahan yang belum disimpan</span>
-          ) : null}
-        </div>
+        {/* Save Button — disembunyikan jika di tab export_import tanpa perubahan form */}
+        {(hasChanges || isSaved || (activeTab !== 'export_import' && activeTab !== 'notification')) && (
+          <div style={{ position: 'sticky', bottom: 0, display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 14px', background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(4px)', border: '1px solid #e5e7eb', borderRadius: '12px' }}>
+            <button type="submit" className="bo-btn bo-btn-primary" disabled={!hasChanges && !isSaved} style={{ opacity: !hasChanges && !isSaved ? 0.6 : 1 }}>
+              <Save size={18} /> Simpan Semua Pengaturan
+            </button>
+            {isSaved ? (
+              <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--green)' }}>
+                ✅ Perubahan berhasil disimpan!
+              </span>
+            ) : hasChanges ? (
+              <span style={{ fontSize: '0.8rem', color: '#d97706', fontWeight: 600 }}>● Ada perubahan yang belum disimpan</span>
+            ) : null}
+          </div>
+        )}
       </form>
     </div>
   );
