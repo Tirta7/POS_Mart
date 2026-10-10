@@ -1,20 +1,10 @@
 // VOC ML client SDK untuk aplikasi Billiard / Kasir POS (Node.js >= 18, tanpa dependency).
 //
-// Contoh pemakaian di backend aplikasi POS:
-//
-//   import { checkLicense } from './vocml-client.js';
-//   const lic = await checkLicense({
-//     serverUrl: 'https://lisensi.domainanda.com',
-//     product: 'pos',                                  // 'pos' atau 'billiard'
-//     machineId: process.env.VOCML_MACHINE_ID,         // dari get-machine-id.ps1
-//     publicKeyPem: PUBLIC_KEY,                        // salin dari menu Pengaturan VOC ML
-//     cacheFile: '/app/data/license-cache.json',       // simpan di volume agar tahan restart
-//     storeName: 'Toko Berkah Mart',
-//     appVersion: '1.4.2',
-//   });
-//   if (!lic.allowed) tampilkanLayarTerkunci(lic.reason, lic.machineId);
-//
-// Panggil saat startup dan berkala (mis. tiap 3 jam).
+// Aturan Lisensi (Koreksi Masa Aktif & Tagihan QRIS):
+// 1. Setiap respons sukses dari server menjadi sumber kebenaran tunggal:
+//    selalu timpa data lisensi lokal (license_key, expires_at, status, locked, lock_reason, days_left, billing).
+// 2. Status locked / expired dari server langsung memblokir aplikasi.
+// 3. Field billing dibawa saat locked / expired dan dibersihkan saat lisensi aktif kembali.
 
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -81,49 +71,221 @@ function readCache(file) {
 }
 
 function writeCache(file, data) {
-  try { fs.writeFileSync(file, JSON.stringify(data)); } catch { /* abaikan */ }
+  try {
+    const dir = fs.existsSync(file) ? null : fs.mkdirSync(file.substring(0, file.lastIndexOf('/')), { recursive: true });
+    fs.writeFileSync(file, JSON.stringify(data, null, 2));
+  } catch { /* abaikan */ }
 }
 
 const ALLOWED = new Set(['active', 'expiring']);
 
-export async function checkLicense({ serverUrl, product, machineId, publicKeyPem, cacheFile, apiKey = '', storeName = '', appVersion = '', timeoutMs = 8000 }) {
+/** Pengecekan lisensi utama (checkLicense). */
+export async function checkLicense({
+  serverUrl,
+  product,
+  machineId,
+  publicKeyPem,
+  cacheFile,
+  apiKey = '',
+  storeName = '',
+  appVersion = '',
+  timeoutMs = 8000
+}) {
   const base = serverUrl.replace(/\/$/, '');
   const headers = { 'Content-Type': 'application/json', ...(apiKey ? { 'X-VOCML-Key': apiKey } : {}) };
-  const result = (allowed, status, extra = {}) => ({ allowed, status, machineId, ...extra });
+  const normalizedMid = String(machineId).trim().toUpperCase();
+  const result = (allowed, status, extra = {}) => ({ allowed, status, machineId: normalizedMid, ...extra });
 
   try {
-    const qs = new URLSearchParams({ machine_id: machineId, product, app_version: appVersion });
+    const qs = new URLSearchParams({ machine_id: normalizedMid, product, app_version: appVersion });
     let res = await fetch(`${base}/api/v1/check?${qs}`, { headers, signal: AbortSignal.timeout(timeoutMs) });
     if (res.status === 404) {
       // Belum terdaftar -> daftarkan, akan muncul di "Machine ID Masuk"
       res = await fetch(`${base}/api/v1/register`, {
-        method: 'POST', headers, signal: AbortSignal.timeout(timeoutMs),
-        body: JSON.stringify({ machine_id: machineId, product, store_name: storeName, app_version: appVersion }),
+        method: 'POST',
+        headers,
+        signal: AbortSignal.timeout(timeoutMs),
+        body: JSON.stringify({ machine_id: normalizedMid, product, store_name: storeName, app_version: appVersion }),
       });
     }
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const body = await res.json();
     const payload = verifyToken(body.token, publicKeyPem);
-    if (!payload || payload.machine_id !== machineId.toUpperCase()) throw new Error('Token server tidak valid');
+    if (!payload || payload.machine_id !== normalizedMid) throw new Error('Token server tidak valid');
 
-    writeCache(cacheFile, { token: body.token, checkedAt: Date.now() });
-    if (payload.status === 'locked') return result(false, 'locked', { reason: payload.lock_reason || 'Aplikasi dikunci', expiresAt: payload.expires_at });
-    if (payload.status === 'pending') return result(false, 'pending', { reason: 'Menunggu aktivasi lisensi' });
-    if (payload.status === 'expired') return result(false, 'expired', { reason: 'Masa lisensi telah berakhir', expiresAt: payload.expires_at });
-    return result(ALLOWED.has(payload.status), payload.status, { expiresAt: payload.expires_at, licenseKey: payload.license_key });
+    // BAGIAN A & B: Key dari server SELALU menimpa key lokal (koreksi masa aktif)
+    // Simpan billing terakhir bersama snapshot status lisensi. Jika /check sukses dan billing = null, hapus tagihan lokal.
+    const billing = body.billing || null;
+    writeCache(cacheFile, {
+      token: body.token,
+      checkedAt: Date.now(),
+      billing: billing,
+      license_key: payload.license_key || body.license_key || null,
+      status: payload.status,
+      expires_at: payload.expires_at,
+      locked: payload.locked ?? (payload.status === 'locked'),
+      lock_reason: payload.lock_reason || '',
+      days_left: payload.days_left ?? null,
+      grace_days: payload.grace_days ?? body.grace_days ?? 5,
+    });
+
+    const isLocked = payload.status === 'locked' || payload.locked === true;
+    const isExpired = payload.status === 'expired';
+
+    if (isLocked) {
+      return result(false, 'locked', {
+        reason: payload.lock_reason || 'Aplikasi dikunci',
+        lockReason: payload.lock_reason || '',
+        expiresAt: payload.expires_at,
+        daysLeft: payload.days_left ?? 0,
+        billing: billing,
+        licenseKey: payload.license_key,
+      });
+    }
+
+    if (payload.status === 'pending') {
+      return result(false, 'pending', {
+        reason: 'Menunggu aktivasi lisensi',
+        billing: billing,
+      });
+    }
+
+    if (isExpired) {
+      return result(false, 'expired', {
+        reason: 'Masa lisensi telah berakhir',
+        expiresAt: payload.expires_at,
+        daysLeft: payload.days_left ?? 0,
+        billing: billing,
+        licenseKey: payload.license_key,
+      });
+    }
+
+    const isAllowed = ALLOWED.has(payload.status);
+    return result(isAllowed, payload.status, {
+      expiresAt: payload.expires_at,
+      daysLeft: payload.days_left ?? null,
+      licenseKey: payload.license_key,
+      lockReason: '',
+      // Jangan tampilkan QRIS saat status aktif / segera berakhir
+      billing: null,
+    });
   } catch (err) {
-    // Offline: pakai cache terakhir selama masih dalam masa toleransi
+    // Offline: pakai snapshot terakhir + grace_days
     const cache = readCache(cacheFile);
     const payload = cache && verifyToken(cache.token, publicKeyPem);
-    if (!payload || payload.machine_id !== machineId.toUpperCase()) {
-      return result(false, 'offline', { reason: 'Tidak dapat terhubung ke server lisensi', offline: true });
+    if (!payload || payload.machine_id !== normalizedMid) {
+      return result(false, 'offline', {
+        reason: 'Tidak dapat terhubung ke server lisensi',
+        offline: true,
+        billing: null,
+      });
     }
-    const graceMs = (payload.grace_days || 0) * 86400000;
-    const withinGrace = Date.now() - cache.checkedAt <= graceMs && cache.checkedAt <= Date.now();
-    const key = payload.license_key ? verifyLicenseKey(payload.license_key, machineId, product, publicKeyPem) : { valid: false };
+
+    // Aturan 3: Jika status dari server "expired" atau "locked", langsung tampilkan layar terkunci walaupun key lama masih ada
+    if (payload.status === 'locked') {
+      return result(false, 'locked', {
+        reason: payload.lock_reason || 'Aplikasi dikunci',
+        lockReason: payload.lock_reason || '',
+        expiresAt: payload.expires_at,
+        daysLeft: payload.days_left ?? 0,
+        billing: cache.billing || null,
+        offline: true,
+      });
+    }
+
+    if (payload.status === 'expired') {
+      return result(false, 'expired', {
+        reason: 'Masa lisensi telah berakhir',
+        expiresAt: payload.expires_at,
+        daysLeft: payload.days_left ?? 0,
+        billing: cache.billing || null,
+        offline: true,
+      });
+    }
+
+    const graceDays = payload.grace_days ?? cache.grace_days ?? 5;
+    const graceMs = graceDays * 86400000;
+    const withinGrace = Date.now() - (cache.checkedAt || 0) <= graceMs && (cache.checkedAt || 0) <= Date.now();
+    const key = payload.license_key ? verifyLicenseKey(payload.license_key, normalizedMid, product, publicKeyPem) : { valid: false };
+
     if (ALLOWED.has(payload.status) && withinGrace && key.valid && !key.expired) {
-      return result(true, payload.status, { expiresAt: key.expiresAt, offline: true });
+      return result(true, payload.status, {
+        expiresAt: payload.expires_at || key.expiresAt,
+        daysLeft: payload.days_left,
+        licenseKey: payload.license_key,
+        offline: true,
+        billing: null,
+      });
     }
-    return result(false, 'offline', { reason: 'Tidak terhubung ke server lisensi dan masa toleransi offline habis', offline: true });
+
+    return result(false, 'offline', {
+      reason: 'Tidak terhubung ke server lisensi dan masa toleransi offline habis',
+      offline: true,
+      expiresAt: payload.expires_at,
+      billing: cache.billing || null,
+    });
   }
+}
+
+/** Aktivasi License Key secara online (POST /api/v1/activate). */
+export async function activateLicense({
+  serverUrl,
+  product,
+  machineId,
+  licenseKey,
+  publicKeyPem,
+  cacheFile,
+  apiKey = '',
+  timeoutMs = 8000
+}) {
+  const base = serverUrl.replace(/\/$/, '');
+  const headers = { 'Content-Type': 'application/json', ...(apiKey ? { 'X-VOCML-Key': apiKey } : {}) };
+  const normalizedMid = String(machineId).trim().toUpperCase();
+
+  const res = await fetch(`${base}/api/v1/activate`, {
+    method: 'POST',
+    headers,
+    signal: AbortSignal.timeout(timeoutMs),
+    body: JSON.stringify({
+      machine_id: normalizedMid,
+      product,
+      license_key: String(licenseKey).trim(),
+    }),
+  });
+
+  const body = await res.json();
+  if (!res.ok) {
+    throw new Error(body.error || body.message || `Aktivasi gagal (HTTP ${res.status})`);
+  }
+
+  const payload = verifyToken(body.token, publicKeyPem);
+  if (!payload || payload.machine_id !== normalizedMid) {
+    throw new Error('Token respons aktivasi tidak valid');
+  }
+
+  const billing = body.billing || null;
+  writeCache(cacheFile, {
+    token: body.token,
+    checkedAt: Date.now(),
+    billing: billing,
+    license_key: payload.license_key || body.license_key || null,
+    status: payload.status,
+    expires_at: payload.expires_at,
+    locked: payload.locked ?? (payload.status === 'locked'),
+    lock_reason: payload.lock_reason || '',
+    days_left: payload.days_left ?? null,
+    grace_days: payload.grace_days ?? body.grace_days ?? 5,
+  });
+
+  const isAllowed = ALLOWED.has(payload.status);
+  return {
+    allowed: isAllowed,
+    status: payload.status,
+    machineId: normalizedMid,
+    expiresAt: payload.expires_at,
+    daysLeft: payload.days_left ?? null,
+    licenseKey: payload.license_key,
+    lockReason: payload.lock_reason || '',
+    billing: isAllowed ? null : billing,
+  };
 }

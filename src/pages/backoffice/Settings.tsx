@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSettingsStore, DEFAULT_INVOICE_FOOTER, defaultInvoiceHeader } from '../../store/useSettingsStore';
-import { Settings as SettingsIcon, Save, Percent, RefreshCw, Receipt, Bell, ShieldCheck, AlertTriangle, XOctagon, FileSpreadsheet } from 'lucide-react';
+import { Settings as SettingsIcon, Save, Percent, RefreshCw, Receipt, Bell, ShieldCheck, AlertTriangle, XOctagon, FileSpreadsheet, QrCode, KeyRound, Copy, CheckCircle } from 'lucide-react';
 import NotificationSettings from './NotificationSettings';
 import ExportImportSettings from './ExportImportSettings';
 
@@ -38,20 +38,32 @@ const Settings: React.FC = () => {
   const [isSaved, setIsSaved] = useState(false);
   const [licenseData, setLicenseData] = useState<any>(null);
   const [licenseLoading, setLicenseLoading] = useState(false);
+  const [refreshingLicense, setRefreshingLicense] = useState(false);
+  const [copiedMid, setCopiedMid] = useState(false);
+  const [manualKey, setManualKey] = useState('');
+  const [activatingKey, setActivatingKey] = useState(false);
+  const [keyMsg, setKeyMsg] = useState<{ text: string; isError: boolean } | null>(null);
+
+  const fetchLicense = async (forceCheck = false) => {
+    if (forceCheck) setRefreshingLicense(true);
+    else setLicenseLoading(true);
+    try {
+      const url = forceCheck ? '/api/license/check' : '/api/license-status';
+      const method = forceCheck ? 'POST' : 'GET';
+      const res = await fetch(url, { method });
+      const data = await res.json();
+      setLicenseData(data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLicenseLoading(false);
+      setRefreshingLicense(false);
+    }
+  };
 
   useEffect(() => {
-    if (activeTab === 'license' && !licenseData) {
-      setLicenseLoading(true);
-      fetch('/api/license-status')
-        .then(res => res.json())
-        .then(data => {
-          setLicenseData(data);
-          setLicenseLoading(false);
-        })
-        .catch(err => {
-          console.error(err);
-          setLicenseLoading(false);
-        });
+    if (activeTab === 'license') {
+      fetchLicense(false);
     }
   }, [activeTab]);
 
@@ -420,9 +432,9 @@ const Settings: React.FC = () => {
 
               {/* Lisensi */}
               {activeTab === 'license' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '600px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '640px' }}>
                   {licenseLoading ? (
-                    <div style={{ padding: '20px', textAlign: 'center', color: '#6b7280' }}>Memuat data lisensi...</div>
+                    <div style={{ padding: '24px', textAlign: 'center', color: '#6b7280' }}>Memuat data lisensi...</div>
                   ) : licenseData ? (
                     <>
                       {/* Status Banner */}
@@ -434,30 +446,74 @@ const Settings: React.FC = () => {
                         <div style={{ 
                           padding: '10px', borderRadius: '10px', 
                           background: licenseData.allowed ? '#d1fae5' : '#fee2e2', 
-                          color: licenseData.allowed ? '#059669' : '#dc2626' 
+                          color: licenseData.allowed ? '#059669' : '#dc2626',
+                          flexShrink: 0,
                         }}>
                           {licenseData.allowed ? <ShieldCheck size={28} /> : (licenseData.status === 'expired' || licenseData.status === 'locked' ? <XOctagon size={28} /> : <AlertTriangle size={28} />)}
                         </div>
-                        <div>
-                          <h4 style={{ margin: '0 0 4px 0', fontSize: '16px', color: licenseData.allowed ? '#065f46' : '#991b1b', fontWeight: 700 }}>
-                            {licenseData.status === 'active' ? 'Lisensi Aktif' : 
-                             licenseData.status === 'expired' ? 'Lisensi Kedaluwarsa' : 
-                             licenseData.status === 'locked' ? 'Aplikasi Terkunci' : 
-                             licenseData.status === 'pending' ? 'Menunggu Aktivasi' : 'Status Lisensi: ' + licenseData.status}
-                          </h4>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
+                            <h4 style={{ margin: '0 0 4px 0', fontSize: '16px', color: licenseData.allowed ? '#065f46' : '#991b1b', fontWeight: 700 }}>
+                              {licenseData.status === 'active' ? 'Lisensi Aktif' : 
+                               licenseData.status === 'expiring' ? 'Lisensi Segera Berakhir' :
+                               licenseData.status === 'expired' ? 'Lisensi Kedaluwarsa' : 
+                               licenseData.status === 'locked' ? 'Aplikasi Terkunci' : 
+                               licenseData.status === 'pending' ? 'Menunggu Aktivasi' : 'Status Lisensi: ' + licenseData.status}
+                            </h4>
+                            <button
+                              type="button"
+                              onClick={() => fetchLicense(true)}
+                              disabled={refreshingLicense}
+                              style={{
+                                display: 'inline-flex', alignItems: 'center', gap: '4px',
+                                background: '#fff', border: '1px solid #d1d5db', borderRadius: '6px',
+                                padding: '4px 8px', fontSize: '11.5px', fontWeight: 600, color: '#374151',
+                                cursor: refreshingLicense ? 'not-allowed' : 'pointer'
+                              }}
+                            >
+                              <RefreshCw size={12} style={{ animation: refreshingLicense ? 'spin 1s linear infinite' : 'none' }} />
+                              {refreshingLicense ? 'Mengecek...' : 'Cek Ulang Server'}
+                            </button>
+                          </div>
                           <p style={{ margin: 0, fontSize: '13px', color: licenseData.allowed ? '#047857' : '#b91c1c', lineHeight: 1.5 }}>
                             {licenseData.reason || (licenseData.allowed ? 'Aplikasi Anda terhubung dan memiliki lisensi yang valid. Semua fitur dapat digunakan tanpa batasan.' : 'Lisensi tidak valid atau perlu diperpanjang.')}
                           </p>
                         </div>
                       </div>
 
+                      {/* Tagihan QRIS (jika ada) */}
+                      {licenseData.billing && (
+                        <div style={{
+                          background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '12px',
+                          padding: '16px', display: 'flex', gap: '16px', alignItems: 'center'
+                        }}>
+                          <img
+                            src={`/api/license/billing/qris.png?t=${licenseData.billing.amount}`}
+                            alt="QRIS Tagihan"
+                            style={{ width: '100px', height: '100px', borderRadius: '8px', border: '1px solid #e2e8f0', background: '#fff', objectFit: 'contain', imageRendering: 'pixelated' }}
+                          />
+                          <div style={{ flex: 1 }}>
+                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#16a34a', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase' }}>
+                              <QrCode size={13} /> Tagihan Perpanjangan
+                            </div>
+                            <div style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a', margin: '2px 0' }}>
+                              {licenseData.billing.amount_text}
+                            </div>
+                            <div style={{ fontSize: '12px', color: '#64748b' }}>
+                              QRIS · {licenseData.billing.merchant_name}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Detail Lisensi */}
                       <div className="bo-form-group">
                         <label className="bo-label">Detail Lisensi</label>
                         <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '10px', overflow: 'hidden' }}>
                           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
                             <tbody>
                               <tr style={{ borderBottom: '1px solid #e5e7eb' }}>
-                                <td style={{ padding: '12px 16px', color: '#6b7280', width: '40%' }}>Status</td>
+                                <td style={{ padding: '12px 16px', color: '#6b7280', width: '38%' }}>Status</td>
                                 <td style={{ padding: '12px 16px', fontWeight: 700, color: licenseData.allowed ? '#059669' : '#dc2626' }}>
                                   {String(licenseData.status || '').toUpperCase()}
                                   {licenseData.offline && <span style={{ marginLeft: '8px', fontSize: '11px', background: '#f3f4f6', color: '#6b7280', padding: '2px 6px', borderRadius: '4px' }}>Offline Mode</span>}
@@ -468,12 +524,35 @@ const Settings: React.FC = () => {
                                   <td style={{ padding: '12px 16px', color: '#6b7280' }}>Masa Aktif</td>
                                   <td style={{ padding: '12px 16px', fontWeight: 600, color: '#111827' }}>
                                     Sampai {new Date(licenseData.expiresAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+                                    {licenseData.daysLeft !== null && licenseData.daysLeft !== undefined && (
+                                      <span style={{ marginLeft: '8px', fontSize: '12px', color: licenseData.daysLeft <= 7 ? '#d97706' : '#059669', fontWeight: 600 }}>
+                                        ({licenseData.daysLeft} hari lagi)
+                                      </span>
+                                    )}
                                   </td>
                                 </tr>
                               )}
                               <tr style={{ borderBottom: '1px solid #e5e7eb' }}>
                                 <td style={{ padding: '12px 16px', color: '#6b7280' }}>Machine ID</td>
-                                <td style={{ padding: '12px 16px', fontFamily: 'monospace', fontWeight: 600, color: '#111827' }}>{licenseData.machineId || '-'}</td>
+                                <td style={{ padding: '12px 16px', fontFamily: 'monospace', fontWeight: 600, color: '#111827' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <span>{licenseData.machineId || '-'}</span>
+                                    {licenseData.machineId && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          navigator.clipboard.writeText(licenseData.machineId);
+                                          setCopiedMid(true);
+                                          setTimeout(() => setCopiedMid(false), 2000);
+                                        }}
+                                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: copiedMid ? '#10b981' : '#6b7280', padding: '2px' }}
+                                        title="Salin Machine ID"
+                                      >
+                                        {copiedMid ? <CheckCircle size={14} /> : <Copy size={14} />}
+                                      </button>
+                                    )}
+                                  </div>
+                                </td>
                               </tr>
                               <tr style={{ borderBottom: '1px solid #e5e7eb' }}>
                                 <td style={{ padding: '12px 16px', color: '#6b7280' }}>Tipe Produk</td>
@@ -482,14 +561,66 @@ const Settings: React.FC = () => {
                               {licenseData.licenseKey && (
                                 <tr>
                                   <td style={{ padding: '12px 16px', color: '#6b7280' }}>Lisensi Key</td>
-                                  <td style={{ padding: '12px 16px', fontFamily: 'monospace', fontWeight: 600, color: '#111827' }}>{licenseData.licenseKey}</td>
+                                  <td style={{ padding: '12px 16px', fontFamily: 'monospace', fontWeight: 600, color: '#111827', wordBreak: 'break-all' }}>{licenseData.licenseKey}</td>
                                 </tr>
                               )}
                             </tbody>
                           </table>
                         </div>
-                        <p style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '8px' }}>
-                          * Data ditarik langsung dari server backend. Hubungi administrator VOC ML Anda untuk info lebih lanjut.
+                      </div>
+
+                      {/* Aktivasi Manual */}
+                      <div className="bo-form-group">
+                        <label className="bo-label">Aktivasi / Perpanjang Lisensi Manual</label>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <input
+                            type="text"
+                            placeholder="VOCML-XXXXX-XXXXX-..."
+                            value={manualKey}
+                            onChange={(e) => setManualKey(e.target.value)}
+                            className="bo-input"
+                            style={{ fontFamily: 'monospace', fontSize: '13px' }}
+                          />
+                          <button
+                            type="button"
+                            disabled={activatingKey || !manualKey.trim()}
+                            onClick={async () => {
+                              setActivatingKey(true);
+                              setKeyMsg(null);
+                              try {
+                                const res = await fetch('/api/license/activate', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ licenseKey: manualKey.trim() })
+                                });
+                                const data = await res.json();
+                                if (res.ok && data.allowed) {
+                                  setKeyMsg({ text: 'Aktivasi berhasil!', isError: false });
+                                  setLicenseData(data);
+                                  setManualKey('');
+                                } else {
+                                  setKeyMsg({ text: data.error || 'Aktivasi gagal.', isError: true });
+                                }
+                              } catch {
+                                setKeyMsg({ text: 'Gagal terhubung ke server', isError: true });
+                              } finally {
+                                setActivatingKey(false);
+                              }
+                            }}
+                            className="bo-btn bo-btn-primary"
+                            style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                          >
+                            <KeyRound size={15} />
+                            {activatingKey ? 'Mengaktifkan...' : 'Aktivasi'}
+                          </button>
+                        </div>
+                        {keyMsg && (
+                          <p style={{ margin: '6px 0 0', fontSize: '12.5px', color: keyMsg.isError ? '#dc2626' : '#059669', fontWeight: 600 }}>
+                            {keyMsg.text}
+                          </p>
+                        )}
+                        <p style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '6px' }}>
+                          * Masukkan kode lisensi yang diberikan oleh administrator VOCML untuk memperpanjang secara manual.
                         </p>
                       </div>
                     </>
