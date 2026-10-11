@@ -56,6 +56,7 @@ export interface Employee {
   username: string;
   password: string;
   isActive: boolean;
+  shift?: "A" | "B" | "C" | "AUTO"; // Shift kerja karyawan
 }
 
 export interface StockTransaction {
@@ -70,12 +71,15 @@ export interface StockTransaction {
   note?: string; // keterangan / sumber mutasi (mis. 'Penjualan Kasir', 'Koreksi stok')
   customerId?: string; // pelanggan pada mutasi OUT hasil penjualan kasir
   customerName?: string; // snapshot nama pelanggan (tetap tampil walau data pelanggan dihapus)
+  onCredit?: boolean; // IN dari supplier: true = menambah hutang, false = tunai/lunas
 }
 
 export interface StockTransactionItem {
   productId: string;
   variantId?: string;
   variantName?: string;
+  /** Varian BARU yang belum terdaftar (dibuat otomatis oleh server saat barang diterima) */
+  newVariantName?: string;
   productName?: string;
   unit?: string;
   qty: number; // ADJUSTMENT: bernilai selisih (+/-)

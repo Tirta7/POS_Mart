@@ -18,6 +18,7 @@ interface InventoryState {
   reserveStock: (productId: string, qty: number, variantId?: string) => void;
   releaseReservedStock: (productId: string, qty: number, variantId?: string) => void;
   addTransaction: (transaction: StockTransaction) => Promise<void>;
+  deleteTransaction: (id: string) => Promise<void>;
   addCategory: (category: string) => void;
   deleteCategory: (category: string) => void;
   editCategory: (oldCategory: string, newCategory: string) => void;
@@ -71,6 +72,7 @@ const mapTransaction = (t: any): StockTransaction => ({
   note: t.note,
   customerId: t.customer_id,
   customerName: t.customer_name,
+  onCredit: t.on_credit !== false,
   items: (t.items || []).map((i: any) => ({
     productId: i.product_id,
     variantId: i.variant_id || undefined,
@@ -235,14 +237,34 @@ export const useInventoryStore = create<InventoryState>()(
           });
           if (res.ok) {
             await res.json();
-            // Optional: you can add it to local state if needed
-            set((state) => ({ transactions: [...state.transactions, transaction] }));
             // IMPORTANT: Refetch products & transactions so the new stock shows up everywhere!
-            get().fetchProducts(); 
-            get().fetchTransactions(); 
+            await Promise.all([get().fetchProducts(), get().fetchTransactions()]);
+          } else {
+            const body = await res.json().catch(() => ({}));
+            throw new Error(body.error || 'Gagal menyimpan transaksi stok');
           }
         } catch(err) {
           console.error(err);
+          throw err;
+        }
+      },
+      deleteTransaction: async (id: string) => {
+        try {
+          const res = await fetch(`/api/saas/stock-transactions/${id}`, {
+            method: 'DELETE',
+            headers: getHeaders()
+          });
+          if (res.ok) {
+            set((state) => ({ transactions: state.transactions.filter(t => t.id !== id) }));
+            get().fetchProducts();
+            get().fetchTransactions();
+          } else {
+            const data = await res.json();
+            throw new Error(data.error || 'Failed to delete transaction');
+          }
+        } catch (err) {
+          console.error("Error deleting transaction:", err);
+          throw err;
         }
       },
       fetchCategories: async () => {

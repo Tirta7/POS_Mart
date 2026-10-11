@@ -43,17 +43,25 @@ const SupplierData: React.FC = () => {
     }
     setError('');
 
-    if (editTarget) {
-      await updateSupplier(editTarget.id, form);
-    } else {
-      await addSupplier(form);
+    try {
+      if (editTarget) {
+        await updateSupplier(editTarget.id, form);
+      } else {
+        await addSupplier(form);
+      }
+      setModalOpen(false);
+    } catch (err: any) {
+      setError(err?.message || 'Gagal menyimpan supplier.');
     }
-    setModalOpen(false);
   };
 
   const handleDelete = async (id: string) => {
     if (confirm('Yakin ingin menghapus supplier ini?')) {
-      await deleteSupplier(id);
+      try {
+        await deleteSupplier(id);
+      } catch (err: any) {
+        alert(err?.message || 'Gagal menghapus supplier.');
+      }
     }
   };
 

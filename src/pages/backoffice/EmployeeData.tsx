@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAuthStore } from '../../store/useAuthStore';
 import { UserPlus, Users, Edit2, Trash2, X, Eye, EyeOff, Save } from 'lucide-react';
 import type { Employee } from '../../types';
+import { SHIFT_OPTIONS, shiftLabel, type ShiftCode } from '../../components/ShiftLabel';
 
 const EMPTY_EMP: Omit<Employee, 'id'> = {
   name: '',
@@ -10,6 +11,7 @@ const EMPTY_EMP: Omit<Employee, 'id'> = {
   username: '',
   password: '',
   isActive: true,
+  shift: 'A',
 };
 
 const EmployeeData: React.FC = () => {
@@ -31,7 +33,7 @@ const EmployeeData: React.FC = () => {
 
   const openEdit = (emp: Employee) => {
     setEditTarget(emp);
-    setForm({ name: emp.name, role: emp.role, pin: emp.pin, username: emp.username, password: emp.password, isActive: emp.isActive });
+    setForm({ name: emp.name, role: emp.role, pin: emp.pin, username: emp.username, password: emp.password, isActive: emp.isActive, shift: emp.shift || 'A' });
     setError('');
     setShowPassword(false);
     setModalOpen(true);
@@ -88,6 +90,7 @@ const EmployeeData: React.FC = () => {
                 <th>Nama Lengkap</th>
                 <th>Username Login</th>
                 <th>Jabatan / Role</th>
+                <th>Shift</th>
                 <th>PIN</th>
                 <th style={{ textAlign: 'center' }}>Status</th>
                 <th style={{ textAlign: 'center' }}>Aksi</th>
@@ -107,6 +110,9 @@ const EmployeeData: React.FC = () => {
                     <span className={`bo-badge ${emp.role === 'Supervisor' ? 'bo-badge-amber' : emp.role === 'Admin' ? 'bo-badge-red' : 'bo-badge-gray'}`}>
                       {emp.role}
                     </span>
+                  </td>
+                  <td>
+                    <span className="bo-badge bo-badge-gray">{shiftLabel(emp.shift)}</span>
                   </td>
                   <td>
                     <code style={{ backgroundColor: '#f3f4f6', padding: '2px 8px', borderRadius: '4px', fontSize: '13px' }}>
@@ -207,6 +213,23 @@ const EmployeeData: React.FC = () => {
                     <option value="true">Aktif</option>
                     <option value="false">Non-Aktif</option>
                   </select>
+                </div>
+              </div>
+
+              {/* Shift kerja */}
+              <div>
+                <label style={{ fontSize: '13px', fontWeight: '600', color: '#374151', display: 'block', marginBottom: '6px' }}>Shift Kerja</label>
+                <select
+                  value={form.shift || 'A'}
+                  onChange={e => setForm(f => ({ ...f, shift: e.target.value as ShiftCode }))}
+                  style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: '8px', outline: 'none', fontSize: '14px', backgroundColor: 'white' }}
+                >
+                  {SHIFT_OPTIONS.map(o => (
+                    <option key={o.value} value={o.value}>{o.label} — {o.hours}</option>
+                  ))}
+                </select>
+                <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '4px' }}>
+                  Shift ini tampil di bagian atas halaman POS Kasir & Back-Office saat karyawan login.
                 </div>
               </div>
 

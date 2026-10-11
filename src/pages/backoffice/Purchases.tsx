@@ -10,8 +10,12 @@ import type { StockTransaction, Supplier } from '../../types';
 import BarcodeScannerCamera from '../../components/BarcodeScannerCamera';
 
 interface CartItem {
+  key: string; // productId::variantId|new:nama  (unik per baris belanja)
   productId: string;
   name: string;
+  variantId?: string;
+  variantName?: string;
+  isNewVariant?: boolean; // varian belum terdaftar -> dibuat otomatis saat PO diterbitkan
   currentStock: number;
   qty: number;
   batchNo: string;
@@ -24,11 +28,17 @@ interface CartItem {
   showBatchExp?: boolean;
 }
 
+const makeKey = (productId: string, variantId?: string, newName?: string) =>
+  `${productId}::${variantId || (newName ? 'new:' + newName.trim().toLowerCase() : '')}`;
+
+const PO_DRAFT_URL = '/api/saas/drafts/purchase-po';
+const DRAFT_HEADERS = { 'Content-Type': 'application/json', 'x-tenant-id': 'TID-DEMO-123' };
+
 type PurchaseTab = 'FORM' | 'HISTORY' | 'DEBT';
 
 const Purchases: React.FC = () => {
   const { 
-    products, updateProduct, addTransaction, addProduct, categories, 
+    products, addTransaction, addProduct, categories, 
     transactions, fetchTransactions, fetchProducts 
   } = useInventoryStore();
   const { suppliers, fetchSuppliers, paySupplierDebt, addSupplier } = useSupplierStore();
@@ -56,6 +66,13 @@ const Purchases: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [poErrors, setPoErrors] = useState<string[]>([]);
+  const [poNotice, setPoNotice] = useState<string>('');
+
+  // Variant picker (muncul saat produk punya varian)
+  const [variantPickerProduct, setVariantPickerProduct] = useState<any | null>(null);
+  const [newVariantInput, setNewVariantInput] = useState('');
+  const [variantPickerError, setVariantPickerError] = useState('');
 
   // History filters & modal
   const [historySearch, setHistorySearch] = useState('');
@@ -97,6 +114,29 @@ const Purchases: React.FC = () => {
     fetchTransactions();
     fetchSuppliers();
   }, [fetchProducts, fetchTransactions, fetchSuppliers]);
+
+  // Muat draf PO yang tersimpan di server (jika ada)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(PO_DRAFT_URL, { headers: DRAFT_HEADERS });
+        if (!res.ok) return;
+        const draft = await res.json();
+        if (cancelled || !draft || !Array.isArray(draft.items) || draft.items.length === 0) return;
+        setItems(draft.items);
+        if (draft.selectedSupplier) setSelectedSupplier(draft.selectedSupplier);
+        if (draft.documentNo) setDocumentNo(draft.documentNo);
+        if (draft.orderDate) setOrderDate(draft.orderDate);
+        if (draft.paymentTerm) setPaymentTerm(draft.paymentTerm);
+        if (draft.orderNotes) setOrderNotes(draft.orderNotes);
+        setPoNotice('Draf PO sebelumnya dimuat. Periksa kembali sebelum diterbitkan.');
+      } catch (err) {
+        console.error('Gagal memuat draf PO:', err);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   // Set default selected supplier if none selected and suppliers exist
   useEffect(() => {
@@ -187,30 +227,80 @@ const Purchases: React.FC = () => {
     ).slice(0, 10);
   }, [products, searchTerm]);
 
-  // Add Item to cart
-  const handleAddItem = (product: any) => {
-    const existing = items.find(i => i.productId === product.id);
+  // Tambah satu baris belanja (produk biasa, varian terdaftar, atau varian baru)
+  const addCartLine = (
+    product: any,
+    variant?: { id: string; name: string; stock: number; purchasePrice?: number; sellingPrice?: number },
+    newVariantName?: string
+  ) => {
+    const key = makeKey(product.id, variant?.id, newVariantName);
+    const existing = items.find(i => i.key === key);
     if (existing) {
-      handleItemChange(product.id, 'qty', existing.qty + 1);
-      setSearchTerm('');
+      handleItemChange(key, 'qty', existing.qty + 1);
       return;
     }
-    const buyPrice = Number(product.purchasePrice) || 0;
+    const buyPrice = Number(variant?.purchasePrice ?? product.purchasePrice) || 0;
     setItems(prev => [...prev, {
+      key,
       productId: product.id,
       name: product.name,
-      currentStock: product.stock || 0,
+      variantId: variant?.id,
+      variantName: variant?.name || (newVariantName ? newVariantName.trim() : undefined),
+      isNewVariant: !variant && !!newVariantName,
+      currentStock: variant ? variant.stock : (newVariantName ? 0 : (product.stock || 0)),
       qty: 1,
       batchNo: '',
       expiryDate: '',
       purchasePrice: buyPrice,
       originalPrice: buyPrice,
-      sellingPrice: Number(product.sellingPrice) || 0,
+      sellingPrice: Number(variant?.sellingPrice ?? product.sellingPrice) || 0,
       unit: product.unit || 'Pcs',
       subtotal: buyPrice,
       showBatchExp: false
     }]);
+  };
+
+  // Add Item to cart
+  const handleAddItem = (product: any) => {
     setSearchTerm('');
+    setPoErrors([]);
+    setPoNotice('');
+    if ((product.variants || []).length > 0) {
+      // Produk bervarian -> pilih varian dulu (atau input varian baru)
+      setVariantPickerError('');
+      setNewVariantInput('');
+      setVariantPickerProduct(product);
+      return;
+    }
+    addCartLine(product);
+  };
+
+  const handlePickExistingVariant = (variant: any) => {
+    if (!variantPickerProduct) return;
+    addCartLine(variantPickerProduct, variant);
+    setVariantPickerError('');
+  };
+
+  const handleAddNewVariant = () => {
+    if (!variantPickerProduct) return;
+    const name = newVariantInput.trim();
+    if (!name) {
+      setVariantPickerError('Nama varian baru wajib diisi.');
+      return;
+    }
+    if (name.length > 60) {
+      setVariantPickerError('Nama varian maksimal 60 karakter.');
+      return;
+    }
+    // Nama sama dengan varian yang sudah ada -> pakai varian itu (hindari duplikat)
+    const same = (variantPickerProduct.variants || []).find((v: any) => v.name.trim().toLowerCase() === name.toLowerCase());
+    if (same) {
+      addCartLine(variantPickerProduct, same);
+    } else {
+      addCartLine(variantPickerProduct, undefined, name);
+    }
+    setNewVariantInput('');
+    setVariantPickerError('');
   };
 
   // Add Quick Sample Product (for instant testing)
@@ -241,18 +331,18 @@ const Purchases: React.FC = () => {
     }
   };
 
-  const handleRemoveItem = (productId: string) => {
-    setItems(prev => prev.filter(i => i.productId !== productId));
+  const handleRemoveItem = (key: string) => {
+    setItems(prev => prev.filter(i => i.key !== key));
   };
 
-  const handleItemChange = (productId: string, field: keyof CartItem, value: any) => {
+  const handleItemChange = (key: string, field: keyof CartItem, value: any) => {
     setItems(prev => prev.map(item => {
-      if (item.productId === productId) {
+      if (item.key === key) {
         const updated = { ...item, [field]: value };
         if (field === 'qty' || field === 'purchasePrice') {
           const qty = Number(field === 'qty' ? value : item.qty) || 0;
           const price = Number(field === 'purchasePrice' ? value : item.purchasePrice) || 0;
-          updated.subtotal = qty * price;
+          updated.subtotal = Math.round(qty * price);
         }
         return updated;
       }
@@ -267,11 +357,18 @@ const Purchases: React.FC = () => {
     }
     const newItems: CartItem[] = (tx.items || []).map(it => {
       const prod = products.find(p => p.id === it.productId);
-      const buyPrice = it.purchasePrice || prod?.purchasePrice || 0;
+      const variant = it.variantId ? prod?.variants?.find(v => v.id === it.variantId) : undefined;
+      // Varian dulu pernah ada tetapi sudah dihapus -> dibuat ulang sebagai varian baru (berdasarkan nama)
+      const newName = !variant && it.variantName ? it.variantName : undefined;
+      const buyPrice = it.purchasePrice || variant?.purchasePrice || prod?.purchasePrice || 0;
       return {
+        key: makeKey(it.productId, variant?.id, newName),
         productId: it.productId,
         name: it.productName || prod?.name || `Produk ${it.productId}`,
-        currentStock: prod?.stock || 0,
+        variantId: variant?.id,
+        variantName: variant?.name || newName,
+        isNewVariant: !!newName,
+        currentStock: variant ? variant.stock : (newName ? 0 : (prod?.stock || 0)),
         qty: it.qty || 1,
         batchNo: it.batchNo || '',
         expiryDate: it.expiryDate || '',
@@ -279,83 +376,195 @@ const Purchases: React.FC = () => {
         originalPrice: prod?.purchasePrice || buyPrice,
         sellingPrice: prod?.sellingPrice || 0,
         unit: prod?.unit || 'Pcs',
-        subtotal: (it.qty || 1) * buyPrice,
+        subtotal: Math.round((it.qty || 1) * buyPrice),
         showBatchExp: Boolean(it.batchNo || it.expiryDate)
       };
     });
     setItems(newItems);
     setDocumentNo(`PO-${Date.now()}`);
+    setPoErrors([]);
     setActiveTab('FORM');
     if (selectedHistoryTx) setSelectedHistoryTx(null);
   };
 
-  // Submit PO
-  const handleSubmit = async (e?: React.FormEvent, isDraft = false) => {
-    if (e) e.preventDefault();
-    if (!selectedSupplier) {
-      alert("Pilih supplier terlebih dahulu!");
-      return;
+  const handleDeleteTransaction = async (id: string) => {
+    if (confirm('Yakin ingin membatalkan faktur pembelian ini? Stok barang akan dikembalikan (dikurangi) dan hutang ke supplier akan dihapus.')) {
+      try {
+        await useInventoryStore.getState().deleteTransaction(id);
+        alert('Faktur pembelian berhasil dibatalkan dan stok dikembalikan.');
+        // fetchProducts & fetchTransactions is already called in the store
+      } catch (err: any) {
+        alert(err.message || 'Gagal membatalkan faktur pembelian.');
+      }
     }
+  };
+
+  // Validasi lengkap form PO sebelum diterbitkan
+  const validatePO = (): { errors: string[]; warnings: string[] } => {
+    const errors: string[] = [];
+    const warnings: string[] = [];
+
+    // Langkah 1: Faktur
+    if (!selectedSupplier) errors.push('Supplier belum dipilih.');
+    else if (!suppliers.some(s => s.id === selectedSupplier)) errors.push('Supplier yang dipilih tidak valid. Muat ulang halaman.');
+
+    const doc = documentNo.trim();
+    if (!doc) {
+      errors.push('No. Faktur / Dokumen PO wajib diisi.');
+    } else if ((transactions || []).some(t => t.type === 'IN' && t.supplierId && (t.documentNo || '').trim().toLowerCase() === doc.toLowerCase())) {
+      errors.push(`No. Faktur "${doc}" sudah pernah dipakai. Klik "No. Baru" atau gunakan nomor lain.`);
+    }
+
+    if (!orderDate) {
+      errors.push('Tanggal faktur wajib diisi.');
+    } else {
+      const d = new Date(orderDate);
+      const endToday = new Date(); endToday.setHours(23, 59, 59, 999);
+      if (isNaN(d.getTime())) errors.push('Tanggal faktur tidak valid.');
+      else if (d.getTime() > endToday.getTime()) errors.push('Tanggal faktur tidak boleh di masa depan.');
+    }
+
+    // Langkah 2: Barang
+    if (items.length === 0) errors.push('Tambahkan minimal 1 barang belanja.');
+
+    const seen = new Set<string>();
+    items.forEach((it, i) => {
+      const label = `Barang #${i + 1} (${it.name}${it.variantName ? ' - ' + it.variantName : ''})`;
+      const product = products.find(p => p.id === it.productId);
+      if (!product) {
+        errors.push(`${label}: produk tidak ditemukan di katalog (mungkin sudah dihapus).`);
+        return;
+      }
+      if (seen.has(it.key)) errors.push(`${label}: muncul dua kali.`);
+      seen.add(it.key);
+
+      const qty = Number(it.qty);
+      const price = Number(it.purchasePrice);
+      if (!Number.isFinite(qty) || qty <= 0) errors.push(`${label}: jumlah harus lebih dari 0.`);
+      if (!Number.isFinite(price) || price <= 0) errors.push(`${label}: harga beli harus lebih dari 0.`);
+
+      // Langkah 3: Varian
+      const hasVariants = (product.variants || []).length > 0;
+      if (hasVariants && !it.variantId && !(it.isNewVariant && it.variantName?.trim())) {
+        errors.push(`${label}: produk ini memiliki varian, pilih varian terlebih dahulu.`);
+      }
+      if (!hasVariants && it.isNewVariant) {
+        if ((product.stock || 0) > 0) errors.push(`${label}: produk belum punya varian tetapi masih ada stok ${product.stock}. Atur varian dahulu di Manajemen Stok.`);
+      }
+      if (it.variantId && !(product.variants || []).some(v => v.id === it.variantId)) {
+        errors.push(`${label}: varian sudah dihapus. Hapus baris ini lalu tambahkan ulang.`);
+      }
+
+      if (it.expiryDate) {
+        const exp = new Date(it.expiryDate);
+        if (!isNaN(exp.getTime()) && exp.getTime() < Date.now()) warnings.push(`${label}: tanggal kedaluwarsa sudah lewat.`);
+      }
+      const base = Number(it.originalPrice) || 0;
+      if (base > 0 && price > 0 && Math.abs(price - base) / base > 0.5) {
+        warnings.push(`${label}: harga beli ${formatIDR(price)} berbeda >50% dari HPP ${formatIDR(base)}.`);
+      }
+    });
+
+    return { errors, warnings };
+  };
+
+  // Simpan draf PO di server (stok & hutang TIDAK berubah)
+  const handleSaveDraft = async () => {
+    setPoNotice('');
     if (items.length === 0) {
-      alert("Tambahkan minimal 1 produk belanja!");
+      setPoErrors(['Tambahkan minimal 1 barang untuk disimpan sebagai draf.']);
       return;
     }
-    if (!currentUser) return;
+    try {
+      const res = await fetch(PO_DRAFT_URL, {
+        method: 'POST',
+        headers: DRAFT_HEADERS,
+        body: JSON.stringify({ selectedSupplier, documentNo, orderDate, paymentTerm, orderNotes, items })
+      });
+      if (!res.ok) throw new Error('Server menolak penyimpanan draf.');
+      setPoErrors([]);
+      setPoNotice('Draf PO tersimpan. Stok dan hutang belum berubah sampai PO diterbitkan.');
+    } catch (err: any) {
+      setPoErrors([err?.message || 'Gagal menyimpan draf.']);
+    }
+  };
+
+  // Submit PO
+  const handleSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (isSubmitting) return;
+    setPoNotice('');
+    if (!currentUser) {
+      setPoErrors(['Sesi login tidak ditemukan. Silakan login ulang.']);
+      return;
+    }
+
+    const { errors, warnings } = validatePO();
+    if (errors.length > 0) {
+      setPoErrors(errors);
+      return;
+    }
+    setPoErrors([]);
+
+    const supp = suppliers.find(s => s.id === selectedSupplier);
+    const onCredit = !paymentTerm.toLowerCase().startsWith('tunai');
+    const newVariantCount = items.filter(i => i.isNewVariant).length;
+
+    const summary = [
+      `Terbitkan PO ${documentNo.trim()}?`,
+      '',
+      `Supplier : ${supp?.name || '-'}`,
+      `Barang   : ${items.length} baris (${totalQty} unit)`,
+      `Total    : ${formatIDR(totalValue)}`,
+      `Pembayaran: ${paymentTerm}${onCredit ? ' → menambah hutang supplier' : ' → tidak menambah hutang'}`,
+      newVariantCount > 0 ? `Varian baru: ${newVariantCount} varian akan didaftarkan otomatis` : '',
+      warnings.length > 0 ? `\nPerhatian:\n- ${warnings.join('\n- ')}` : '',
+      '',
+      'Stok barang akan bertambah setelah PO diterbitkan.'
+    ].filter(l => l !== '').join('\n');
+    if (!window.confirm(summary)) return;
 
     setIsSubmitting(true);
     try {
-      const supp = suppliers.find(s => s.id === selectedSupplier);
-
-      // 1. Catat Transaksi Pembelian (IN)
       const transaction: StockTransaction = {
         id: `TXN-${Date.now()}`,
         type: 'IN',
-        date: orderDate ? new Date(orderDate).toISOString() : new Date().toISOString(),
+        date: new Date(orderDate).toISOString(),
         documentNo: documentNo.trim(),
         supplierId: selectedSupplier,
         employeeId: currentUser.id,
-        items: items.map(({ name, currentStock, originalPrice, sellingPrice, unit, showBatchExp, ...rest }) => ({
-          ...rest,
-          productName: name,
-          unit: unit
+        items: items.map(it => ({
+          productId: it.productId,
+          variantId: it.variantId,
+          variantName: it.variantName,
+          newVariantName: it.isNewVariant ? it.variantName : undefined,
+          productName: it.name,
+          unit: it.unit,
+          qty: Number(it.qty),
+          batchNo: it.batchNo,
+          expiryDate: it.expiryDate,
+          purchasePrice: Number(it.purchasePrice),
+          subtotal: Math.round(Number(it.qty) * Number(it.purchasePrice))
         })),
         totalValue,
-        note: orderNotes ? `${orderNotes} (${paymentTerm})` : `PO dari ${supp?.name || 'Supplier'} (${paymentTerm})`
+        note: orderNotes ? `${orderNotes} (${paymentTerm})` : `PO dari ${supp?.name || 'Supplier'} (${paymentTerm})`,
+        onCredit
       };
 
+      // Server menambah stok (+varian baru), menghitung HPP rata-rata, dan menambah hutang dalam SATU transaksi database.
       await addTransaction(transaction);
 
-      // 2. Update HPP dan stok produk jika bukan draft murni
-      for (const item of items) {
-        const product = products.find(p => p.id === item.productId);
-        if (product) {
-          const oldQty = product.stock;
-          const oldPrice = product.purchasePrice || 0;
-          const addedQty = Number(item.qty);
-          const addedPrice = Number(item.purchasePrice);
-          const newTotalQty = oldQty + addedQty;
-          
-          const newAvgPrice = newTotalQty > 0 
-            ? Math.round(((oldQty * oldPrice) + (addedQty * addedPrice)) / newTotalQty)
-            : oldPrice;
+      // Hapus draf yang tersimpan (jika ada)
+      fetch(PO_DRAFT_URL, { method: 'POST', headers: DRAFT_HEADERS, body: JSON.stringify(null) }).catch(() => {});
 
-          await updateProduct(product.id, {
-            ...product,
-            stock: newTotalQty,
-            purchasePrice: newAvgPrice
-          });
-        }
-      }
-
-      alert(isDraft ? "Draf pembelian berhasil disimpan!" : "PO Berhasil Diterbitkan! Stok barang dan hutang supplier telah diperbarui.");
       setItems([]);
       setDocumentNo(`PO-${Date.now()}`);
       setOrderNotes('');
-      fetchSuppliers();
-      fetchTransactions();
-    } catch (err) {
+      setPoNotice(`PO ${transaction.documentNo} berhasil diterbitkan. Stok${newVariantCount > 0 ? ', varian baru' : ''}${onCredit ? ' dan hutang supplier' : ''} telah diperbarui.`);
+      await Promise.all([fetchSuppliers(), fetchTransactions(), fetchProducts()]);
+    } catch (err: any) {
       console.error(err);
-      alert("Terjadi kesalahan saat memproses pembelian.");
+      setPoErrors([err?.message || 'Terjadi kesalahan saat memproses pembelian.']);
     } finally {
       setIsSubmitting(false);
     }
@@ -472,641 +681,416 @@ const Purchases: React.FC = () => {
     >
       
       {/* =====================================================================
-          1. PAGE HEADER DENGAN ICON SQUIRCLE MERAH
+          1. PAGE HEADER (konsisten dengan halaman back-office lain)
           ===================================================================== */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-        <div style={{
-          width: '44px', height: '44px', borderRadius: '14px',
-          background: '#fff1f2', display: 'flex', alignItems: 'center', justifyContent: 'center',
-          flexShrink: 0
-        }}>
-          <ShoppingCart size={22} color="#e11d48" />
-        </div>
+      <div className="bo-page-header" style={{ flexShrink: 0 }}>
         <div>
-          <h1 style={{ fontSize: '18px', fontWeight: 800, color: '#0f172a', margin: 0, letterSpacing: '-0.3px' }}>
-            Pembelian (Purchase Order)
-          </h1>
-          <p style={{ fontSize: '12px', color: '#64748b', margin: '2px 0 0 0', lineHeight: 1.4 }}>
-            Kelola pesanan pembelian supplier, penerimaan stok, dan buku hutang usaha secara terpadu.
-          </p>
+          <h1 className="bo-page-title">Pembelian (Purchase Order)</h1>
+          <p className="bo-page-subtitle">Kelola pesanan pembelian supplier, penerimaan stok, dan buku hutang usaha secara terpadu.</p>
+        </div>
+        <div className="bo-header-actions">
+          {activeTab !== 'FORM' && (
+            <button className="bo-btn bo-btn-primary" onClick={() => setActiveTab('FORM')}>
+              <Plus size={16} /> Buat PO Baru
+            </button>
+          )}
         </div>
       </div>
 
       {/* =====================================================================
-          2. KPI METRICS CARDS (3 KOLOM PERSIS MOCKUP)
+          2. RINGKASAN (KPI) — satu baris ringkas
           ===================================================================== */}
       <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(3, 1fr)',
-        gap: isMobileScreen ? '8px' : '14px',
-        marginBottom: '14px',
-        flexShrink: 0
+        display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+        gap: isMobileScreen ? '8px' : '12px', marginBottom: '14px', flexShrink: 0
       }}>
-        
-        {/* Card 1: BELANJA BULAN INI */}
-        <div style={{
-          background: '#ffffff', borderRadius: '16px', padding: '12px 10px',
-          border: '1px solid #f1f5f9', display: 'flex', flexDirection: 'column', gap: '4px',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
-        }}>
-          <span style={{ fontSize: '10px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.2px' }}>
-            BELANJA BULAN INI
-          </span>
-          <div style={{ fontSize: '16px', fontWeight: 800, color: '#0f172a', whiteSpace: 'nowrap' }}>
-            {formatIDR(totalMonthlySpent)}
+        {[
+          { label: 'Belanja Bulan Ini', value: formatIDR(totalMonthlySpent), sub: `${monthlyPurchases.length} faktur masuk`, color: '#0f172a', subColor: '#64748b', border: '#e5e7eb' },
+          { label: 'Total Hutang', value: formatIDR(totalSupplierDebt), sub: `${suppliersWithDebt.length} vendor berhutang`, color: '#dc2626', subColor: '#dc2626', border: '#fecaca' },
+          { label: 'Faktur PO', value: String(purchaseHistory.length), sub: 'Semua periode', color: '#0f172a', subColor: '#059669', border: '#e5e7eb' },
+        ].map(k => (
+          <div key={k.label} style={{
+            background: '#ffffff', border: `1px solid ${k.border}`, borderRadius: '12px',
+            padding: isMobileScreen ? '10px' : '12px 16px', minWidth: 0
+          }}>
+            <div style={{ fontSize: '10.5px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.3px' }}>{k.label}</div>
+            <div style={{ fontSize: isMobileScreen ? '15px' : '19px', fontWeight: 800, color: k.color, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', margin: '2px 0' }}>{k.value}</div>
+            <div style={{ fontSize: '11px', fontWeight: 600, color: k.subColor }}>{k.sub}</div>
           </div>
-          <span style={{ fontSize: '10.5px', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <span style={{ fontSize: '8px' }}>●</span> {monthlyPurchases.length} Faktur Masuk
-          </span>
-        </div>
+        ))}
+      </div>
 
-        {/* Card 2: HUTANG (HIGHLIGHTED MERAH DENGAN TITIK MERAH) */}
-        <div style={{
-          background: '#ffffff', borderRadius: '16px', padding: '12px 10px',
-          border: '1px solid #fecaca', display: 'flex', flexDirection: 'column', gap: '4px',
-          boxShadow: '0 2px 8px rgba(239,68,68,0.06)'
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '10.5px', fontWeight: 800, color: '#b91c1c', textTransform: 'uppercase' }}>
-              HUTANG
+      {/* =====================================================================
+          3. TAB (gaya sama dengan filter kategori di halaman lain)
+          ===================================================================== */}
+      <div className="categories-bar" style={{ flexShrink: 0 }}>
+        <button className={`cat-btn ${activeTab === 'FORM' ? 'active' : ''}`} onClick={() => setActiveTab('FORM')}>
+          <Plus size={16} /> Buat PO Baru
+        </button>
+        <button className={`cat-btn ${activeTab === 'HISTORY' ? 'active' : ''}`} onClick={() => setActiveTab('HISTORY')}>
+          <Clock size={16} /> Riwayat
+          <span style={{ opacity: 0.75, fontSize: '0.75rem' }}>{purchaseHistory.length}</span>
+        </button>
+        <button className={`cat-btn ${activeTab === 'DEBT' ? 'active' : ''}`} onClick={() => setActiveTab('DEBT')}>
+          <CreditCard size={16} /> Hutang
+          {suppliersWithDebt.length > 0 && (
+            <span style={{ background: '#dc2626', color: '#fff', borderRadius: '999px', padding: '0 7px', fontSize: '0.7rem', fontWeight: 700 }}>
+              {suppliersWithDebt.length}
             </span>
-            <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#dc2626' }}></span>
-          </div>
-          <div style={{ fontSize: '15px', fontWeight: 800, color: '#dc2626', whiteSpace: 'nowrap' }}>
-            {formatIDR(totalSupplierDebt)}
-          </div>
-          <span style={{ fontSize: '10px', color: '#dc2626', fontWeight: 500 }}>
-            {suppliersWithDebt.length} Vendor Jatuh Tempo
-          </span>
-        </div>
-
-        {/* Card 3: FAKTUR PO */}
-        <div style={{
-          background: '#ffffff', borderRadius: '16px', padding: '12px 10px',
-          border: '1px solid #f1f5f9', display: 'flex', flexDirection: 'column', gap: '4px',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
-        }}>
-          <span style={{ fontSize: '10px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.2px' }}>
-            FAKTUR PO
-          </span>
-          <div style={{ fontSize: '17px', fontWeight: 800, color: '#0f172a' }}>
-            {purchaseHistory.length}
-          </div>
-          <span style={{ fontSize: '10.5px', color: '#10b981', fontWeight: 600 }}>
-            Semua Periode
-          </span>
-        </div>
-      </div>
-
-      {/* =====================================================================
-          3. SEGMENTED TABS (BUAT PO BARU, RIWAYAT, HUTANG)
-          ===================================================================== */}
-      <div style={{
-        background: '#e9eef5', padding: '4px', borderRadius: '14px',
-        display: isMobileScreen ? 'flex' : 'inline-flex', gap: '4px', marginBottom: '14px',
-        flexShrink: 0
-      }}>
-        {/* Tab 1: Buat PO Baru */}
-        <button
-          type="button"
-          onClick={() => setActiveTab('FORM')}
-          style={{
-            flex: 1, border: 'none',
-            background: activeTab === 'FORM' ? '#ffffff' : 'transparent',
-            color: activeTab === 'FORM' ? '#dc2626' : '#475569',
-            borderRadius: '10px', padding: '8px 6px',
-            fontSize: '13px', fontWeight: activeTab === 'FORM' ? 700 : 600,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px',
-            cursor: 'pointer',
-            boxShadow: activeTab === 'FORM' ? '0 2px 6px rgba(0,0,0,0.06)' : 'none'
-          }}
-        >
-          <Plus size={16} color={activeTab === 'FORM' ? '#dc2626' : '#64748b'} />
-          <span>Buat PO Baru</span>
-        </button>
-
-        {/* Tab 2: Riwayat */}
-        <button
-          type="button"
-          onClick={() => setActiveTab('HISTORY')}
-          style={{
-            flex: 1, border: 'none',
-            background: activeTab === 'HISTORY' ? '#ffffff' : 'transparent',
-            color: activeTab === 'HISTORY' ? '#dc2626' : '#475569',
-            borderRadius: '10px', padding: '8px 6px',
-            fontSize: '13px', fontWeight: activeTab === 'HISTORY' ? 700 : 600,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
-            cursor: 'pointer',
-            boxShadow: activeTab === 'HISTORY' ? '0 2px 6px rgba(0,0,0,0.06)' : 'none'
-          }}
-        >
-          <Clock size={15} color={activeTab === 'HISTORY' ? '#dc2626' : '#64748b'} />
-          <span>Riwayat</span>
-          <span style={{
-            background: '#e2e8f0', color: '#475569',
-            borderRadius: '999px', padding: '1px 7px', fontSize: '11px', fontWeight: 700
-          }}>
-            {purchaseHistory.length}
-          </span>
-        </button>
-
-        {/* Tab 3: Hutang */}
-        <button
-          type="button"
-          onClick={() => setActiveTab('DEBT')}
-          style={{
-            flex: 1, border: 'none',
-            background: activeTab === 'DEBT' ? '#ffffff' : 'transparent',
-            color: activeTab === 'DEBT' ? '#dc2626' : '#475569',
-            borderRadius: '10px', padding: '8px 6px',
-            fontSize: '13px', fontWeight: activeTab === 'DEBT' ? 700 : 600,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
-            cursor: 'pointer',
-            boxShadow: activeTab === 'DEBT' ? '0 2px 6px rgba(0,0,0,0.06)' : 'none'
-          }}
-        >
-          <CreditCard size={15} color={activeTab === 'DEBT' ? '#dc2626' : '#64748b'} />
-          <span>Hutang</span>
-          <span style={{
-            background: '#dc2626', color: '#ffffff',
-            borderRadius: '999px', padding: '1px 7px', fontSize: '11px', fontWeight: 700
-          }}>
-            {suppliersWithDebt.length}
-          </span>
+          )}
         </button>
       </div>
 
       {/* =====================================================================
           TAB 1: FORM BUAT PO BARU
+          Desktop : kiri = barang belanja, kanan = detail faktur + ringkasan (sticky)
+          Mobile  : detail faktur -> barang belanja -> bar total di bawah
           ===================================================================== */}
-      {activeTab === 'FORM' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          
-          {/* Card: Detail Pembelian & Faktur */}
-          <div style={{
-            background: '#ffffff', borderRadius: '16px', padding: '16px',
-            border: '1px solid #f1f5f9', boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
-            display: 'flex', flexDirection: 'column', gap: '12px'
-          }}>
-            {/* Header with red dot & No. Baru button */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '8px', borderBottom: '1px solid #f8fafc' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#dc2626', display: 'inline-block' }}></span>
-                <span style={{ fontSize: '15px', fontWeight: 800, color: '#0f172a' }}>Detail Pembelian & Faktur</span>
-              </div>
+      {activeTab === 'FORM' && (() => {
+        const lbl: React.CSSProperties = { fontSize: '11px', fontWeight: 700, color: '#64748b', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.2px' };
+        const ctl: React.CSSProperties = { width: '100%', height: '38px', boxSizing: 'border-box' };
+
+        const invoiceCard = (
+          <div className="bo-card" style={{ marginBottom: 0 }}>
+            <div className="bo-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 className="bo-card-title" style={{ margin: 0 }}>Detail Faktur</h3>
               <button
                 type="button"
                 onClick={() => setDocumentNo(`PO-${Date.now()}`)}
-                style={{
-                  background: '#fff5f5', border: '1px solid #fecaca', color: '#dc2626',
-                  borderRadius: '999px', padding: '4px 12px', fontSize: '12px', fontWeight: 600,
-                  display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer'
-                }}
+                className="bo-btn bo-btn-secondary"
+                style={{ height: '30px', padding: '0 10px', fontSize: '12px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
               >
                 <RefreshCw size={12} /> No. Baru
               </button>
             </div>
-
-            {/* Field: NO. FAKTUR / DOKUMEN PO */}
-            <div>
-              <label style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', display: 'block', marginBottom: '4px', textTransform: 'uppercase' }}>
-                NO. FAKTUR / DOKUMEN PO
-              </label>
-              <input
-                type="text"
-                value={documentNo}
-                onChange={e => setDocumentNo(e.target.value)}
-                style={{
-                  width: '100%', background: '#f8fafc', border: '1px solid #e2e8f0',
-                  borderRadius: '10px', height: '42px', padding: '0 12px',
-                  fontFamily: 'monospace', fontWeight: 700, fontSize: '14px', color: '#0f172a'
-                }}
-              />
-            </div>
-
-            {/* Field: TANGGAL PEMBELIAN */}
-            <div>
-              <label style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', display: 'block', marginBottom: '4px', textTransform: 'uppercase' }}>
-                TANGGAL PEMBELIAN
-              </label>
-              <div style={{ position: 'relative' }}>
-                <input
-                  type="date"
-                  value={orderDate}
-                  onChange={e => setOrderDate(e.target.value)}
-                  style={{
-                    width: '100%', background: '#ffffff', border: '1px solid #e2e8f0',
-                    borderRadius: '10px', height: '42px', padding: '0 12px',
-                    fontSize: '13.5px', color: '#0f172a'
-                  }}
-                />
+            <div style={{ padding: '14px 16px 16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label style={lbl}>No. Faktur / Dokumen PO</label>
+                <input className="bo-input" type="text" value={documentNo} onChange={e => setDocumentNo(e.target.value)}
+                  style={{ ...ctl, fontFamily: 'ui-monospace, Menlo, monospace', fontWeight: 700 }} />
               </div>
-            </div>
-
-            {/* Field: PILIH SUPPLIER / VENDOR */}
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                <label style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>
-                  PILIH SUPPLIER / VENDOR
-                </label>
-                <button
-                  type="button"
-                  onClick={() => setIsNewSupplierModalOpen(true)}
-                  style={{
-                    background: 'none', border: 'none', padding: 0,
-                    color: '#dc2626', fontWeight: 700, fontSize: '12px', cursor: 'pointer'
-                  }}
-                >
-                  + Supplier Baru
-                </button>
+              <div>
+                <label style={lbl}>Tanggal</label>
+                <input className="bo-input" type="date" value={orderDate} onChange={e => setOrderDate(e.target.value)} style={ctl} />
               </div>
-              <select
-                value={selectedSupplier}
-                onChange={e => setSelectedSupplier(e.target.value)}
-                style={{
-                  width: '100%', background: '#ffffff', border: '1px solid #e2e8f0',
-                  borderRadius: '10px', height: '44px', padding: '0 12px',
-                  fontSize: '13.5px', color: '#0f172a', fontWeight: 500
-                }}
-              >
-                {suppliers.length === 0 ? (
-                  <option value="">-- Belum ada supplier --</option>
-                ) : (
-                  suppliers.map(s => (
-                    <option key={s.id} value={s.id}>
-                      {s.name} (Hutang: {formatIDR(s.totalPayable || 0)})
-                    </option>
-                  ))
-                )}
-              </select>
-            </div>
-
-            {/* Field: KETENTUAN PEMBAYARAN */}
-            <div>
-              <label style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', display: 'block', marginBottom: '4px', textTransform: 'uppercase' }}>
-                KETENTUAN PEMBAYARAN
-              </label>
-              <select
-                value={paymentTerm}
-                onChange={e => setPaymentTerm(e.target.value)}
-                style={{
-                  width: '100%', background: '#ffffff', border: '1px solid #e2e8f0',
-                  borderRadius: '10px', height: '44px', padding: '0 12px',
-                  fontSize: '13.5px', color: '#0f172a', fontWeight: 500
-                }}
-              >
-                <option value="Tempo 14 Hari (Hutang)">Tempo 14 Hari (Hutang)</option>
-                <option value="Tempo 7 Hari (Hutang)">Tempo 7 Hari (Hutang)</option>
-                <option value="Tempo 30 Hari (Hutang)">Tempo 30 Hari (Hutang)</option>
-                <option value="Tunai / Cash (Lunas)">Tunai / Cash (Lunas)</option>
-                <option value="Konsinyasi">Konsinyasi (Bagi Hasil)</option>
-              </select>
-            </div>
-
-            {/* Field: CATATAN FAKTUR (OPSIONAL) */}
-            <div>
-              <label style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', display: 'block', marginBottom: '4px', textTransform: 'uppercase' }}>
-                CATATAN FAKTUR (OPSIONAL)
-              </label>
-              <input
-                type="text"
-                placeholder="No. Surat Jalan, info pengiriman..."
-                value={orderNotes}
-                onChange={e => setOrderNotes(e.target.value)}
-                style={{
-                  width: '100%', background: '#ffffff', border: '1px solid #e2e8f0',
-                  borderRadius: '10px', height: '42px', padding: '0 12px',
-                  fontSize: '13.5px', color: '#0f172a'
-                }}
-              />
+              <div>
+                <label style={lbl}>Pembayaran</label>
+                <select className="bo-input" value={paymentTerm} onChange={e => setPaymentTerm(e.target.value)} style={ctl}>
+                  <option value="Tempo 14 Hari (Hutang)">Tempo 14 Hari</option>
+                  <option value="Tempo 7 Hari (Hutang)">Tempo 7 Hari</option>
+                  <option value="Tempo 30 Hari (Hutang)">Tempo 30 Hari</option>
+                  <option value="Tunai / Cash (Lunas)">Tunai / Cash (Lunas)</option>
+                  <option value="Konsinyasi">Konsinyasi (Bagi Hasil)</option>
+                </select>
+              </div>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <label style={lbl}>Supplier / Vendor</label>
+                  <button type="button" onClick={() => setIsNewSupplierModalOpen(true)}
+                    style={{ background: 'none', border: 'none', padding: 0, marginBottom: '4px', color: 'var(--primary, #dc2626)', fontWeight: 700, fontSize: '12px', cursor: 'pointer' }}>
+                    + Supplier Baru
+                  </button>
+                </div>
+                <select className="bo-input" value={selectedSupplier} onChange={e => setSelectedSupplier(e.target.value)} style={ctl}>
+                  {suppliers.length === 0 ? (
+                    <option value="">-- Belum ada supplier --</option>
+                  ) : (
+                    suppliers.map(s => (
+                      <option key={s.id} value={s.id}>{s.name} (Hutang: {formatIDR(s.totalPayable || 0)})</option>
+                    ))
+                  )}
+                </select>
+              </div>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label style={lbl}>Catatan (opsional)</label>
+                <input className="bo-input" type="text" placeholder="No. surat jalan, info pengiriman..." value={orderNotes}
+                  onChange={e => setOrderNotes(e.target.value)} style={ctl} />
+              </div>
             </div>
           </div>
+        );
 
-          {/* Card: CARI PRODUK ATAU SCAN BARCODE */}
-          <div style={{
-            background: '#ffffff', borderRadius: '16px', padding: '16px',
-            border: '1px solid #f1f5f9', boxShadow: '0 2px 8px rgba(0,0,0,0.02)'
-          }}>
-            <div style={{ fontSize: '12px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.2px', marginBottom: '10px' }}>
-              CARI PRODUK ATAU SCAN BARCODE
+        const summaryCard = (
+          <div className="bo-card" style={{ marginBottom: 0 }}>
+            <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {poErrors.length > 0 && (
+                <div role="alert" style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '10px', padding: '10px 12px', maxHeight: '160px', overflowY: 'auto' }}>
+                  <div style={{ fontSize: '12px', fontWeight: 800, color: '#b91c1c', marginBottom: '4px' }}>
+                    Periksa {poErrors.length} hal berikut sebelum menerbitkan PO:
+                  </div>
+                  <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '12px', color: '#991b1b', lineHeight: 1.5 }}>
+                    {poErrors.map((er, i) => <li key={i}>{er}</li>)}
+                  </ul>
+                </div>
+              )}
+              {poErrors.length === 0 && poNotice && (
+                <div role="status" style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '10px', padding: '10px 12px', fontSize: '12px', fontWeight: 600, color: '#166534', lineHeight: 1.5 }}>
+                  {poNotice}
+                </div>
+              )}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+                <div>
+                  <div style={{ fontSize: '10.5px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Total Estimasi PO</div>
+                  <div style={{ fontSize: '22px', fontWeight: 900, color: '#0f172a', lineHeight: 1.15 }}>{formatIDR(totalValue)}</div>
+                </div>
+                <div style={{ fontSize: '12px', fontWeight: 600, color: '#475569', textAlign: 'right' }}>
+                  {items.length} item{totalQty > 0 ? ` • ${totalQty} unit` : ''}
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  type="button"
+                  className="bo-btn bo-btn-secondary"
+                  onClick={() => handleSaveDraft()}
+                  disabled={isSubmitting || items.length === 0}
+                  style={{ opacity: items.length === 0 ? 0.55 : 1, cursor: items.length === 0 ? 'not-allowed' : 'pointer' }}
+                >
+                  Simpan Draf
+                </button>
+                <button
+                  type="button"
+                  className="bo-btn bo-btn-primary"
+                  onClick={() => handleSubmit()}
+                  disabled={isSubmitting || items.length === 0}
+                  style={{ flex: 1, justifyContent: 'center', display: 'inline-flex', alignItems: 'center', gap: '6px', opacity: items.length === 0 ? 0.55 : 1, cursor: items.length === 0 ? 'not-allowed' : 'pointer' }}
+                >
+                  <Check size={16} /> Terbitkan PO
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+
+        const stepBtn: React.CSSProperties = { width: '28px', height: '28px', border: 'none', background: '#ffffff', borderRadius: '6px', fontWeight: 700, fontSize: '15px', color: '#0f172a', cursor: 'pointer' };
+        const qtyStepper = (item: CartItem) => (
+          <div style={{ display: 'inline-flex', alignItems: 'center', background: '#f1f5f9', borderRadius: '8px', padding: '2px' }}>
+            <button type="button" style={stepBtn} onClick={() => handleItemChange(item.key, 'qty', Math.max(0.001, Math.round((item.qty - 1) * 1000) / 1000))}>-</button>
+            <input
+              type="number" min="0.001" step="any" value={item.qty}
+              onChange={e => handleItemChange(item.key, 'qty', Math.max(0.001, Number(e.target.value)))}
+              style={{ width: '56px', textAlign: 'center', border: 'none', background: 'transparent', fontWeight: 700, fontSize: '13.5px', color: '#0f172a' }}
+            />
+            <button type="button" style={stepBtn} onClick={() => handleItemChange(item.key, 'qty', Math.round((item.qty + 1) * 1000) / 1000)}>+</button>
+          </div>
+        );
+        const priceInput = (item: CartItem) => (
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+            <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>Rp</span>
+            <input
+              className="bo-input" type="number" min="0" value={item.purchasePrice}
+              onChange={e => handleItemChange(item.key, 'purchasePrice', Number(e.target.value))}
+              style={{ width: '104px', height: '32px', padding: '0 8px', fontWeight: 700, fontSize: '13px' }}
+            />
+          </div>
+        );
+        const delBtn = (item: CartItem) => (
+          <button type="button" onClick={() => handleRemoveItem(item.key)} title="Hapus item"
+            style={{ width: '30px', height: '30px', borderRadius: '7px', border: '1px solid #fecaca', background: '#fef2f2', color: '#ef4444', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+            <Trash2 size={14} />
+          </button>
+        );
+        const itemTitle = (item: CartItem) => (
+          <>
+            {item.name}
+            {item.variantName && (
+              <span style={{ marginLeft: '6px', fontSize: '11px', background: '#f5f3ff', color: '#7c3aed', padding: '1px 7px', borderRadius: '4px', fontWeight: 700 }}>
+                {item.variantName}
+              </span>
+            )}
+            {item.isNewVariant && (
+              <span style={{ marginLeft: '4px', fontSize: '10px', background: '#fef3c7', color: '#b45309', padding: '1px 6px', borderRadius: '4px', fontWeight: 800 }}>
+                VARIAN BARU
+              </span>
+            )}
+          </>
+        );
+        const itemMeta = (item: CartItem) => {
+          const product = products.find(p => p.id === item.productId);
+          const sellPrice = item.sellingPrice || product?.sellingPrice || 0;
+          const margin = sellPrice > 0 ? (((sellPrice - item.purchasePrice) / sellPrice) * 100).toFixed(0) : null;
+          return (
+            <div style={{ display: 'flex', gap: '6px', marginTop: '4px', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '11px', background: '#eff6ff', color: '#2563eb', padding: '1px 6px', borderRadius: '4px', fontWeight: 600 }}>
+                Stok: {item.currentStock} {item.unit} → {Math.round((item.currentStock + (Number(item.qty) || 0)) * 1000) / 1000}
+              </span>
+              {sellPrice > 0 && (
+                <span style={{ fontSize: '11px', background: '#f0fdf4', color: '#16a34a', padding: '1px 6px', borderRadius: '4px', fontWeight: 600 }}>
+                  Jual: {formatIDR(sellPrice)}
+                </span>
+              )}
+              {margin !== null && (
+                <span style={{ fontSize: '11px', background: Number(margin) > 0 ? '#dcfce7' : '#fee2e2', color: Number(margin) > 0 ? '#15803d' : '#b91c1c', padding: '1px 6px', borderRadius: '4px', fontWeight: 700 }}>
+                  Margin: {margin}%
+                </span>
+              )}
+            </div>
+          );
+        };
+
+        const itemsCard = (
+          <div className="bo-card" style={{ marginBottom: 0 }}>
+            <div className="bo-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+              <h3 className="bo-card-title" style={{ margin: 0 }}>
+                <ShoppingCart size={18} style={{ color: 'var(--primary)' }} /> Barang Belanja
+                <span className="bo-badge bo-badge-red" style={{ backgroundColor: 'var(--primary)', color: 'white', marginLeft: '8px' }}>{items.length} Item</span>
+              </h3>
             </div>
 
-            <div style={{ display: 'flex', gap: '8px', position: 'relative' }}>
+            {/* Pencarian produk / scan barcode */}
+            <div style={{ padding: '12px 16px', display: 'flex', gap: '8px', position: 'relative', borderBottom: '1px solid #f1f5f9' }}>
               <div style={{ position: 'relative', flex: 1 }}>
-                <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+                <Search size={16} style={{ position: 'absolute', left: '11px', top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }} />
                 <input
-                  type="text"
-                  placeholder="Ketik nama produk, SKU, atau scan..."
+                  className="bo-input" type="text"
+                  placeholder="Cari nama produk, SKU, atau scan barcode..."
                   value={searchTerm}
                   onChange={e => setSearchTerm(e.target.value)}
                   onKeyDown={handleSearchKeyDown}
-                  style={{
-                    width: '100%', background: '#ffffff', border: '1px solid #e2e8f0',
-                    borderRadius: '10px', height: '44px', paddingLeft: '38px', paddingRight: '12px',
-                    fontSize: '13.5px', color: '#0f172a'
-                  }}
+                  style={{ width: '100%', height: '38px', paddingLeft: '34px', boxSizing: 'border-box', backgroundColor: '#f9fafb' }}
                 />
               </div>
-
-              {/* Green Camera Button */}
-              <button
-                type="button"
-                onClick={() => setIsScannerOpen(true)}
-                style={{
-                  width: '44px', height: '44px', borderRadius: '10px',
-                  background: '#059669', border: 'none', color: '#ffffff',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  cursor: 'pointer', flexShrink: 0
-                }}
-                title="Buka Kamera Barcode"
-              >
-                <Camera size={18} />
+              <button type="button" onClick={() => setIsScannerOpen(true)} title="Buka Kamera Barcode"
+                style={{ width: '38px', height: '38px', borderRadius: '8px', background: '#059669', border: 'none', color: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
+                <Camera size={17} />
               </button>
 
-              {/* Autocomplete Dropdown */}
               {searchTerm && (
                 <div style={{
-                  position: 'absolute', top: '100%', left: 0, right: '52px',
-                  background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '12px',
-                  boxShadow: '0 10px 25px rgba(0,0,0,0.12)', zIndex: 50, maxHeight: '260px',
-                  overflowY: 'auto', marginTop: '6px'
+                  position: 'absolute', top: '100%', left: '16px', right: '62px',
+                  background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '10px',
+                  boxShadow: '0 10px 25px rgba(0,0,0,0.12)', zIndex: 50, maxHeight: '260px', overflowY: 'auto', marginTop: '-4px'
                 }}>
                   {filteredProducts.length === 0 ? (
                     <div style={{ padding: '16px', textAlign: 'center' }}>
                       <div style={{ color: '#64748b', fontSize: '13px', marginBottom: '8px' }}>Produk tidak ditemukan</div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setNewProdBarcode(searchTerm);
-                          setNewProdName('');
-                          setIsNewProductModalOpen(true);
-                        }}
-                        style={{
-                          background: '#dc2626', color: 'white', border: 'none',
-                          borderRadius: '8px', padding: '6px 12px', fontSize: '12px', fontWeight: 600, cursor: 'pointer'
-                        }}
-                      >
+                      <button type="button" className="bo-btn bo-btn-primary"
+                        onClick={() => { setNewProdBarcode(searchTerm); setNewProdName(''); setIsNewProductModalOpen(true); }}>
                         + Buat Produk Baru
                       </button>
                     </div>
                   ) : (
                     filteredProducts.map(p => (
-                      <div
-                        key={p.id}
-                        onClick={() => handleAddItem(p)}
-                        style={{
-                          padding: '10px 14px', borderBottom: '1px solid #f1f5f9', cursor: 'pointer',
-                          display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-                        }}
-                      >
+                      <div key={p.id} onClick={() => handleAddItem(p)}
+                        style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div>
                           <div style={{ fontWeight: 700, fontSize: '13.5px', color: '#0f172a' }}>{p.name}</div>
-                          <div style={{ fontSize: '11px', color: '#64748b' }}>Stok: {p.stock} • HPP: {formatIDR(p.purchasePrice)}</div>
+                          <div style={{ fontSize: '11px', color: '#64748b' }}>
+                            Stok: {p.stock} • HPP: {formatIDR(p.purchasePrice)}
+                            {(p.variants || []).length > 0 && (
+                              <span style={{ marginLeft: '6px', background: '#f5f3ff', color: '#7c3aed', padding: '0 6px', borderRadius: '4px', fontWeight: 700 }}>
+                                {(p.variants || []).length} varian
+                              </span>
+                            )}
+                          </div>
                         </div>
-                        <span style={{ fontSize: '12px', color: '#dc2626', fontWeight: 700 }}>+ Tambah</span>
+                        <span style={{ fontSize: '12px', color: 'var(--primary, #dc2626)', fontWeight: 700 }}>+ Tambah</span>
                       </div>
                     ))
                   )}
                 </div>
               )}
             </div>
-          </div>
 
-          {/* =================================================================
-              PO ITEMS LIST / EMPTY STATE PERSIS SCREENSHOT 1 & 2
-              ================================================================= */}
-          {items.length === 0 ? (
-            <div style={{
-              border: '1.5px dashed #cbd5e1', borderRadius: '16px',
-              padding: '36px 16px', background: '#ffffff', textAlign: 'center'
-            }}>
-              <div style={{
-                width: '56px', height: '56px', borderRadius: '50%',
-                background: '#f0f5ff', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                margin: '0 auto', color: '#94a3b8'
-              }}>
-                <ShoppingCart size={26} />
+            {items.length === 0 ? (
+              <div style={{ padding: '40px 16px', textAlign: 'center' }}>
+                <div style={{ width: '52px', height: '52px', borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto', color: '#94a3b8' }}>
+                  <ShoppingCart size={24} />
+                </div>
+                <div style={{ fontSize: '15px', fontWeight: 800, color: '#0f172a', marginTop: '12px' }}>Daftar barang belanja masih kosong</div>
+                <div style={{ fontSize: '12.5px', color: '#64748b', lineHeight: 1.5, maxWidth: '320px', margin: '6px auto 14px' }}>
+                  Gunakan kolom pencarian atau scan kamera untuk menambahkan produk yang akan dipesan ke supplier.
+                </div>
+                <button type="button" onClick={handleAddSampleProduct} className="bo-btn bo-btn-secondary"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                  <Plus size={14} /> Tambah Contoh Produk Cepat
+                </button>
               </div>
-              <div style={{ fontSize: '15px', fontWeight: 800, color: '#0f172a', marginTop: '12px' }}>
-                Daftar Barang Belanja Masih Kosong
+            ) : !isMobileScreen ? (
+              <div className="bo-table-container" style={{ overflowX: 'auto' }}>
+                <table className="bo-table" style={{ width: '100%', minWidth: '640px' }}>
+                  <thead>
+                    <tr>
+                      <th style={{ width: '36px' }}>#</th>
+                      <th>Produk</th>
+                      <th style={{ textAlign: 'center' }}>Jumlah</th>
+                      <th>Harga Beli</th>
+                      <th style={{ textAlign: 'right' }}>Subtotal</th>
+                      <th style={{ width: '44px' }}></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items.map((item, idx) => (
+                      <tr key={item.key}>
+                        <td style={{ color: '#94a3b8', fontWeight: 700 }}>{idx + 1}</td>
+                        <td>
+                          <div className="bo-table-bold">{itemTitle(item)}</div>
+                          {itemMeta(item)}
+                        </td>
+                        <td style={{ textAlign: 'center' }}>{qtyStepper(item)}</td>
+                        <td>{priceInput(item)}</td>
+                        <td style={{ textAlign: 'right', fontWeight: 800, color: '#dc2626', whiteSpace: 'nowrap' }}>{formatIDR(item.subtotal)}</td>
+                        <td style={{ textAlign: 'center' }}>{delBtn(item)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-              <div style={{
-                fontSize: '12px', color: '#64748b', lineHeight: 1.5,
-                maxWidth: '300px', margin: '6px auto 16px auto'
-              }}>
-                Gunakan kolom pencarian di atas atau tombol scan kamera untuk menambahkan produk yang akan dipesan ke supplier.
-              </div>
-              <button
-                type="button"
-                onClick={handleAddSampleProduct}
-                style={{
-                  background: '#f1f5f9', color: '#334155', border: 'none',
-                  borderRadius: '999px', padding: '8px 18px', fontSize: '12.5px', fontWeight: 600,
-                  cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px'
-                }}
-              >
-                <Plus size={14} color="#dc2626" /> Tambah Contoh Produk Cepat
-              </button>
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {items.map((item, idx) => {
-                const product = products.find(p => p.id === item.productId);
-                const sellPrice = product?.sellingPrice || item.sellingPrice || 0;
-                const margin = sellPrice > 0 
-                  ? (((sellPrice - item.purchasePrice) / sellPrice) * 100).toFixed(0)
-                  : null;
-
-                return (
-                  <div key={item.productId} style={{
-                    background: '#ffffff', borderRadius: '14px', padding: '14px',
-                    border: '1px solid #f1f5f9', boxShadow: '0 1px 4px rgba(0,0,0,0.02)',
-                    display: 'flex', flexDirection: 'column', gap: '10px'
-                  }}>
-                    {/* Header item */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      <div style={{ flex: 1, paddingRight: '8px' }}>
+            ) : (
+              <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {items.map((item, idx) => (
+                  <div key={item.key} style={{ border: '1px solid #e5e7eb', borderRadius: '12px', padding: '12px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontWeight: 800, fontSize: '14px', color: '#0f172a' }}>
-                          <span style={{ color: '#94a3b8', marginRight: '4px' }}>#{idx + 1}</span>
-                          {item.name}
+                          <span style={{ color: '#94a3b8', marginRight: '4px' }}>#{idx + 1}</span>{itemTitle(item)}
                         </div>
-                        <div style={{ display: 'flex', gap: '6px', marginTop: '4px', flexWrap: 'wrap' }}>
-                          <span style={{ fontSize: '11px', background: '#eff6ff', color: '#2563eb', padding: '1px 6px', borderRadius: '4px', fontWeight: 600 }}>
-                            Stok: {item.currentStock} {item.unit}
-                          </span>
-                          {sellPrice > 0 && (
-                            <span style={{ fontSize: '11px', background: '#f0fdf4', color: '#16a34a', padding: '1px 6px', borderRadius: '4px', fontWeight: 600 }}>
-                              Jual: {formatIDR(sellPrice)}
-                            </span>
-                          )}
-                          {margin !== null && (
-                            <span style={{ 
-                              fontSize: '11px', 
-                              background: Number(margin) > 0 ? '#dcfce7' : '#fee2e2', 
-                              color: Number(margin) > 0 ? '#15803d' : '#b91c1c', 
-                              padding: '1px 6px', borderRadius: '4px', fontWeight: 700 
-                            }}>
-                              Margin: {margin}%
-                            </span>
-                          )}
-                        </div>
+                        {itemMeta(item)}
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveItem(item.productId)}
-                        style={{
-                          background: '#fee2e2', border: 'none', borderRadius: '8px',
-                          width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          color: '#ef4444', cursor: 'pointer'
-                        }}
-                      >
-                        <Trash2 size={15} />
-                      </button>
+                      {delBtn(item)}
                     </div>
-
-                    {/* Stepper Qty & Presets */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', background: '#f1f5f9', borderRadius: '8px', padding: '2px' }}>
-                        <button
-                          type="button"
-                          onClick={() => handleItemChange(item.productId, 'qty', Math.max(1, item.qty - 1))}
-                          style={{
-                            width: '32px', height: '32px', border: 'none', background: '#ffffff',
-                            borderRadius: '6px', fontWeight: 700, fontSize: '16px', color: '#0f172a', cursor: 'pointer'
-                          }}
-                        >
-                          -
-                        </button>
-                        <input
-                          type="number"
-                          min="1"
-                          value={item.qty}
-                          onChange={e => handleItemChange(item.productId, 'qty', Math.max(1, Number(e.target.value)))}
-                          style={{
-                            width: '46px', textAlign: 'center', border: 'none', background: 'transparent',
-                            fontWeight: 700, fontSize: '14px', color: '#0f172a'
-                          }}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => handleItemChange(item.productId, 'qty', item.qty + 1)}
-                          style={{
-                            width: '32px', height: '32px', border: 'none', background: '#ffffff',
-                            borderRadius: '6px', fontWeight: 700, fontSize: '16px', color: '#0f172a', cursor: 'pointer'
-                          }}
-                        >
-                          +
-                        </button>
-                      </div>
-
-                      {/* Presets */}
-                      <div style={{ display: 'flex', gap: '4px' }}>
-                        <button
-                          type="button"
-                          onClick={() => handleItemChange(item.productId, 'qty', item.qty + 5)}
-                          style={{ background: '#f1f5f9', border: 'none', borderRadius: '6px', padding: '4px 8px', fontSize: '11px', fontWeight: 600, color: '#475569', cursor: 'pointer' }}
-                        >
-                          +5
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleItemChange(item.productId, 'qty', item.qty + 10)}
-                          style={{ background: '#f1f5f9', border: 'none', borderRadius: '6px', padding: '4px 8px', fontSize: '11px', fontWeight: 600, color: '#475569', cursor: 'pointer' }}
-                        >
-                          +10
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleItemChange(item.productId, 'qty', item.qty + 24)}
-                          style={{ background: '#f1f5f9', border: 'none', borderRadius: '6px', padding: '4px 8px', fontSize: '11px', fontWeight: 600, color: '#475569', cursor: 'pointer' }}
-                        >
-                          +24 Dus
-                        </button>
-                      </div>
+                      {qtyStepper(item)}
+                      {priceInput(item)}
                     </div>
-
-                    {/* Harga Beli & Subtotal */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #f8fafc', paddingTop: '8px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>HPP: Rp</span>
-                        <input
-                          type="number"
-                          min="0"
-                          value={item.purchasePrice}
-                          onChange={e => handleItemChange(item.productId, 'purchasePrice', Number(e.target.value))}
-                          style={{
-                            width: '100px', height: '32px', border: '1px solid #e2e8f0', borderRadius: '6px',
-                            padding: '0 8px', fontWeight: 700, fontSize: '13px'
-                          }}
-                        />
-                      </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: '10px', color: '#64748b', fontWeight: 600 }}>SUBTOTAL</div>
-                        <div style={{ fontSize: '15px', fontWeight: 800, color: '#dc2626' }}>
-                          {formatIDR(item.subtotal)}
-                        </div>
-                      </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #f1f5f9', paddingTop: '8px' }}>
+                      <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 700 }}>SUBTOTAL</span>
+                      <span style={{ fontSize: '15px', fontWeight: 800, color: '#dc2626' }}>{formatIDR(item.subtotal)}</span>
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          )}
-
-          {/* =================================================================
-              FIXED STICKY BOTTOM BAR (PERSIS SCREENSHOT 1 & 2)
-              ================================================================= */}
-          <div style={{
-            position: 'fixed', bottom: 0, left: 0, right: 0,
-            background: '#ffffff', borderTop: '1px solid #f1f5f9',
-            boxShadow: '0 -4px 16px rgba(0,0,0,0.06)', padding: '12px 16px',
-            zIndex: 100, display: 'flex', flexDirection: 'column', gap: '10px'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <span style={{ fontSize: '10.5px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>
-                  TOTAL ESTIMASI PO
-                </span>
-                <div style={{ fontSize: '18px', fontWeight: 900, color: '#0f172a', lineHeight: 1.1 }}>
-                  {formatIDR(totalValue)}
-                </div>
+                ))}
               </div>
-              <span style={{ fontSize: '12.5px', fontWeight: 600, color: '#475569' }}>
-                {items.length} Item Dipilih {totalQty > 0 ? `(${totalQty} Unit)` : ''}
-              </span>
-            </div>
+            )}
+          </div>
+        );
 
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <button
-                type="button"
-                onClick={() => handleSubmit(undefined, true)}
-                disabled={isSubmitting || items.length === 0}
-                style={{
-                  background: '#f1f5f9', color: '#1e293b', border: 'none',
-                  borderRadius: '10px', padding: '12px 18px', fontWeight: 700, fontSize: '14px',
-                  cursor: items.length === 0 ? 'not-allowed' : 'pointer', opacity: items.length === 0 ? 0.6 : 1
-                }}
-              >
-                Simpan Draf
-              </button>
-              <button
-                type="button"
-                onClick={() => handleSubmit(undefined, false)}
-                disabled={isSubmitting || items.length === 0}
-                style={{
-                  flex: 1, background: '#dc2626', color: '#ffffff', border: 'none',
-                  borderRadius: '10px', padding: '12px 20px', fontWeight: 700, fontSize: '14px',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
-                  cursor: items.length === 0 ? 'not-allowed' : 'pointer', opacity: items.length === 0 ? 0.6 : 1
-                }}
-              >
-                <Check size={16} /> Terbitkan PO Sekarang
-              </button>
+        if (isMobileScreen) {
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {invoiceCard}
+              {itemsCard}
+              <div style={{
+                position: 'fixed', bottom: 0, left: 0, right: 0, background: '#ffffff', borderTop: '1px solid #e5e7eb',
+                boxShadow: '0 -4px 16px rgba(0,0,0,0.06)', zIndex: 100
+              }}>
+                {summaryCard}
+              </div>
+            </div>
+          );
+        }
+
+        return (
+          <div style={{
+            display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 360px', gap: '16px',
+            alignItems: 'start', flex: 1, minHeight: 0, overflowY: 'auto', paddingBottom: '8px'
+          }}>
+            <div>{itemsCard}</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', position: 'sticky', top: 0 }}>
+              {invoiceCard}
+              {summaryCard}
             </div>
           </div>
-
-        </div>
-      )}
+        );
+      })()}
 
       {/* =====================================================================
           TAB 2: RIWAYAT PO & FAKTUR (DESKTOP TABLE vs MOBILE CARDS)
@@ -1259,6 +1243,17 @@ const Purchases: React.FC = () => {
                                 }}
                               >
                                 Pesan Lagi
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteTransaction(tx.id)}
+                                style={{
+                                  background: '#fef2f2', color: '#ef4444', border: '1px solid #fecaca',
+                                  borderRadius: '8px', padding: '5px 10px', fontSize: '11.5px', fontWeight: 700, cursor: 'pointer'
+                                }}
+                                title="Batal & Hapus"
+                              >
+                                <Trash2 size={14} />
                               </button>
                             </div>
                           </td>
@@ -1434,6 +1429,17 @@ const Purchases: React.FC = () => {
                           }}
                         >
                           Pesan Lagi
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteTransaction(tx.id)}
+                          style={{
+                            background: '#fef2f2', color: '#ef4444', border: '1px solid #fecaca',
+                            borderRadius: '8px', padding: '8px', fontSize: '12px', fontWeight: 600, cursor: 'pointer'
+                          }}
+                          title="Batal & Hapus"
+                        >
+                          <Trash2 size={14} />
                         </button>
                       </div>
                     </div>
@@ -1978,7 +1984,12 @@ const Purchases: React.FC = () => {
                   <tbody>
                     {(selectedHistoryTx.items || []).map((it, idx) => (
                       <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                        <td style={{ padding: '8px' }}>{it.productName || it.productId}</td>
+                        <td style={{ padding: '8px' }}>
+                          {it.productName || it.productId}
+                          {it.variantName && (
+                            <span style={{ marginLeft: '6px', fontSize: '11px', background: '#f5f3ff', color: '#7c3aed', padding: '1px 7px', borderRadius: '4px', fontWeight: 700 }}>{it.variantName}</span>
+                          )}
+                        </td>
                         <td style={{ padding: '8px', textAlign: 'center' }}>{it.qty} {it.unit || ''}</td>
                         <td style={{ padding: '8px', textAlign: 'right' }}>{formatIDR(it.purchasePrice)}</td>
                         <td style={{ padding: '8px', textAlign: 'right', fontWeight: 700 }}>{formatIDR(it.subtotal)}</td>
@@ -2015,6 +2026,75 @@ const Purchases: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* =====================================================================
+          MODAL: PILIH VARIAN (varian terdaftar atau varian BARU yang baru datang)
+          ===================================================================== */}
+      {variantPickerProduct && (() => {
+        const livePicked = new Set(items.filter(i => i.productId === variantPickerProduct.id).map(i => i.key));
+        const liveProduct = products.find(p => p.id === variantPickerProduct.id) || variantPickerProduct;
+        const variants: any[] = liveProduct.variants || [];
+        return (
+          <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '16px' }}
+            onClick={() => setVariantPickerProduct(null)}>
+            <div onClick={e => e.stopPropagation()} style={{ background: 'white', borderRadius: '16px', width: '100%', maxWidth: '460px', maxHeight: '88vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 20px 50px rgba(0,0,0,0.25)' }}>
+              <div style={{ padding: '14px 18px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <div style={{ fontSize: '11px', fontWeight: 700, color: '#7c3aed', textTransform: 'uppercase' }}>Pilih Varian Barang Datang</div>
+                  <div style={{ fontSize: '15px', fontWeight: 800, color: '#0f172a' }}>{liveProduct.name}</div>
+                </div>
+                <button type="button" onClick={() => setVariantPickerProduct(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}><X size={18} /></button>
+              </div>
+
+              <div style={{ padding: '12px 18px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase' }}>Varian terdaftar</div>
+                {variants.map(v => {
+                  const picked = livePicked.has(makeKey(liveProduct.id, v.id));
+                  return (
+                    <button key={v.id} type="button" onClick={() => handlePickExistingVariant(v)}
+                      style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', borderRadius: '10px', border: picked ? '1.5px solid #7c3aed' : '1px solid #e2e8f0', background: picked ? '#f5f3ff' : '#ffffff', cursor: 'pointer', textAlign: 'left' }}>
+                      <span>
+                        <span style={{ fontWeight: 700, fontSize: '13.5px', color: '#0f172a' }}>{v.name}</span>
+                        <span style={{ display: 'block', fontSize: '11px', color: '#64748b' }}>Stok saat ini: {v.stock} {liveProduct.unit}</span>
+                      </span>
+                      <span style={{ fontSize: '12px', fontWeight: 700, color: picked ? '#7c3aed' : 'var(--primary, #dc2626)' }}>{picked ? '✓ Di keranjang (+1)' : '+ Tambah'}</span>
+                    </button>
+                  );
+                })}
+
+                <div style={{ marginTop: '8px', paddingTop: '12px', borderTop: '1px dashed #cbd5e1' }}>
+                  <div style={{ fontSize: '11px', fontWeight: 800, color: '#b45309', textTransform: 'uppercase', marginBottom: '6px' }}>Varian baru (belum terdaftar)</div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <input
+                      className="bo-input" type="text" maxLength={60}
+                      placeholder="mis. Merah, Hijau, XL..."
+                      value={newVariantInput}
+                      onChange={e => { setNewVariantInput(e.target.value); setVariantPickerError(''); }}
+                      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddNewVariant(); } }}
+                      style={{ flex: 1, height: '38px', boxSizing: 'border-box' }}
+                    />
+                    <button type="button" onClick={handleAddNewVariant}
+                      style={{ background: '#7c3aed', color: 'white', border: 'none', borderRadius: '8px', padding: '0 14px', fontWeight: 700, fontSize: '13px', cursor: 'pointer' }}>
+                      + Varian Baru
+                    </button>
+                  </div>
+                  {variantPickerError && <div style={{ marginTop: '6px', fontSize: '12px', color: '#b91c1c', fontWeight: 600 }}>{variantPickerError}</div>}
+                  <div style={{ marginTop: '6px', fontSize: '11px', color: '#64748b', lineHeight: 1.4 }}>
+                    Varian baru otomatis terdaftar di aplikasi (Manajemen Stok & Kasir) begitu PO diterbitkan.
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ padding: '12px 18px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end' }}>
+                <button type="button" onClick={() => setVariantPickerProduct(null)}
+                  style={{ background: '#dc2626', color: 'white', border: 'none', borderRadius: '8px', padding: '9px 20px', fontWeight: 700, fontSize: '13px', cursor: 'pointer' }}>
+                  Selesai
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* =====================================================================
           MODAL: BARCODE SCANNER CAMERA

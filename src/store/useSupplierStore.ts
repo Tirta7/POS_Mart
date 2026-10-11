@@ -11,6 +11,11 @@ interface SupplierState {
   paySupplierDebt: (supplierId: string, amount: number, note: string) => Promise<void>;
 }
 
+const errMsg = async (res: Response, fallback: string) => {
+  const body = await res.json().catch(() => ({}));
+  return body?.error || fallback;
+};
+
 export const useSupplierStore = create<SupplierState>()(
   (set) => ({
       suppliers: [],
@@ -37,9 +42,12 @@ export const useSupplierStore = create<SupplierState>()(
           if (res.ok) {
             const newSup = await res.json();
             set((state) => ({ suppliers: [...state.suppliers, { ...newSup, totalPayable: newSup.payable }] }));
+          } else {
+            throw new Error(await errMsg(res, 'Gagal menambah supplier'));
           }
         } catch (err) {
           console.error(err);
+          throw err;
         }
       },
       updateSupplier: async (id, supplier) => {
@@ -52,9 +60,12 @@ export const useSupplierStore = create<SupplierState>()(
           if (res.ok) {
             const updated = await res.json();
             set((state) => ({ suppliers: state.suppliers.map(s => s.id === id ? { ...updated, totalPayable: updated.payable } : s) }));
+          } else {
+            throw new Error(await errMsg(res, 'Gagal memperbarui supplier'));
           }
         } catch (err) {
           console.error(err);
+          throw err;
         }
       },
       deleteSupplier: async (id) => {
@@ -65,9 +76,12 @@ export const useSupplierStore = create<SupplierState>()(
           });
           if (res.ok) {
             set((state) => ({ suppliers: state.suppliers.filter(s => s.id !== id) }));
+          } else {
+            throw new Error(await errMsg(res, 'Gagal menghapus supplier'));
           }
         } catch (err) {
           console.error(err);
+          throw err;
         }
       },
       updateSupplierPayable: async (supplierId, amount) => {
@@ -112,9 +126,12 @@ export const useSupplierStore = create<SupplierState>()(
                   : s
               )
             }));
+          } else {
+            throw new Error(await errMsg(res, 'Gagal mencatat pembayaran hutang'));
           }
         } catch (err) {
           console.error(err);
+          throw err;
         }
       },
     })

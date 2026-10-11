@@ -82,6 +82,7 @@ model User {
   pin           String?  // Added for PIN login
   role          String   @default("cashier")
   is_active     Boolean  @default(true) // Added to match isActive
+  shift         String   @default("A") // Shift kerja: A (Pagi), B (Siang), C (Malam), AUTO (ikut jam)
   created_at    DateTime @default(now())
 
   tenant Tenant @relation(fields: [tenant_id], references: [id])
@@ -201,6 +202,7 @@ model StockTransaction {
   note         String?
   customer_id  String?
   customer_name String?
+  on_credit    Boolean  @default(true) // IN dari supplier: true = menambah hutang (tempo), false = tunai/lunas
 
   tenant Tenant                 @relation(fields: [tenant_id], references: [id])
   items  StockTransactionItem[]

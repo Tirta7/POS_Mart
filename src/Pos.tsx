@@ -17,7 +17,20 @@ import BarcodeScannerCamera from './components/BarcodeScannerCamera';
 import { sendSaleNotification } from './utils/pushNotification';
 import ReceiptModal from './components/ReceiptModal';
 import type { SalesTransaction } from './types';
+import ShiftLabel from './components/ShiftLabel';
 import type { ReceiptOptions } from './utils/receipt';
+
+/** Tanggal & jam real-time (mengikuti jam perangkat), diperbarui tiap detik. */
+function LiveClock() {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const t = window.setInterval(() => setNow(new Date()), 1000);
+    return () => window.clearInterval(t);
+  }, []);
+  const date = now.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+  const time = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).replace(/\./g, ':');
+  return <>{date}, {time}</>;
+}
 
 function App() {
   const { appName, appLogo, taxEnabled, taxRate, roundingUnit } = useSettingsStore();
@@ -370,8 +383,8 @@ function App() {
 
         <div className="status-pills">
           <div className="pill"><span className="pill-dot"></span> SERVER ONLINE</div>
-          <div className="pill" style={{borderLeft: '1px solid #d1d5db', borderRadius: 0}}>Shift A (Pagi)</div>
-          <div className="pill" style={{borderLeft: '1px solid #d1d5db', borderRadius: 0}}>Okt 24, 12:42 PM</div>
+          <div className="pill" style={{borderLeft: '1px solid #d1d5db', borderRadius: 0}}><ShiftLabel /></div>
+          <div className="pill" style={{borderLeft: '1px solid #d1d5db', borderRadius: 0, fontVariantNumeric: 'tabular-nums'}}><LiveClock /></div>
         </div>
 
         <div className="nav-links">

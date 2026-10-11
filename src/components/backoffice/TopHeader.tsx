@@ -1,6 +1,7 @@
 import React from 'react';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useSettingsStore } from '../../store/useSettingsStore';
+import ShiftLabel from '../ShiftLabel';
 import { Link, useNavigate } from 'react-router-dom';
 import { LogOut, Menu, X, ShoppingCart } from 'lucide-react';
 
@@ -47,7 +48,7 @@ const TopHeader: React.FC<TopHeaderProps> = ({ onMenuToggle, menuOpen }) => {
         <div className="bo-status-pill active">
           <span className="bo-status-dot"></span> ONLINE
         </div>
-        <div className="bo-status-pill border-l border-gray-300">Shift A (Pagi)</div>
+        <div className="bo-status-pill border-l border-gray-300"><ShiftLabel /></div>
         <div className="bo-status-pill border-l border-gray-300">Admin Mode</div>
       </div>
 

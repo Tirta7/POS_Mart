@@ -29,7 +29,8 @@ const mapUser = (dbUser: any): Employee => ({
   name: dbUser.name || dbUser.username,
   pin: dbUser.pin || '',
   role: dbUser.role as any,
-  isActive: dbUser.is_active
+  isActive: dbUser.is_active,
+  shift: (dbUser.shift || "A") as any
 });
 
 export const useAuthStore = create<AuthState>()(
@@ -89,6 +90,7 @@ export const useAuthStore = create<AuthState>()(
               role: employee.role,
               name: employee.name,
               pin: employee.pin,
+              shift: employee.shift,
               isActive: employee.isActive
             })
           });
@@ -111,6 +113,7 @@ export const useAuthStore = create<AuthState>()(
               role: employee.role,
               name: employee.name,
               pin: employee.pin,
+              shift: employee.shift,
               isActive: employee.isActive
             })
           });

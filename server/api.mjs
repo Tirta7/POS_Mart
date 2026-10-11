@@ -234,7 +234,17 @@ app.get('/api/saas/products', async (req, res) => {
 
 app.post('/api/saas/products', async (req, res) => {
   try {
-    const data = req.body;
+    const data = req.body || {};
+    if (!String(data.name || '').trim()) throw new ValidationError('Nama produk wajib diisi.');
+    for (const [k, label] of [['purchasePrice', 'Harga beli'], ['sellingPrice', 'Harga jual'], ['wholesalePrice', 'Harga grosir'], ['stock', 'Stok'], ['minStock', 'Stok minimum']]) {
+      if (data[k] !== undefined && data[k] !== null && data[k] !== '' && (!Number.isFinite(Number(data[k])) || Number(data[k]) < 0)) {
+        throw new ValidationError(`${label} tidak valid.`);
+      }
+    }
+    if (data.barcode) {
+      const dupBarcode = await prisma.product.findFirst({ where: { tenant_id: req.tenantId, barcode: data.barcode, deleted_at: null } });
+      if (dupBarcode) throw new ValidationError(`Barcode "${data.barcode}" sudah dipakai produk "${dupBarcode.name}".`);
+    }
     let categoryId = null;
     
     // Jika ada nama kategori, cari atau buat kategori tersebut
@@ -279,7 +289,7 @@ app.post('/api/saas/products', async (req, res) => {
     notifyTenant(req.tenantId, 'products');
     res.json(product);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
@@ -716,6 +726,18 @@ app.post('/api/saas/transactions', async (req, res) => {
     const data = req.body;
     const { receipt_number, total_amount, payment_method, cashier_id, cashier_name, items, customer_id, customer_name } = data;
     
+    if (!receipt_number) throw new ValidationError('Nomor struk wajib diisi.');
+    if (!Array.isArray(items) || items.length === 0) throw new ValidationError('Keranjang kosong.');
+    if (!Number.isFinite(Number(total_amount)) || Number(total_amount) < 0) throw new ValidationError('Total transaksi tidak valid.');
+    if (!payment_method) throw new ValidationError('Metode pembayaran wajib diisi.');
+    for (const it of items) {
+      if (!it || !it.product_id) throw new ValidationError('Ada item tanpa produk.');
+      if (!Number.isFinite(Number(it.quantity)) || Number(it.quantity) <= 0) throw new ValidationError('Jumlah item harus lebih dari 0.');
+    }
+    const productIds = [...new Set(items.map(it => it.product_id))];
+    const validCount = await prisma.product.count({ where: { id: { in: productIds }, tenant_id: req.tenantId } });
+    if (validCount !== productIds.length) throw new ValidationError('Ada produk di keranjang yang tidak ditemukan. Muat ulang halaman lalu coba lagi.');
+
     const transaction = await prisma.$transaction(async (tx) => {
       // 1. Buat Header Transaksi
       const newTx = await tx.transaction.create({
@@ -848,7 +870,7 @@ app.post('/api/saas/transactions', async (req, res) => {
 
     res.json(transaction);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
@@ -868,106 +890,292 @@ app.get('/api/saas/stock-transactions', async (req, res) => {
   }
 });
 
+class ValidationError extends Error {
+  constructor(message, status = 400) {
+    super(message);
+    this.status = status;
+  }
+}
+const sendError = (res, err) => {
+  if (!(err instanceof ValidationError)) console.error('[API]', err);
+  res.status(err.status || 500).json({ error: err.message });
+};
+const STOCK_TYPES = ['IN', 'OUT', 'ADJUSTMENT'];
+
 app.post('/api/saas/stock-transactions', async (req, res) => {
   try {
-    const data = req.body;
-    const { type, documentNo, supplierId, employeeId, totalValue, note, customerId, customerName, items } = data;
-    
+    const data = req.body || {};
+    const type = String(data.type || '').toUpperCase();
+    if (!STOCK_TYPES.includes(type)) throw new ValidationError('Tipe transaksi tidak valid (IN / OUT / ADJUSTMENT).');
+
+    const documentNo = String(data.documentNo || '').trim();
+    if (!documentNo) throw new ValidationError('Nomor dokumen wajib diisi.');
+
+    const items = Array.isArray(data.items) ? data.items : [];
+    if (items.length === 0) throw new ValidationError('Minimal 1 barang harus diisi.');
+
+    const supplierId = data.supplierId || null;
+    const note = data.note || null;
+    const onCredit = data.onCredit !== false; // default: pembelian dari supplier = hutang
+
     const transaction = await prisma.$transaction(async (tx) => {
-      // 1. Buat Header Transaksi
+      // --- Validasi header ---
+      if (supplierId) {
+        const supp = await tx.supplier.findFirst({ where: { id: supplierId, tenant_id: req.tenantId } });
+        if (!supp) throw new ValidationError('Supplier tidak ditemukan.');
+        if (type === 'IN') {
+          const dup = await tx.stockTransaction.findFirst({
+            where: { tenant_id: req.tenantId, type: 'IN', supplier_id: { not: null }, document_no: documentNo }
+          });
+          if (dup) throw new ValidationError(`No. Faktur "${documentNo}" sudah pernah dipakai. Gunakan nomor lain.`);
+        }
+      }
+
+      // --- Validasi & normalisasi setiap baris ---
+      const seen = new Set();
+      const productCache = new Map();
+      const lines = [];
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i] || {};
+        const label = `Baris ${i + 1}`;
+        if (!item.productId) throw new ValidationError(`${label}: produk belum dipilih.`);
+
+        let product = productCache.get(item.productId);
+        if (!product) {
+          product = await tx.product.findFirst({
+            where: { id: item.productId, tenant_id: req.tenantId, deleted_at: null },
+            include: { variants: true }
+          });
+          if (product) productCache.set(item.productId, product);
+        }
+        if (!product) throw new ValidationError(`${label}: produk tidak ditemukan / sudah dihapus.`);
+
+        const qty = round3(item.qty);
+        if (!Number.isFinite(qty) || qty === 0) throw new ValidationError(`${label} (${product.name}): jumlah harus diisi.`);
+        if (type !== 'ADJUSTMENT' && qty < 0) throw new ValidationError(`${label} (${product.name}): jumlah tidak boleh negatif.`);
+
+        const price = Number(item.purchasePrice || 0);
+        if (!Number.isFinite(price) || price < 0) throw new ValidationError(`${label} (${product.name}): harga beli tidak valid.`);
+        if (type === 'IN' && price <= 0) throw new ValidationError(`${label} (${product.name}): harga beli wajib lebih dari 0.`);
+
+        // --- Varian ---
+        const hasVariants = product.variants.length > 0;
+        const newVariantName = String(item.newVariantName || '').trim();
+        let variant = null;
+        let createVariantName = null;
+
+        if (item.variantId) {
+          variant = product.variants.find(v => v.id === item.variantId);
+          if (!variant) throw new ValidationError(`${label} (${product.name}): varian tidak ditemukan.`);
+        } else if (newVariantName) {
+          if (type !== 'IN') throw new ValidationError(`${label} (${product.name}): varian baru hanya bisa dibuat saat barang masuk.`);
+          // Nama sama dengan varian yang sudah ada -> pakai varian itu (tidak duplikat)
+          variant = product.variants.find(v => v.name.trim().toLowerCase() === newVariantName.toLowerCase()) || null;
+          if (!variant) {
+            if (!hasVariants && product.stock > 0) {
+              throw new ValidationError(`${label} (${product.name}): produk ini belum punya varian tetapi masih ada stok ${product.stock}. Atur varian terlebih dahulu di Manajemen Stok agar stok awal tidak hilang.`);
+            }
+            createVariantName = newVariantName;
+          }
+        } else if (hasVariants) {
+          throw new ValidationError(`${label} (${product.name}): pilih varian (produk ini memiliki ${product.variants.length} varian).`);
+        }
+
+        const key = `${product.id}::${variant ? variant.id : createVariantName ? 'new:' + createVariantName.toLowerCase() : ''}`;
+        if (seen.has(key)) throw new ValidationError(`${label} (${product.name}${variant ? ' - ' + variant.name : createVariantName ? ' - ' + createVariantName : ''}): barang sama muncul dua kali. Gabungkan jumlahnya.`);
+        seen.add(key);
+
+        let stockChange = qty;
+        if (type === 'OUT') stockChange = -Math.abs(qty);
+        else if (type === 'IN') stockChange = Math.abs(qty);
+
+        if (type === 'OUT') {
+          const available = variant ? variant.stock : product.stock;
+          if (available < Math.abs(qty)) throw new ValidationError(`${label} (${product.name}): stok tidak cukup (tersedia ${available}).`);
+        }
+
+        lines.push({ item, product, variant, createVariantName, qty, price, stockChange });
+      }
+
+      // --- Header (total dihitung ulang di server) ---
+      const totalValue = type === 'IN'
+        ? lines.reduce((s, l) => s + Math.round(Math.abs(l.qty) * l.price), 0)
+        : Number(data.totalValue || 0);
+
       const newTx = await tx.stockTransaction.create({
         data: {
           tenant_id: req.tenantId,
           type,
+          ...(data.date && !isNaN(new Date(data.date).getTime()) ? { date: new Date(data.date) } : {}),
           document_no: documentNo,
           supplier_id: supplierId,
-          employee_id: employeeId || 'cashier-1',
-          total_value: Number(totalValue),
+          employee_id: data.employeeId || 'cashier-1',
+          total_value: totalValue,
           note,
-          customer_id: customerId,
-          customer_name: customerName
+          customer_id: data.customerId || null,
+          customer_name: data.customerName || null,
+          on_credit: onCredit
         }
       });
 
-      // 2. Masukkan Item dan Update Stok Produk
-      for (const item of items) {
-        // Validasi varian (opsional) & snapshot nama varian
-        let variantId = null;
-        let variantName = null;
-        if (item.variantId) {
-          const variant = await tx.productVariant.findFirst({
-            where: { id: item.variantId, product_id: item.productId, tenant_id: req.tenantId }
+      // --- Eksekusi baris ---
+      for (const l of lines) {
+        let variantId = l.variant ? l.variant.id : null;
+        let variantName = l.variant ? l.variant.name : null;
+
+        if (l.createVariantName) {
+          const created = await tx.productVariant.create({
+            data: {
+              tenant_id: req.tenantId,
+              product_id: l.product.id,
+              name: l.createVariantName,
+              stock: 0,
+              purchase_price: optNum(l.price),
+              selling_price: optNum(l.item.sellingPrice)
+            }
           });
-          if (!variant) throw new Error('Varian produk tidak ditemukan: ' + (item.variantName || item.variantId));
-          variantId = variant.id;
-          variantName = variant.name;
+          variantId = created.id;
+          variantName = created.name;
         }
 
         await tx.stockTransactionItem.create({
           data: {
             stock_transaction_id: newTx.id,
-            product_id: item.productId,
-            qty: round3(item.qty),
-            batch_no: item.batchNo,
-            expiry_date: item.expiryDate,
-            purchase_price: Number(item.purchasePrice),
-            subtotal: Number(item.subtotal),
+            product_id: l.product.id,
+            qty: l.qty,
+            batch_no: l.item.batchNo || null,
+            expiry_date: l.item.expiryDate || null,
+            purchase_price: l.price,
+            subtotal: Math.round(Math.abs(l.qty) * l.price),
             variant_id: variantId,
             variant_name: variantName
           }
         });
 
-        // Update stok (qty bisa positif atau negatif tergantung IN/OUT/ADJUSTMENT)
-        let stockChange = round3(item.qty);
-        if (type === 'OUT') stockChange = -Math.abs(stockChange);
-        else if (type === 'IN') stockChange = Math.abs(stockChange);
-
         if (variantId) {
           await tx.productVariant.update({
             where: { id: variantId },
-            data: { stock: { increment: stockChange } }
+            data: { stock: { increment: l.stockChange } }
           });
         }
 
+        const productUpdate = { stock: { increment: l.stockChange } };
+        // Barang masuk dari pembelian -> HPP produk dihitung rata-rata tertimbang (weighted average)
+        if (type === 'IN' && l.price > 0) {
+          const oldQty = Math.max(0, l.product.stock);
+          const newQty = oldQty + Math.abs(l.qty);
+          productUpdate.purchase_price = newQty > 0
+            ? Math.round(((oldQty * (l.product.purchase_price || 0)) + (Math.abs(l.qty) * l.price)) / newQty)
+            : l.price;
+          // Produk dengan beberapa baris varian: stok awal baris berikutnya harus ikut yang terbaru
+          l.product.stock = newQty;
+          l.product.purchase_price = productUpdate.purchase_price;
+        }
         await tx.product.update({
-          where: { id: item.productId, tenant_id: req.tenantId },
-          data: { stock: { increment: stockChange } }
+          where: { id: l.product.id },
+          data: productUpdate
         });
       }
 
-      return newTx;
-    });
+      // --- Hutang supplier (satu transaksi DB dengan stok: gagal = rollback semua) ---
+      if (type === 'IN' && supplierId && onCredit && totalValue > 0) {
+        await tx.supplier.updateMany({
+          where: { id: supplierId, tenant_id: req.tenantId },
+          data: { payable: { increment: totalValue } }
+        });
+      }
 
-    // JIKA INI PEMBELIAN DARI SUPPLIER, OTOMATIS TAMBAH HUTANG!
-    if (type === 'IN' && supplierId && totalValue > 0) {
-       try {
-         await prisma.supplier.updateMany({
-           where: { id: supplierId, tenant_id: req.tenantId },
-           data: {
-             payable: { increment: Number(totalValue) }
-           }
-         });
-         notifyTenant(req.tenantId, 'suppliers');
-       } catch (err) {
-         console.error("Gagal menambah hutang supplier:", err);
-       }
-    }
+      return tx.stockTransaction.findUnique({
+        where: { id: newTx.id },
+        include: { items: true }
+      });
+    });
 
     notifyTenant(req.tenantId, 'stock-transactions');
     notifyTenant(req.tenantId, 'transactions');
     notifyTenant(req.tenantId, 'products'); // Because stock changed
+    if (type === 'IN' && supplierId) notifyTenant(req.tenantId, 'suppliers');
     const io = getIo();
     if (io) {
       io.to(req.tenantId).emit('stock_mutation_updated', {
         type,
         documentNo,
-        totalValue: Number(totalValue),
+        totalValue: transaction.total_value,
         note
       });
     }
     res.json(transaction);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
+  }
+});
+
+// Batalkan faktur pembelian (IN): stok & hutang dikembalikan. Mutasi lain (penjualan/koreksi) tidak boleh dihapus.
+app.delete('/api/saas/stock-transactions/:id', async (req, res) => {
+  try {
+    const transactionId = req.params.id;
+
+    const result = await prisma.$transaction(async (tx) => {
+      const stockTx = await tx.stockTransaction.findFirst({
+        where: { id: transactionId, tenant_id: req.tenantId },
+        include: { items: true }
+      });
+      if (!stockTx) throw new ValidationError('Transaksi tidak ditemukan.', 404);
+      if (stockTx.type !== 'IN' || !stockTx.supplier_id) {
+        throw new ValidationError('Hanya faktur pembelian dari supplier yang dapat dibatalkan.');
+      }
+
+      // Validasi: stok saat ini harus cukup untuk ditarik kembali (jangan sampai stok minus)
+      for (const item of stockTx.items) {
+        const qty = Math.abs(round3(item.qty));
+        const product = await tx.product.findFirst({ where: { id: item.product_id, tenant_id: req.tenantId } });
+        if (!product) continue;
+        const variant = item.variant_id ? await tx.productVariant.findUnique({ where: { id: item.variant_id } }) : null;
+        const available = variant ? variant.stock : product.stock;
+        if (available < qty) {
+          const nm = variant ? `${product.name} - ${variant.name}` : product.name;
+          throw new ValidationError(`Tidak bisa dibatalkan: stok "${nm}" tinggal ${available}, sedangkan faktur ini memasukkan ${qty}. Sebagian barang sudah terjual/terpakai.`);
+        }
+      }
+
+      for (const item of stockTx.items) {
+        const dec = Math.abs(round3(item.qty));
+        if (item.variant_id) {
+          const v = await tx.productVariant.findUnique({ where: { id: item.variant_id } });
+          if (v) {
+            await tx.productVariant.update({ where: { id: v.id }, data: { stock: { decrement: dec } } });
+          }
+        }
+        await tx.product.update({
+          where: { id: item.product_id },
+          data: { stock: { decrement: dec } }
+        });
+      }
+
+      // Hutang dikembalikan (tidak boleh minus) hanya jika faktur ini memang menambah hutang
+      if (stockTx.on_credit && stockTx.total_value > 0) {
+        const supp = await tx.supplier.findFirst({ where: { id: stockTx.supplier_id, tenant_id: req.tenantId } });
+        if (supp) {
+          await tx.supplier.update({
+            where: { id: supp.id },
+            data: { payable: Math.max(0, supp.payable - Number(stockTx.total_value)) }
+          });
+        }
+      }
+
+      await tx.stockTransactionItem.deleteMany({ where: { stock_transaction_id: transactionId } });
+      await tx.stockTransaction.delete({ where: { id: transactionId } });
+      return stockTx;
+    });
+
+    notifyTenant(req.tenantId, 'stock-transactions');
+    notifyTenant(req.tenantId, 'transactions');
+    notifyTenant(req.tenantId, 'products');
+    notifyTenant(req.tenantId, 'suppliers');
+
+    res.json({ success: true, message: 'Faktur pembelian dibatalkan, stok dan hutang telah dikembalikan.' });
+  } catch (err) {
+    sendError(res, err);
   }
 });
 
@@ -987,54 +1195,87 @@ app.get('/api/saas/suppliers', async (req, res) => {
 
 app.post('/api/saas/suppliers', async (req, res) => {
   try {
-    const data = req.body;
+    const data = req.body || {};
+    const name = String(data.name || '').trim();
+    if (!name) throw new ValidationError('Nama supplier wajib diisi.');
+    const payable = Number(data.payable || 0);
+    const term = Number(data.paymentTermDays || 0);
+    if (!Number.isFinite(payable) || payable < 0) throw new ValidationError('Hutang awal tidak valid.');
+    if (!Number.isFinite(term) || term < 0) throw new ValidationError('Tempo pembayaran tidak valid.');
+    const dup = await prisma.supplier.findFirst({
+      where: { tenant_id: req.tenantId, name: { equals: name, mode: 'insensitive' } }
+    });
+    if (dup) throw new ValidationError(`Supplier "${name}" sudah terdaftar.`);
     const supplier = await prisma.supplier.create({
       data: {
         tenant_id: req.tenantId,
-        name: data.name,
+        name,
         contact: data.contact,
         phone: data.phone,
-        payment_term_days: Number(data.paymentTermDays || 0),
-        payable: Number(data.payable || 0)
+        payment_term_days: term,
+        payable
       }
     });
     notifyTenant(req.tenantId, 'suppliers');
     res.json(supplier);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
 app.put('/api/saas/suppliers/:id', async (req, res) => {
   try {
-    const data = req.body;
+    const data = req.body || {};
+    const existing = await prisma.supplier.findFirst({ where: { id: req.params.id, tenant_id: req.tenantId } });
+    if (!existing) throw new ValidationError('Supplier tidak ditemukan.', 404);
+
     const updateData = {};
-    if (data.name !== undefined) updateData.name = data.name;
+    if (data.name !== undefined) {
+      const name = String(data.name).trim();
+      if (!name) throw new ValidationError('Nama supplier wajib diisi.');
+      updateData.name = name;
+    }
     if (data.contact !== undefined) updateData.contact = data.contact;
     if (data.phone !== undefined) updateData.phone = data.phone;
-    if (data.paymentTermDays !== undefined) updateData.payment_term_days = Number(data.paymentTermDays);
-    if (data.payable !== undefined) updateData.payable = Number(data.payable);
+    if (data.paymentTermDays !== undefined) {
+      const term = Number(data.paymentTermDays);
+      if (!Number.isFinite(term) || term < 0) throw new ValidationError('Tempo pembayaran tidak valid.');
+      updateData.payment_term_days = term;
+    }
+    if (data.payable !== undefined) {
+      const payable = Number(data.payable);
+      if (!Number.isFinite(payable) || payable < 0) throw new ValidationError('Hutang tidak valid.');
+      updateData.payable = payable;
+    }
 
     const supplier = await prisma.supplier.update({
-      where: { id: req.params.id },
+      where: { id: existing.id },
       data: updateData
     });
     notifyTenant(req.tenantId, 'suppliers');
     res.json(supplier);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
 app.delete('/api/saas/suppliers/:id', async (req, res) => {
   try {
-    await prisma.supplier.delete({
-      where: { id: req.params.id }
-    });
+    const existing = await prisma.supplier.findFirst({ where: { id: req.params.id, tenant_id: req.tenantId } });
+    if (!existing) throw new ValidationError('Supplier tidak ditemukan.', 404);
+    if (existing.payable > 0) throw new ValidationError('Supplier masih memiliki hutang. Lunasi dulu sebelum menghapus.', 409);
+    const [paymentCount, purchaseCount] = await Promise.all([
+      prisma.supplierPayment.count({ where: { supplier_id: existing.id } }),
+      prisma.stockTransaction.count({ where: { tenant_id: req.tenantId, supplier_id: existing.id } })
+    ]);
+    if (paymentCount > 0 || purchaseCount > 0) {
+      throw new ValidationError('Supplier sudah memiliki riwayat pembelian/pembayaran sehingga tidak dapat dihapus.', 409);
+    }
+    await prisma.supplier.delete({ where: { id: existing.id } });
     notifyTenant(req.tenantId, 'suppliers');
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
@@ -1063,6 +1304,7 @@ app.post('/api/saas/users', async (req, res) => {
         role: data.role || 'Cashier',
         name: data.name,
         pin: data.pin,
+        shift: data.shift || "A",
         is_active: data.isActive !== undefined ? data.isActive : true,
         id: data.id // Optional explicit ID
       }
@@ -1085,6 +1327,7 @@ app.put('/api/saas/users/:id', async (req, res) => {
         role: data.role !== undefined ? data.role : undefined,
         name: data.name !== undefined ? data.name : undefined,
         pin: data.pin !== undefined ? data.pin : undefined,
+        shift: data.shift !== undefined && data.shift ? data.shift : undefined,
         is_active: data.isActive !== undefined ? data.isActive : undefined
       }
     });
@@ -1159,29 +1402,37 @@ app.get('/api/saas/supplier-payments', async (req, res) => {
 
 app.post('/api/saas/supplier-payments', async (req, res) => {
   try {
-    const data = req.body;
-    const payment = await prisma.supplierPayment.create({
-      data: {
-        tenant_id: req.tenantId,
-        supplier_id: data.supplierId,
-        amount: Number(data.amount),
-        payment_method: data.paymentMethod || "CASH",
-        note: data.note
+    const data = req.body || {};
+    const amount = Number(data.amount);
+    if (!data.supplierId) throw new ValidationError('Supplier wajib dipilih.');
+    if (!Number.isFinite(amount) || amount <= 0) throw new ValidationError('Nominal pembayaran harus lebih dari 0.');
+
+    const payment = await prisma.$transaction(async (tx) => {
+      const supp = await tx.supplier.findFirst({ where: { id: data.supplierId, tenant_id: req.tenantId } });
+      if (!supp) throw new ValidationError('Supplier tidak ditemukan.', 404);
+      if (amount > supp.payable) {
+        throw new ValidationError(`Nominal melebihi total hutang (${supp.payable}).`);
       }
-    });
-    
-    // Kurangi hutang supplier
-    await prisma.supplier.update({
-      where: { id: data.supplierId, tenant_id: req.tenantId },
-      data: {
-        payable: { decrement: Number(data.amount) }
-      }
+      const created = await tx.supplierPayment.create({
+        data: {
+          tenant_id: req.tenantId,
+          supplier_id: supp.id,
+          amount,
+          payment_method: data.paymentMethod || "CASH",
+          note: data.note
+        }
+      });
+      await tx.supplier.update({
+        where: { id: supp.id },
+        data: { payable: { decrement: amount } }
+      });
+      return created;
     });
 
     notifyTenant(req.tenantId, 'suppliers'); // Trigger refresh to frontend
     res.json(payment);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err);
   }
 });
 
