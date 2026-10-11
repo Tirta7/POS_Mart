@@ -11,7 +11,8 @@ interface InventoryState {
   transactions: StockTransaction[];
   categories: string[];
   addProduct: (product: Product) => Promise<Product>;
-  deleteProduct: (id: string) => Promise<void>;
+  deleteProduct: (id: string) => Promise<DeleteProductResult>;
+  setProductActive: (id: string, active: boolean) => Promise<boolean>;
   updateProduct: (oldId: string, product: Product) => Promise<void>;
   updateProductStock: (productId: string, qty: number) => void;
   reserveStock: (productId: string, qty: number, variantId?: string) => void;
@@ -20,6 +21,15 @@ interface InventoryState {
   addCategory: (category: string) => void;
   deleteCategory: (category: string) => void;
   editCategory: (oldCategory: string, newCategory: string) => void;
+}
+
+export interface DeleteProductResult {
+  ok: boolean;
+  archived?: boolean; // true = soft delete (punya riwayat), riwayat tetap tersimpan
+  hasHistory?: boolean;
+  saleCount?: number;
+  mutationCount?: number;
+  error?: string;
 }
 
 const round3 = (n: number) => Math.round((Number(n) || 0) * 1000) / 1000;
@@ -32,6 +42,7 @@ const mapProduct = (p: any): Product => ({
   category: p.category?.name || 'Uncategorized',
   location: '',
   unit: p.unit || 'Pcs',
+  isActive: p.is_active !== false,
   stock: round3(p.stock),
   minStock: p.min_stock,
   baseUnitMultiplier: 1,
@@ -141,10 +152,36 @@ export const useInventoryStore = create<InventoryState>()(
           });
           if (res.ok) {
             set((state) => ({ products: state.products.filter(p => p.id !== id) }));
+            const okBody = await res.json().catch(() => ({}));
+            return { ok: true, archived: !!okBody.archived, saleCount: okBody.saleCount, mutationCount: okBody.mutationCount };
+          }
+          const body = await res.json().catch(() => ({}));
+          if (res.status === 409 && body.code === 'HAS_HISTORY') {
+            return { ok: false, hasHistory: true, saleCount: body.saleCount, mutationCount: body.mutationCount, error: body.error };
+          }
+          return { ok: false, error: body.error || 'Gagal menghapus produk' };
+        } catch(err: any) {
+          console.error(err);
+          return { ok: false, error: err?.message || 'Gagal menghubungi server' };
+        }
+      },
+
+      setProductActive: async (id, active) => {
+        try {
+          const res = await fetch(`/api/saas/products/${id}/active`, {
+            method: 'PATCH',
+            headers: getHeaders(),
+            body: JSON.stringify({ active })
+          });
+          if (res.ok) {
+            const updated = mapProduct(await res.json());
+            set((state) => ({ products: state.products.map(p => p.id === id ? { ...p, ...updated } : p) }));
+            return true;
           }
         } catch(err) {
           console.error(err);
         }
+        return false;
       },
       
       updateProduct: async (oldId, product) => {

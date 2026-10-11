@@ -16,6 +16,7 @@ export interface Product {
   image?: string;
   isPending?: boolean; // Flag to indicate if the product is a draft in Goods Receipt
   variants?: ProductVariant[]; // Varian (mis. warna). Jika ada, stok produk = total stok varian
+  isActive?: boolean; // false = disembunyikan dari Kasir POS
 }
 
 /** Varian produk. Harga kosong/0 = ikut harga produk induk. */

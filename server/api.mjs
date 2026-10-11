@@ -223,7 +223,7 @@ app.put('/api/saas/settings', async (req, res) => {
 app.get('/api/saas/products', async (req, res) => {
   try {
     const products = await prisma.product.findMany({
-      where: { tenant_id: req.tenantId },
+      where: { tenant_id: req.tenantId, deleted_at: null },
       include: PRODUCT_INCLUDE
     });
     res.json(products);
@@ -339,11 +339,49 @@ app.put('/api/saas/products/:id', async (req, res) => {
 
 app.delete('/api/saas/products/:id', async (req, res) => {
   try {
-    await prisma.product.delete({
+    const product = await prisma.product.findFirst({
       where: { id: req.params.id, tenant_id: req.tenantId }
+    });
+    if (!product) return res.status(404).json({ error: 'Produk tidak ditemukan', code: 'NOT_FOUND' });
+
+    // Produk yang sudah pernah terjual / punya mutasi stok dihapus secara SOFT DELETE:
+    // hilang dari daftar produk & Kasir, tetapi barisnya tetap ada sehingga laporan penjualan,
+    // invoice & riwayat mutasi stok tetap utuh (nama produk tetap tampil di riwayat).
+    const [saleCount, mutationCount] = await Promise.all([
+      prisma.transactionItem.count({ where: { product_id: product.id } }),
+      prisma.stockTransactionItem.count({ where: { product_id: product.id } })
+    ]);
+    if (saleCount > 0 || mutationCount > 0) {
+      await prisma.product.update({
+        where: { id: product.id },
+        data: { deleted_at: new Date(), is_active: false }
+      });
+      notifyTenant(req.tenantId, 'products');
+      return res.json({ success: true, archived: true, saleCount, mutationCount });
+    }
+
+    await prisma.product.delete({
+      where: { id: product.id }
     });
     notifyTenant(req.tenantId, 'products');
     res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Aktif/nonaktifkan produk (nonaktif = tidak tampil di Kasir POS, data & riwayat tetap utuh)
+app.patch('/api/saas/products/:id/active', async (req, res) => {
+  try {
+    const active = !!req.body.active;
+    const result = await prisma.product.updateMany({
+      where: { id: req.params.id, tenant_id: req.tenantId },
+      data: { is_active: active }
+    });
+    if (result.count === 0) return res.status(404).json({ error: 'Produk tidak ditemukan' });
+    const product = await prisma.product.findUnique({ where: { id: req.params.id }, include: PRODUCT_INCLUDE });
+    notifyTenant(req.tenantId, 'products');
+    res.json(product);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1161,7 +1199,7 @@ app.get('/api/saas/export/all', async (req, res) => {
 
     // 2. Products with category
     const products = await prisma.product.findMany({
-      where: { tenant_id: tenantId },
+      where: { tenant_id: tenantId, deleted_at: null },
       include: PRODUCT_INCLUDE,
       orderBy: { name: 'asc' }
     });
@@ -1378,12 +1416,12 @@ app.post('/api/saas/import/master', async (req, res) => {
         let existing = null;
         if (pBarcode) {
           existing = await prisma.product.findFirst({
-            where: { tenant_id: tenantId, barcode: pBarcode }
+            where: { tenant_id: tenantId, deleted_at: null, barcode: pBarcode }
           });
         }
         if (!existing) {
           existing = await prisma.product.findFirst({
-            where: { tenant_id: tenantId, name: { equals: pName, mode: 'insensitive' } }
+            where: { tenant_id: tenantId, deleted_at: null, name: { equals: pName, mode: 'insensitive' } }
           });
         }
 

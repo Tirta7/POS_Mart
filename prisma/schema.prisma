@@ -124,6 +124,8 @@ model Product {
   min_stock      Float   @default(0)
   unit           String  @default("Pcs") // satuan jual (Pcs, Kg, Gram, Liter, ...). Harga selalu per satuan ini.
   image_url      String?
+  is_active      Boolean @default(true) // false = disembunyikan dari Kasir POS (mis. stok habis mendadak)
+  deleted_at     DateTime? // soft delete: produk yang sudah punya riwayat tidak dihapus fisik agar laporan/invoice/mutasi tetap utuh
 
   tenant               Tenant                 @relation(fields: [tenant_id], references: [id])
   category             Category?              @relation(fields: [category_id], references: [id])

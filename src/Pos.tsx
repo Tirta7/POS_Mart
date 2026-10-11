@@ -95,7 +95,7 @@ function App() {
   };
 
   // Available stock = physical stock - reserved
-  const PRODUCTS = storeProducts.map((p, i) => {
+  const PRODUCTS = storeProducts.filter(p => p.isActive !== false).map((p, i) => {
     const availableStock = p.stock - (p.reserved || 0);
     const minStock = p.minStock ?? 10;
     const isLowStock = availableStock <= minStock;

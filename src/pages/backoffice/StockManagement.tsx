@@ -3,7 +3,7 @@ import { useInventoryStore } from '../../store/useInventoryStore';
 import { useSettingsStore } from '../../store/useSettingsStore';
 import { useDraftStore } from '../../store/useDraftStore';
 
-import { Plus, Save, CheckCircle, PackageCheck, Edit2, Trash2, X, ArrowDownToLine, Camera, Search, FileText, AlertTriangle, Printer, LayoutGrid, Package } from 'lucide-react';
+import { Plus, Save, CheckCircle, PackageCheck, Edit2, Trash2, X, ArrowDownToLine, Camera, Search, FileText, AlertTriangle, Printer, LayoutGrid, Package, Eye, EyeOff } from 'lucide-react';
 import BarcodeScannerCamera from '../../components/BarcodeScannerCamera';
 import BarcodeLabelModal from '../../components/BarcodeLabelModal';
 import DraftReviewDrawer from '../../components/DraftReviewDrawer';
@@ -34,7 +34,28 @@ const VariantChips: React.FC<{ variants?: { id?: string; name: string; stock: nu
 
 const StockManagement: React.FC = () => {
   const { appName } = useSettingsStore();
-  const { products, addProduct, deleteProduct, updateProduct, categories, addCategory, deleteCategory, editCategory } = useInventoryStore();
+  const { products, addProduct, deleteProduct, setProductActive, updateProduct, categories, addCategory, deleteCategory, editCategory } = useInventoryStore();
+
+  const handleDeleteProduct = async (p: any) => {
+    const stockInfo = Number(p.stock) > 0 ? `\n\n⚠ Stok saat ini masih ${p.stock} ${p.unit || 'Pcs'} dan ikut hilang.` : '';
+    const histInfo = `\n\nJika produk ini sudah pernah terjual, riwayat penjualan, invoice, dan mutasi stoknya TETAP tersimpan di laporan.`;
+    if (!window.confirm(`Hapus produk "${p.name}"?${stockInfo}${histInfo}`)) return;
+    const result = await deleteProduct(p.id);
+    if (!result.ok) {
+      alert(result.error || 'Gagal menghapus produk');
+      return;
+    }
+    if (result.archived) {
+      alert(`Produk "${p.name}" dihapus dari daftar & Kasir.\nRiwayat tetap tersimpan: ${result.saleCount || 0} item terjual, ${result.mutationCount || 0} mutasi stok.`);
+    }
+  };
+
+  const handleToggleActive = async (p: any) => {
+    const toActive = p.isActive === false;
+    if (!toActive && !window.confirm(`Nonaktifkan "${p.name}"?\nProduk tidak akan tampil di Kasir POS sampai diaktifkan kembali.`)) return;
+    const ok = await setProductActive(p.id, toActive);
+    if (!ok) alert('Gagal mengubah status produk');
+  };
   
   const [editingId, setEditingId] = useState<string | null>(null);
   const [productId, setProductId] = useState('');
@@ -42,6 +63,7 @@ const StockManagement: React.FC = () => {
   const [name, setName] = useState('');
   const [category, setCategory] = useState('Sembako');
   const [searchQuery, setSearchQuery] = useState('');
+  const [showInactive, setShowInactive] = useState(false);
   const [activeCategory, setActiveCategory] = useState('all');
   const [qty, setQty] = useState<number | string>('');
   const [unit, setUnit] = useState('Pcs');
@@ -593,6 +615,7 @@ const StockManagement: React.FC = () => {
     minStock: si.minStock,
     image: si.image,
     variants: (si.variants || []).map((v: any) => ({ id: v.id, name: v.name, stock: Number(v.qty) || 0 })),
+    isActive: true,
     isPending: true
   }));
 
@@ -616,7 +639,11 @@ const StockManagement: React.FC = () => {
     ? activeCategory 
     : 'all';
 
+  const inactiveCount = products.filter(p => p.isActive === false).length;
+
   const filteredProducts = allDisplayProducts.filter(p =>
+    // Switch Nonaktif: OFF = hanya produk aktif, ON = hanya produk nonaktif
+    (showInactive ? p.isActive === false : p.isActive !== false) &&
     (currentCategory === 'all' || (p.category && p.category.toLowerCase() === currentCategory.toLowerCase())) &&
     (p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
      (p.sku && p.sku.toLowerCase().includes(searchQuery.toLowerCase())) ||
@@ -675,6 +702,35 @@ const StockManagement: React.FC = () => {
           </div>
           
           <div className="r-wrap-mobile" style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            {/* Switch: tampilkan produk nonaktif */}
+            <button
+              type="button"
+              role="switch"
+              aria-checked={showInactive}
+              onClick={() => setShowInactive(v => !v)}
+              title="Tampilkan hanya produk yang dinonaktifkan (tidak tampil di Kasir)"
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: '8px', height: '36px', padding: '0 10px',
+                borderRadius: '8px', cursor: 'pointer', whiteSpace: 'nowrap', fontSize: '12px', fontWeight: 700,
+                border: showInactive ? '1px solid #fecaca' : '1px solid #e5e7eb',
+                background: showInactive ? '#fef2f2' : '#f9fafb',
+                color: showInactive ? '#b91c1c' : '#475569', transition: 'all 0.15s'
+              }}
+            >
+              <span style={{
+                position: 'relative', width: '32px', height: '18px', borderRadius: '999px', flexShrink: 0,
+                background: showInactive ? '#ef4444' : '#cbd5e1', transition: 'background 0.15s'
+              }}>
+                <span style={{
+                  position: 'absolute', top: '2px', left: showInactive ? '16px' : '2px', width: '14px', height: '14px',
+                  borderRadius: '50%', background: '#fff', boxShadow: '0 1px 2px rgba(0,0,0,0.3)', transition: 'left 0.15s'
+                }} />
+              </span>
+              Nonaktif
+              {inactiveCount > 0 && (
+                <span style={{ background: showInactive ? '#ef4444' : '#94a3b8', color: '#fff', borderRadius: '999px', padding: '0 6px', fontSize: '11px' }}>{inactiveCount}</span>
+              )}
+            </button>
             <div className="r-full-mobile" style={{ position: 'relative', width: '260px' }}>
               <Search size={16} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }} />
               <input
@@ -873,6 +929,14 @@ const StockManagement: React.FC = () => {
                                 DRAF
                               </span>
                             )}
+                            {p.isActive === false && (
+                              <span
+                                title="Tidak tampil di Kasir POS"
+                                style={{ fontSize: '10px', fontWeight: 800, backgroundColor: '#fee2e2', color: '#b91c1c', border: '1px solid #fecaca', padding: '1px 6px', borderRadius: '999px', letterSpacing: '0.3px' }}
+                              >
+                                NONAKTIF
+                              </span>
+                            )}
                           </div>
                           <VariantChips variants={p.variants} />
                         </td>
@@ -1035,8 +1099,22 @@ const StockManagement: React.FC = () => {
                                 </button>
                                 <button
                                   type="button"
+                                  title={p.isActive === false ? 'Aktifkan kembali di Kasir POS' : 'Nonaktifkan (sembunyikan dari Kasir POS)'}
+                                  onClick={() => handleToggleActive(p)}
+                                  style={{
+                                    width: '30px', height: '30px', borderRadius: '7px',
+                                    border: p.isActive === false ? '1px solid #bbf7d0' : '1px solid #fde68a',
+                                    background: p.isActive === false ? '#f0fdf4' : '#fffbeb',
+                                    color: p.isActive === false ? '#16a34a' : '#d97706',
+                                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.15s'
+                                  }}
+                                >
+                                  {p.isActive === false ? <Eye size={14} /> : <EyeOff size={14} />}
+                                </button>
+                                <button
+                                  type="button"
                                   title="Hapus Produk"
-                                  onClick={() => deleteProduct(p.id)}
+                                  onClick={() => handleDeleteProduct(p)}
                                   style={{
                                     width: '30px', height: '30px', borderRadius: '7px', border: '1px solid #fecaca',
                                     background: '#fef2f2', color: '#ef4444', display: 'inline-flex', alignItems: 'center',
@@ -1096,6 +1174,9 @@ const StockManagement: React.FC = () => {
                       <span className="mobile-badge mobile-badge-cat">{p.category}</span>
                       {p.isPending && (
                         <span className="mobile-badge mobile-badge-draft">DRAF</span>
+                      )}
+                      {p.isActive === false && (
+                        <span className="mobile-badge" style={{ background: '#fee2e2', color: '#b91c1c' }}>NONAKTIF</span>
                       )}
                     </div>
                   </div>
@@ -1163,7 +1244,10 @@ const StockManagement: React.FC = () => {
                         <button className="mobile-action-icon" onClick={() => handleEditClick(p)} title="Edit">
                           <Edit2 size={16} />
                         </button>
-                        <button className="mobile-action-icon text-red" onClick={() => deleteProduct(p.id)} title="Hapus">
+                        <button className="mobile-action-icon" onClick={() => handleToggleActive(p)} title={p.isActive === false ? 'Aktifkan di Kasir' : 'Nonaktifkan dari Kasir'}>
+                          {p.isActive === false ? <Eye size={16} color="#16a34a" /> : <EyeOff size={16} color="#d97706" />}
+                        </button>
+                        <button className="mobile-action-icon text-red" onClick={() => handleDeleteProduct(p)} title="Hapus">
                           <Trash2 size={16} />
                         </button>
                       </>
