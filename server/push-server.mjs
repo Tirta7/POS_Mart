@@ -40,7 +40,7 @@ const server = http.createServer((req, res) => {
             file = path.join(DIST, 'index.html'); // SPA fallback
           }
           res.setHeader('Content-Type', MIME[path.extname(file)] || 'application/octet-stream');
-          if (path.basename(file) === 'sw.js') res.setHeader('Cache-Control', 'no-cache');
+          if (['sw.js', 'index.html', 'version.json'].includes(path.basename(file))) res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
           fs.createReadStream(file).pipe(res);
         });
       });

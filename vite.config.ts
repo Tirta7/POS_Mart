@@ -67,9 +67,23 @@ const pushApiPlugin = (): Plugin => ({
   },
 })
 
+// ID unik tiap build. Dipakai klien untuk mendeteksi bahwa aplikasi sudah diperbarui (auto reload).
+const BUILD_ID = Date.now().toString()
+
+/** Menulis dist/version.json berisi BUILD_ID yang sama dengan yang ditanam di bundle klien. */
+const versionFilePlugin = (): Plugin => ({
+  name: 'pos-version-file',
+  generateBundle() {
+    this.emitFile({ type: 'asset', fileName: 'version.json', source: JSON.stringify({ id: BUILD_ID }) })
+  },
+})
+
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), tailwindcss(), pushApiPlugin()],
+  plugins: [react(), tailwindcss(), pushApiPlugin(), versionFilePlugin()],
+  define: {
+    __APP_VERSION__: JSON.stringify(BUILD_ID),
+  },
   server: {
     host: true,
     // Izinkan akses lewat tunnel (ngrok / Cloudflare Tunnel) agar iOS mendapat HTTPS valid.

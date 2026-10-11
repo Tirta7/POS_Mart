@@ -22,6 +22,7 @@ import { useDraftStore } from './store/useDraftStore';
 import { getSocket } from './utils/socket';
 import GlobalNotification from './components/GlobalNotification';
 import BroadcastToast from './components/BroadcastToast';
+import UpdateWatcher from './components/UpdateWatcher';
 import LicenseLockScreen from './components/LicenseLockScreen';
 
 // Route guard — jika belum login, redirect ke /login
@@ -203,6 +204,7 @@ function App() {
       </Routes>
       <GlobalNotification />
       <BroadcastToast />
+      <UpdateWatcher />
       <LicenseLockScreen />
     </Router>
   );
