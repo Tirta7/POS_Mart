@@ -1110,6 +1110,53 @@ app.post('/api/saas/stock-transactions', async (req, res) => {
   }
 });
 
+// Ubah / pindahkan supplier pada faktur pembelian (satu atau banyak). Hutang ikut berpindah otomatis.
+app.patch('/api/saas/stock-transactions/supplier', async (req, res) => {
+  try {
+    const body = req.body || {};
+    const list = Array.isArray(body.ids) ? [...new Set(body.ids.filter(Boolean))] : [];
+    if (list.length === 0) throw new ValidationError('Pilih minimal 1 faktur.');
+    const newSupplierId = body.supplierId || null;
+    const onCredit = body.onCredit !== false;
+
+    await prisma.$transaction(async (tx) => {
+      if (newSupplierId) {
+        const target = await tx.supplier.findFirst({ where: { id: newSupplierId, tenant_id: req.tenantId } });
+        if (!target) throw new ValidationError('Supplier tujuan tidak ditemukan.');
+      }
+      const txs = await tx.stockTransaction.findMany({ where: { id: { in: list }, tenant_id: req.tenantId } });
+      if (txs.length !== list.length) throw new ValidationError('Sebagian faktur tidak ditemukan.', 404);
+
+      for (const t of txs) {
+        if (t.type !== 'IN') throw new ValidationError(`Faktur ${t.document_no} bukan pembelian / barang masuk.`);
+        const total = Number(t.total_value) || 0;
+
+        // 1) Tarik hutang dari supplier lama (jika faktur ini dulu tercatat hutang)
+        if (t.supplier_id && t.on_credit && total > 0) {
+          const old = await tx.supplier.findFirst({ where: { id: t.supplier_id, tenant_id: req.tenantId } });
+          if (old) {
+            await tx.supplier.update({ where: { id: old.id }, data: { payable: Math.max(0, old.payable - total) } });
+          }
+        }
+        // 2) Bebankan ke supplier baru (jika dicatat hutang)
+        if (newSupplierId && onCredit && total > 0) {
+          await tx.supplier.update({ where: { id: newSupplierId }, data: { payable: { increment: total } } });
+        }
+        await tx.stockTransaction.update({
+          where: { id: t.id },
+          data: { supplier_id: newSupplierId, on_credit: newSupplierId ? onCredit : false }
+        });
+      }
+    });
+
+    notifyTenant(req.tenantId, 'stock-transactions');
+    notifyTenant(req.tenantId, 'suppliers');
+    res.json({ success: true, count: list.length });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
 // Batalkan faktur pembelian (IN): stok & hutang dikembalikan. Mutasi lain (penjualan/koreksi) tidak boleh dihapus.
 app.delete('/api/saas/stock-transactions/:id', async (req, res) => {
   try {
@@ -1121,8 +1168,8 @@ app.delete('/api/saas/stock-transactions/:id', async (req, res) => {
         include: { items: true }
       });
       if (!stockTx) throw new ValidationError('Transaksi tidak ditemukan.', 404);
-      if (stockTx.type !== 'IN' || !stockTx.supplier_id) {
-        throw new ValidationError('Hanya faktur pembelian dari supplier yang dapat dibatalkan.');
+      if (stockTx.type !== 'IN') {
+        throw new ValidationError('Hanya faktur pembelian / barang masuk yang dapat dibatalkan.');
       }
 
       // Validasi: stok saat ini harus cukup untuk ditarik kembali (jangan sampai stok minus)

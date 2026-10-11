@@ -19,6 +19,7 @@ interface InventoryState {
   releaseReservedStock: (productId: string, qty: number, variantId?: string) => void;
   addTransaction: (transaction: StockTransaction) => Promise<void>;
   deleteTransaction: (id: string) => Promise<void>;
+  updateTransactionSupplier: (ids: string[], supplierId: string | null, onCredit: boolean) => Promise<void>;
   addCategory: (category: string) => void;
   deleteCategory: (category: string) => void;
   editCategory: (oldCategory: string, newCategory: string) => void;
@@ -266,6 +267,18 @@ export const useInventoryStore = create<InventoryState>()(
           console.error("Error deleting transaction:", err);
           throw err;
         }
+      },
+      updateTransactionSupplier: async (ids: string[], supplierId: string | null, onCredit: boolean) => {
+        const res = await fetch('/api/saas/stock-transactions/supplier', {
+          method: 'PATCH',
+          headers: getHeaders(),
+          body: JSON.stringify({ ids, supplierId, onCredit })
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.error || 'Gagal mengubah supplier faktur');
+        }
+        await get().fetchTransactions();
       },
       fetchCategories: async () => {
         try {

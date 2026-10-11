@@ -4,7 +4,7 @@ import { useSupplierStore } from '../../store/useSupplierStore';
 import { useAuthStore } from '../../store/useAuthStore';
 import { 
   ShoppingCart, Plus, Trash2, Check, Search, Camera, X, 
-  CreditCard, RefreshCw, MessageSquare, Printer, CheckCircle2, Clock
+  CreditCard, RefreshCw, MessageSquare, Printer, CheckCircle2, Clock, Pencil
 } from 'lucide-react';
 import type { StockTransaction, Supplier } from '../../types';
 import BarcodeScannerCamera from '../../components/BarcodeScannerCamera';
@@ -66,6 +66,13 @@ const Purchases: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Ubah supplier faktur (single / massal)
+  const [supplierEditIds, setSupplierEditIds] = useState<string[] | null>(null);
+  const [editSupplierId, setEditSupplierId] = useState('');
+  const [editOnCredit, setEditOnCredit] = useState(true);
+  const [isSavingSupplier, setIsSavingSupplier] = useState(false);
+  const [supplierEditError, setSupplierEditError] = useState('');
   const [poErrors, setPoErrors] = useState<string[]>([]);
   const [poNotice, setPoNotice] = useState<string>('');
 
@@ -396,6 +403,34 @@ const Purchases: React.FC = () => {
       } catch (err: any) {
         alert(err.message || 'Gagal membatalkan faktur pembelian.');
       }
+    }
+  };
+
+  const openSupplierEdit = (ids: string[]) => {
+    const first = purchaseHistory.find(t => t.id === ids[0]);
+    setSupplierEditIds(ids);
+    setEditSupplierId(ids.length === 1 && first?.supplierId ? first.supplierId : '');
+    setEditOnCredit(first?.supplierId ? first.onCredit !== false : true);
+    setSupplierEditError('');
+  };
+
+  const handleSaveSupplierEdit = async () => {
+    if (!supplierEditIds) return;
+    if (!editSupplierId) {
+      setSupplierEditError('Pilih supplier tujuan terlebih dahulu.');
+      return;
+    }
+    setIsSavingSupplier(true);
+    setSupplierEditError('');
+    try {
+      await useInventoryStore.getState().updateTransactionSupplier(supplierEditIds, editSupplierId, editOnCredit);
+      await Promise.all([fetchSuppliers(), fetchTransactions()]);
+      setSupplierEditIds(null);
+      setSelectedHistoryTx(null);
+    } catch (err: any) {
+      setSupplierEditError(err?.message || 'Gagal mengubah supplier.');
+    } finally {
+      setIsSavingSupplier(false);
     }
   };
 
@@ -1154,6 +1189,16 @@ const Purchases: React.FC = () => {
               }}>
                 {filteredHistory.length} Faktur Masuk
               </span>
+              {(() => {
+                const unnamed = filteredHistory.filter(t => !suppliers.some(s => s.id === t.supplierId));
+                if (unnamed.length === 0) return null;
+                return (
+                  <button type="button" onClick={() => openSupplierEdit(unnamed.map(t => t.id))}
+                    style={{ background: '#fffbeb', color: '#b45309', border: '1px solid #fde68a', borderRadius: '999px', padding: '4px 12px', fontSize: '11.5px', fontWeight: 800, cursor: 'pointer' }}>
+                    Atur Supplier {unnamed.length} Faktur Tanpa Nama
+                  </button>
+                );
+              })()}
             </div>
 
             {/* Table */}
@@ -1167,7 +1212,7 @@ const Purchases: React.FC = () => {
                     <th style={{ padding: '12px 16px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', width: '160px' }}>PRODUK & UNIT</th>
                     <th style={{ padding: '12px 16px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right', width: '160px' }}>TOTAL NOMINAL</th>
                     <th style={{ padding: '12px 16px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', width: '110px' }}>STATUS</th>
-                    <th style={{ padding: '12px 16px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', width: '190px' }}>AKSI</th>
+                    <th style={{ padding: '12px 16px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', width: '240px' }}>AKSI</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1243,6 +1288,17 @@ const Purchases: React.FC = () => {
                                 }}
                               >
                                 Pesan Lagi
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => openSupplierEdit([tx.id])}
+                                style={{
+                                  background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe',
+                                  borderRadius: '8px', padding: '5px 10px', fontSize: '11.5px', fontWeight: 700, cursor: 'pointer'
+                                }}
+                                title="Ubah Supplier"
+                              >
+                                <Pencil size={14} />
                               </button>
                               <button
                                 type="button"
@@ -1429,6 +1485,17 @@ const Purchases: React.FC = () => {
                           }}
                         >
                           Pesan Lagi
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openSupplierEdit([tx.id])}
+                          style={{
+                            background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe',
+                            borderRadius: '8px', padding: '8px', fontSize: '12px', fontWeight: 600, cursor: 'pointer'
+                          }}
+                          title="Ubah Supplier"
+                        >
+                          <Pencil size={14} />
                         </button>
                         <button
                           type="button"
@@ -2026,6 +2093,82 @@ const Purchases: React.FC = () => {
           </div>
         </div>
       )}
+
+      {supplierEditIds && (() => {
+        const targets = purchaseHistory.filter(t => supplierEditIds.includes(t.id));
+        const total = targets.reduce((s, t) => s + (Number(t.totalValue) || 0), 0);
+        const removeBy = new Map<string, number>();
+        targets.forEach(t => {
+          if (t.supplierId && t.onCredit !== false && suppliers.some(s => s.id === t.supplierId)) {
+            removeBy.set(t.supplierId, (removeBy.get(t.supplierId) || 0) + (Number(t.totalValue) || 0));
+          }
+        });
+        return (
+          <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '16px' }}
+            onClick={() => !isSavingSupplier && setSupplierEditIds(null)}>
+            <div onClick={e => e.stopPropagation()} style={{ background: 'white', borderRadius: '16px', width: '100%', maxWidth: '480px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 50px rgba(0,0,0,0.25)' }}>
+              <div style={{ padding: '14px 18px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <div style={{ fontSize: '11px', fontWeight: 700, color: '#2563eb', textTransform: 'uppercase' }}>Ubah Supplier Faktur</div>
+                  <div style={{ fontSize: '15px', fontWeight: 800, color: '#0f172a' }}>
+                    {targets.length === 1 ? targets[0].documentNo : `${targets.length} faktur dipilih`}
+                  </div>
+                </div>
+                <button type="button" onClick={() => setSupplierEditIds(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}><X size={18} /></button>
+              </div>
+
+              <div style={{ padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div style={{ background: '#f8fafc', borderRadius: '10px', padding: '10px 12px', fontSize: '12.5px', color: '#334155' }}>
+                  Total nilai faktur: <b style={{ color: '#dc2626' }}>{formatIDR(total)}</b>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>Supplier tujuan</label>
+                  <select className="bo-input" value={editSupplierId} onChange={e => { setEditSupplierId(e.target.value); setSupplierEditError(''); }}
+                    style={{ width: '100%', height: '38px', boxSizing: 'border-box' }}>
+                    <option value="">-- Pilih supplier --</option>
+                    {suppliers.map(s => <option key={s.id} value={s.id}>{s.name} (Hutang: {formatIDR(s.totalPayable || 0)})</option>)}
+                  </select>
+                  {suppliers.length === 0 && (
+                    <div style={{ marginTop: '4px', fontSize: '11.5px', color: '#b45309' }}>Belum ada supplier. Tambahkan di menu Data Supplier terlebih dahulu.</div>
+                  )}
+                </div>
+
+                <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '12.5px', color: '#0f172a', cursor: 'pointer' }}>
+                  <input type="checkbox" checked={editOnCredit} onChange={e => setEditOnCredit(e.target.checked)} style={{ marginTop: '2px' }} />
+                  <span>
+                    <b>Catat sebagai hutang</b> ke supplier tujuan
+                    <span style={{ display: 'block', fontSize: '11px', color: '#64748b' }}>Hilangkan centang jika faktur sudah dibayar tunai / lunas.</span>
+                  </span>
+                </label>
+
+                <div style={{ border: '1px dashed #cbd5e1', borderRadius: '10px', padding: '10px 12px', fontSize: '12px', lineHeight: 1.6, color: '#334155' }}>
+                  <div style={{ fontWeight: 800, marginBottom: '2px' }}>Dampak pada hutang:</div>
+                  {[...removeBy.entries()].map(([sid, amt]) => (
+                    <div key={sid} style={{ color: '#b91c1c' }}>− {formatIDR(amt)} dari {suppliers.find(s => s.id === sid)?.name}</div>
+                  ))}
+                  {editSupplierId && editOnCredit ? (
+                    <div style={{ color: '#15803d' }}>+ {formatIDR(total)} ke {suppliers.find(s => s.id === editSupplierId)?.name}</div>
+                  ) : (
+                    <div style={{ color: '#64748b' }}>Tidak ada hutang yang ditambahkan.</div>
+                  )}
+                </div>
+
+                {supplierEditError && <div role="alert" style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b', borderRadius: '8px', padding: '8px 12px', fontSize: '12px', fontWeight: 600 }}>{supplierEditError}</div>}
+              </div>
+
+              <div style={{ padding: '12px 18px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                <button type="button" disabled={isSavingSupplier} onClick={() => setSupplierEditIds(null)}
+                  style={{ background: '#f1f5f9', border: 'none', borderRadius: '8px', padding: '9px 16px', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}>Batal</button>
+                <button type="button" disabled={isSavingSupplier} onClick={handleSaveSupplierEdit}
+                  style={{ background: '#2563eb', color: 'white', border: 'none', borderRadius: '8px', padding: '9px 18px', fontWeight: 700, fontSize: '13px', cursor: 'pointer', opacity: isSavingSupplier ? 0.6 : 1 }}>
+                  {isSavingSupplier ? 'Menyimpan...' : 'Simpan & Pindahkan Hutang'}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* =====================================================================
           MODAL: PILIH VARIAN (varian terdaftar atau varian BARU yang baru datang)
