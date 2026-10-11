@@ -51,6 +51,9 @@ function App() {
   const [weightProduct, setWeightProduct] = useState<any>(null);
   const [weightInput, setWeightInput] = useState<number | string>('');
 
+  // Variant Popup State (produk dengan varian: pilih varian dulu sebelum masuk keranjang)
+  const [variantProduct, setVariantProduct] = useState<any>(null);
+
   // Payment Popup State
   const [paymentPopupOpen, setPaymentPopupOpen] = useState(false);
 
@@ -82,19 +85,33 @@ function App() {
     }))
   ];
 
-  // Automatically update prices in the cart if the order type changes
+  // Harga efektif: harga varian jika diisi, jika kosong ikut harga produk induk.
+  // Tipe GROSIR memakai harga grosir (varian -> induk), lainnya memakai harga jual.
+  const resolvePrice = (p: any, variantId: string | undefined | null, type: string) => {
+    const v = variantId ? (p.variants || []).find((x: any) => x.id === variantId) : null;
+    const sell = v?.sellingPrice && v.sellingPrice > 0 ? v.sellingPrice : p.sellingPrice;
+    const wholesale = v?.wholesalePrice && v.wholesalePrice > 0 ? v.wholesalePrice : p.wholesalePrice;
+    return type === 'TAKEAWAY' && wholesale ? wholesale : sell;
+  };
+
   // Available stock = physical stock - reserved
   const PRODUCTS = storeProducts.map((p, i) => {
     const availableStock = p.stock - (p.reserved || 0);
     const minStock = p.minStock ?? 10;
     const isLowStock = availableStock <= minStock;
+    const variants = (p.variants || []).map(v => ({
+      id: v.id,
+      name: v.name,
+      price: resolvePrice(p, v.id, orderType),
+      availableStock: v.stock - (v.reserved || 0),
+    }));
     
     return {
       id: p.id,
       sku: p.sku || '',
       barcode: p.barcode || p.sku || '',
       name: p.name,
-      price: orderType === 'TAKEAWAY' && p.wholesalePrice ? p.wholesalePrice : p.sellingPrice,
+      price: resolvePrice(p, null, orderType),
       type: p.category,
       unit: p.unit || 'Pcs',
       badge: (i + 1).toString().padStart(2, '0'),
@@ -103,6 +120,7 @@ function App() {
       tagColor: isLowStock ? 'promo' : '',
       availableStock: availableStock,  // actual available stock
       rawStock: p.stock,
+      variants,
     };
   });
 
@@ -111,14 +129,13 @@ function App() {
     setCart(prev => prev.map(item => {
       const storeItem = storeProducts.find(p => p.id === item.id);
       if (storeItem) {
-        const newPrice = orderType === 'TAKEAWAY' && storeItem.wholesalePrice ? storeItem.wholesalePrice : storeItem.sellingPrice;
-        return { ...item, price: newPrice };
+        return { ...item, price: resolvePrice(storeItem, item.variantId, orderType) };
       }
       return item;
     }));
   }, [orderType, storeProducts]);
 
-  const subtotal = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
+  const subtotal = cart.reduce((sum, item) => sum + (Math.round(item.price * item.qty)), 0);
   const tax = taxEnabled ? Math.round(subtotal * (taxRate / 100)) : 0;
   const totalBeforeRounding = subtotal + tax;
   const total = roundingUnit > 0 ? Math.ceil(totalBeforeRounding / roundingUnit) * roundingUnit : totalBeforeRounding;
@@ -143,7 +160,7 @@ function App() {
       let limitReached = false;
       const nextCart = prev.map(item => {
         if (item.cartId === cartId) {
-          const newQty = Math.max(0.01, item.qty + delta);
+          const newQty = Math.max(0.01, Math.round((item.qty + delta) * 1000) / 1000);
           if (newQty > item.availableStock) {
             limitReached = true;
             return item;
@@ -196,6 +213,15 @@ function App() {
         p.id.toLowerCase() === q
       );
 
+      if (!exactMatch) {
+        const variantMatch = PRODUCTS.find(p => (p.variants || []).some((v: any) => String(v.name || '').toLowerCase() === q));
+        if (variantMatch) {
+          handleProductClick(variantMatch);
+          setSearchQuery('');
+          return;
+        }
+      }
+
       if (exactMatch) {
         // Jika cocok persis (scanner barcode), langsung tambahkan ke keranjang
         handleProductClick(exactMatch);
@@ -204,28 +230,31 @@ function App() {
     }
   };
 
+  const sameLine = (a: any, b: any) => a.id === b.id && (a.variantId || null) === (b.variantId || null);
+
   const addToCart = (product: any, customQty?: number) => {
     const qtyToAdd = customQty !== undefined ? customQty : 1;
     
     setCart(prev => {
-      const exists = prev.find(i => i.id === product.id);
+      const exists = prev.find(i => sameLine(i, product));
       if (exists) {
         if (exists.qty + qtyToAdd > product.availableStock) {
           alert(`Stok tidak mencukupi! Hanya tersedia ${product.availableStock} ${product.unit}`);
           return prev;
         }
-        return prev.map(i => i.id === product.id ? { ...i, qty: i.qty + qtyToAdd } : i);
+        return prev.map(i => sameLine(i, product) ? { ...i, qty: Math.round((i.qty + qtyToAdd) * 1000) / 1000 } : i);
       }
       
       if (qtyToAdd > product.availableStock) {
         alert(`Stok tidak mencukupi! Hanya tersedia ${product.availableStock} ${product.unit}`);
         return prev;
       }
-      return [...prev, { ...product, cartId: Date.now().toString(), qty: qtyToAdd }];
+      return [...prev, { ...product, cartId: Date.now().toString() + Math.random().toString(36).slice(2, 6), qty: qtyToAdd }];
     });
   };
 
-  const handleProductClick = (product: any) => {
+  // Tambah ke keranjang (cek satuan berat -> popup jumlah, selain itu langsung +1)
+  const proceedAdd = (product: any) => {
     const u = (product.unit || '').toLowerCase();
     if (u === 'kg' || u === 'gram' || u === 'liter') {
       setWeightProduct(product);
@@ -234,6 +263,32 @@ function App() {
     } else {
       addToCart(product);
     }
+  };
+
+  const handleProductClick = (product: any) => {
+    // Produk bervarian: tampilkan popup pilih varian dulu
+    if (product.variants && product.variants.length > 0) {
+      setVariantProduct(product);
+      return;
+    }
+    proceedAdd(product);
+  };
+
+  const handlePickVariant = (variant: any) => {
+    if (!variantProduct) return;
+    if (variant.availableStock <= 0) {
+      alert(`Stok varian "${variant.name}" habis!`);
+      return;
+    }
+    const { variants: _omit, ...base } = variantProduct;
+    proceedAdd({
+      ...base,
+      variantId: variant.id,
+      variantName: variant.name,
+      price: variant.price,
+      availableStock: variant.availableStock,
+    });
+    setVariantProduct(null);
   };
 
   const handleHold = () => {
@@ -250,7 +305,7 @@ function App() {
     });
     // Reserve stock for each item in the hold
     cart.forEach(item => {
-      reserveStock(item.id, item.qty);
+      reserveStock(item.id, item.qty, item.variantId);
     });
     // Clear current order
     setCart([]);
@@ -267,7 +322,7 @@ function App() {
     }
     // Release reservation for the restored hold (it goes back into active cart)
     held.cart.forEach((item: any) => {
-      releaseReservedStock(item.id, item.qty);
+      releaseReservedStock(item.id, item.qty, item.variantId);
     });
     setCart(held.cart);
     setOrderType(held.orderType);
@@ -464,6 +519,7 @@ function App() {
                 const textMatch = p.name.toLowerCase().includes(q) || 
                                   p.sku.toLowerCase().includes(q) || 
                                   (p.barcode && p.barcode.toLowerCase().includes(q)) ||
+                                  (p.variants || []).some((v: any) => String(v.name || '').toLowerCase().includes(q)) ||
                                   p.id.toLowerCase().includes(q);
                 return catMatch && textMatch;
               }
@@ -486,6 +542,7 @@ function App() {
                 <div className="product-info">
                   <div className="product-title">{product.name}</div>
                   <div className="product-tags">
+                    {product.variants.length > 0 && <span className="tag" style={{ backgroundColor: '#ede9fe', color: '#5b21b6', fontWeight: 'bold' }}>{product.variants.length} Varian</span>}
                     {product.type && <span className="tag">{product.type}</span>}
                     <span className="tag" style={{ backgroundColor: product.availableStock <= 0 ? '#fee2e2' : '#dcfce7', color: product.availableStock <= 0 ? '#991b1b' : '#166534', fontWeight: 'bold' }}>
                       Stok: {product.availableStock} {product.unit}
@@ -553,10 +610,10 @@ function App() {
             {cart.map(item => (
               <div key={item.cartId} className="cart-item">
                 <div className="item-details">
-                  <div className="item-title">{item.name}</div>
+                  <div className="item-title">{item.name}{item.variantName && <span style={{ marginLeft: '6px', fontSize: '11px', fontWeight: 700, backgroundColor: '#ede9fe', color: '#5b21b6', padding: '1px 8px', borderRadius: '999px' }}>{item.variantName}</span>}</div>
                   {item.note && <div className="item-note">{item.note}</div>}
                 </div>
-                <div className="item-price">{formatIDR(item.price * item.qty)}</div>
+                <div className="item-price">{formatIDR(Math.round(item.price * item.qty))}</div>
                 <div className="item-controls">
                   <div className="qty-wrapper" style={{ display: 'flex', alignItems: 'center' }}>
                     <button className="qty-btn" onClick={() => updateQty(item.cartId, -1)}><Minus size={14}/></button>
@@ -722,10 +779,12 @@ function App() {
                     total: total,
                     items: cart.map(item => ({
                       productId: item.id,
+                      variantId: item.variantId,
+                      variantName: item.variantName,
                       name: item.name,
                       qty: item.qty,
                       price: item.price,
-                      subtotal: item.price * item.qty
+                      subtotal: Math.round(item.price * item.qty)
                     }))
                   };
                   addOrderToCustomer(effectiveCustomer.id, order);
@@ -748,10 +807,12 @@ function App() {
                   employeeName: currentUser?.name,
                   items: cart.map(item => ({
                     productId: item.id,
+                    variantId: item.variantId,
+                    variantName: item.variantName,
                     name: item.name,
                     qty: item.qty,
                     price: item.price,
-                    subtotal: item.price * item.qty
+                    subtotal: Math.round(item.price * item.qty)
                   }))
                 };
                 addSale(sale);
@@ -926,6 +987,51 @@ function App() {
           </div>
         </div>
       )}
+
+      {/* VARIANT PICKER POPUP */}
+      {variantProduct && (
+        <div className="modal-overlay" onClick={() => setVariantProduct(null)} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: '20px', width: '420px', maxWidth: '94vw', maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+              <h3 style={{ fontSize: '16px', fontWeight: 'bold', margin: 0, color: '#1f2937' }}>Pilih Varian</h3>
+              <button onClick={() => setVariantProduct(null)} aria-label="Tutup" style={{ background: '#f3f4f6', border: 'none', borderRadius: '50%', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#6b7280' }}><X size={16} /></button>
+            </div>
+            <div style={{ display: 'flex', gap: '12px', marginBottom: '14px', backgroundColor: '#f9fafb', padding: '10px', borderRadius: '12px', border: '1px solid #f3f4f6' }}>
+              <img src={variantProduct.img} style={{ width: '48px', height: '48px', objectFit: 'cover', borderRadius: '8px' }} />
+              <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                <div style={{ fontWeight: 'bold', fontSize: '14px', color: '#111827', lineHeight: 1.2 }}>{variantProduct.name}</div>
+                <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '2px' }}>{variantProduct.variants.length} varian tersedia</div>
+              </div>
+            </div>
+            <div style={{ overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {variantProduct.variants.map((v: any) => {
+                const out = v.availableStock <= 0;
+                const inCart = cart.find(c => c.id === variantProduct.id && c.variantId === v.id)?.qty || 0;
+                return (
+                  <button
+                    key={v.id}
+                    type="button"
+                    disabled={out}
+                    onClick={() => handlePickVariant(v)}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', padding: '12px 14px', border: '1.5px solid #e5e7eb', borderRadius: '12px', background: out ? '#f9fafb' : 'white', cursor: out ? 'not-allowed' : 'pointer', opacity: out ? 0.55 : 1, textAlign: 'left', transition: 'border-color 0.15s, box-shadow 0.15s' }}
+                    onMouseOver={(e) => { if (!out) { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(218,41,28,0.12)'; } }}
+                    onMouseOut={(e) => { e.currentTarget.style.borderColor = '#e5e7eb'; e.currentTarget.style.boxShadow = 'none'; }}
+                  >
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: '15px', color: '#111827' }}>{v.name}</div>
+                      <div style={{ fontSize: '12px', marginTop: '2px', fontWeight: 600, color: out ? '#991b1b' : '#166534' }}>
+                        {out ? 'Stok habis' : `Stok: ${v.availableStock} ${variantProduct.unit}`}
+                        {inCart > 0 && <span style={{ color: '#6b7280', fontWeight: 500 }}> • di keranjang: {inCart}</span>}
+                      </div>
+                    </div>
+                    <div style={{ fontWeight: 800, fontSize: '15px', color: 'var(--primary)', whiteSpace: 'nowrap' }}>{formatIDR(v.price)}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
       {/* HOLD ORDERS LIST PANEL */}
       {holdListOpen && (
         <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-end', zIndex: 9999, padding: '0' }}>
@@ -980,7 +1086,7 @@ function App() {
                         {held.cart.slice(0, 3).map((item: any) => (
                           <div key={item.cartId} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#374151', padding: '2px 0' }}>
                             <span>{item.name} <span style={{ color: '#9ca3af' }}>x{item.qty}</span></span>
-                            <span style={{ fontWeight: 'bold' }}>{formatIDR(item.price * item.qty)}</span>
+                            <span style={{ fontWeight: 'bold' }}>{formatIDR(Math.round(item.price * item.qty))}</span>
                           </div>
                         ))}
                         {held.cart.length > 3 && (
@@ -988,7 +1094,7 @@ function App() {
                         )}
                         <div style={{ borderTop: '1px solid #f3f4f6', marginTop: '8px', paddingTop: '8px', display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: '14px' }}>
                           <span style={{ color: '#374151' }}>{held.cart.length} Item • Total</span>
-                          <span style={{ color: 'var(--primary)' }}>{formatIDR(held.cart.reduce((s: number, i: any) => s + i.price * i.qty, 0))}</span>
+                          <span style={{ color: 'var(--primary)' }}>{formatIDR(held.cart.reduce((s: number, i: any) => s + Math.round(i.price * i.qty), 0))}</span>
                         </div>
                       </div>
 
@@ -1005,7 +1111,7 @@ function App() {
                             if(window.confirm('Hapus pesanan ini?')) {
                               // Release reservation for all items in this hold
                               held.cart.forEach((item: any) => {
-                                releaseReservedStock(item.id, item.qty);
+                                releaseReservedStock(item.id, item.qty, item.variantId);
                               });
                               removeHeldOrder(held.holdId);
                             }

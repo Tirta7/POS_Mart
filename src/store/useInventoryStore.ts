@@ -14,13 +14,15 @@ interface InventoryState {
   deleteProduct: (id: string) => Promise<void>;
   updateProduct: (oldId: string, product: Product) => Promise<void>;
   updateProductStock: (productId: string, qty: number) => void;
-  reserveStock: (productId: string, qty: number) => void;
-  releaseReservedStock: (productId: string, qty: number) => void;
-  addTransaction: (transaction: StockTransaction) => void;
+  reserveStock: (productId: string, qty: number, variantId?: string) => void;
+  releaseReservedStock: (productId: string, qty: number, variantId?: string) => void;
+  addTransaction: (transaction: StockTransaction) => Promise<void>;
   addCategory: (category: string) => void;
   deleteCategory: (category: string) => void;
   editCategory: (oldCategory: string, newCategory: string) => void;
 }
+
+const round3 = (n: number) => Math.round((Number(n) || 0) * 1000) / 1000;
 
 const mapProduct = (p: any): Product => ({
   id: p.id,
@@ -29,14 +31,22 @@ const mapProduct = (p: any): Product => ({
   name: p.name,
   category: p.category?.name || 'Uncategorized',
   location: '',
-  unit: 'Pcs',
-  stock: p.stock,
+  unit: p.unit || 'Pcs',
+  stock: round3(p.stock),
   minStock: p.min_stock,
   baseUnitMultiplier: 1,
   purchasePrice: p.purchase_price,
   sellingPrice: p.selling_price,
   wholesalePrice: p.wholesale_price || 0,
   image: p.image_url || 'https://via.placeholder.com/150',
+  variants: (p.variants || []).map((v: any) => ({
+    id: v.id,
+    name: v.name,
+    stock: round3(v.stock),
+    purchasePrice: v.purchase_price ?? undefined,
+    sellingPrice: v.selling_price ?? undefined,
+    wholesalePrice: v.wholesale_price ?? undefined,
+  })),
 });
 
 const mapTransaction = (t: any): StockTransaction => ({
@@ -52,6 +62,9 @@ const mapTransaction = (t: any): StockTransaction => ({
   customerName: t.customer_name,
   items: (t.items || []).map((i: any) => ({
     productId: i.product_id,
+    variantId: i.variant_id || undefined,
+    variantName: i.variant_name || undefined,
+    productName: i.product?.name,
     qty: i.qty,
     batchNo: i.batch_no || '',
     expiryDate: i.expiry_date || '',
@@ -158,16 +171,22 @@ export const useInventoryStore = create<InventoryState>()(
           reserved: qty < 0 ? Math.max(0, (p.reserved || 0) + qty) : (p.reserved || 0)
         } : p)
       })),
-      reserveStock: (productId, qty) => set((state) => ({
+      reserveStock: (productId, qty, variantId) => set((state) => ({
         products: state.products.map(p => p.id === productId ? {
           ...p,
-          reserved: (p.reserved || 0) + qty
+          reserved: (p.reserved || 0) + qty,
+          variants: variantId
+            ? (p.variants || []).map(v => v.id === variantId ? { ...v, reserved: (v.reserved || 0) + qty } : v)
+            : p.variants
         } : p)
       })),
-      releaseReservedStock: (productId, qty) => set((state) => ({
+      releaseReservedStock: (productId, qty, variantId) => set((state) => ({
         products: state.products.map(p => p.id === productId ? {
           ...p,
-          reserved: Math.max(0, (p.reserved || 0) - qty)
+          reserved: Math.max(0, (p.reserved || 0) - qty),
+          variants: variantId
+            ? (p.variants || []).map(v => v.id === variantId ? { ...v, reserved: Math.max(0, (v.reserved || 0) - qty) } : v)
+            : p.variants
         } : p)
       })),
       addTransaction: async (transaction) => {

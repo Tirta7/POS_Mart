@@ -76,6 +76,7 @@ export const buildReceiptHtml = (sale: SalesTransaction, opts: ReceiptOptions): 
       return `
       <div class="item">
         <div class="iname"><span class="no">${idx + 1}.</span> ${esc(i.name)}</div>
+        ${i.variantName ? `<div class="sku">Varian: ${esc(i.variantName)}</div>` : ''}
         ${p?.sku ? `<div class="sku">${esc(p.sku)}</div>` : ''}
         <div class="row"><span>${num(i.qty)} ${esc(unit)} x ${idr(i.price)}</span><span class="amt">${idr(i.subtotal)}</span></div>
       </div>`;

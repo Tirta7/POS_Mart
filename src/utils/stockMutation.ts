@@ -3,6 +3,9 @@ import { useAuthStore } from '../store/useAuthStore';
 
 export interface MutationLine {
   productId: string;
+  /** Jika produk bervarian: varian yang dimutasi (stok varian ikut berubah) */
+  variantId?: string;
+  variantName?: string;
   /** IN/OUT: jumlah positif. ADJUSTMENT: selisih bertanda (+/-). */
   qty: number;
   purchasePrice?: number;
@@ -28,9 +31,9 @@ export const recordStockMutation = (
   lines: MutationLine[],
   note?: string,
   meta?: { customerId?: string; customerName?: string }
-) => {
+): Promise<void> | undefined => {
   const valid = lines.filter(l => l.qty !== 0);
-  if (valid.length === 0) return;
+  if (valid.length === 0) return undefined;
 
   const inv = useInventoryStore.getState();
   const user = useAuthStore.getState().currentUser;
@@ -40,17 +43,19 @@ export const recordStockMutation = (
     const price = l.purchasePrice ?? product?.purchasePrice ?? 0;
     return {
       productId: l.productId,
+      variantId: l.variantId,
+      variantName: l.variantName,
       productName: l.name ?? product?.name,
       unit: l.unit ?? product?.unit,
       qty: l.qty,
       batchNo: '',
       expiryDate: '',
       purchasePrice: price,
-      subtotal: Math.abs(l.qty) * price,
+      subtotal: Math.round(Math.abs(l.qty) * price),
     };
   });
 
-  inv.addTransaction({
+  return inv.addTransaction({
     id: `MUT-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
     type,
     date: new Date().toISOString(),

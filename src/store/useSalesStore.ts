@@ -46,6 +46,8 @@ export const useSalesStore = create<SalesState>()(
                   employeeName: localEmp?.name || t.cashier_name || t.cashier_id,
                   items: (t.items || []).map((i: any) => ({
                     productId: i.product_id,
+                    variantId: i.variant_id || undefined,
+                    variantName: i.variant_name || undefined,
                     name: i.product?.name || 'Unknown',
                     qty: i.quantity,
                     price: i.price_at_time,
@@ -76,6 +78,8 @@ export const useSalesStore = create<SalesState>()(
               total: sale.total,
               items: sale.items.map(item => ({
                 productId: item.productId,
+                variantId: item.variantId,
+                variantName: item.variantName,
                 name: item.name,
                 qty: item.qty,
                 price: item.price,
@@ -99,6 +103,8 @@ export const useSalesStore = create<SalesState>()(
             customer_name: sale.customerName || null,
             items: sale.items.map(item => ({
               product_id: item.productId,
+              variant_id: item.variantId || null,
+              variant_name: item.variantName || null,
               quantity: item.qty,
               price: item.price,
               subtotal: item.subtotal

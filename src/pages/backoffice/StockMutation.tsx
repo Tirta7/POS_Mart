@@ -182,6 +182,7 @@ const StockMutation: React.FC = () => {
         (party?.sub || '').toLowerCase().includes(q) ||
         t.items.some(i => 
           (getProduct(i.productId)?.name || i.productName || i.productId).toLowerCase().includes(q) ||
+          (i.variantName || '').toLowerCase().includes(q) ||
           i.productId.toLowerCase().includes(q)
         )
       );
@@ -635,7 +636,7 @@ const StockMutation: React.FC = () => {
                           const isFirst = idx === 0;
                           const unit = item.unit || product?.unit || 'Pcs';
                           const unitPrice = item.purchasePrice || (item.qty ? Math.abs((item.subtotal || 0) / item.qty) : 0);
-                          const prodName = getProductName(item.productId, item.productName);
+                          const prodName = getProductName(item.productId, item.productName) + (item.variantName ? ` - ${item.variantName}` : '');
                           const prodSku = getProductSku(item.productId);
 
                           return (
@@ -988,7 +989,7 @@ const StockMutation: React.FC = () => {
                 const employeeName = getEmployeeName(t.employeeId);
                 const firstItem = t.items[0];
                 const product = firstItem ? getProduct(firstItem.productId) : null;
-                const prodName = firstItem ? getProductName(firstItem.productId, firstItem.productName) : 'Produk Tidak Dikenal';
+                const prodName = firstItem ? getProductName(firstItem.productId, firstItem.productName) + (firstItem.variantName ? ` - ${firstItem.variantName}` : '') : 'Produk Tidak Dikenal';
                 const prodSku = firstItem ? getProductSku(firstItem.productId) : t.id;
                 const unit = firstItem?.unit || product?.unit || 'Pcs';
                 const unitPrice = firstItem?.purchasePrice || (firstItem?.qty ? Math.abs((firstItem.subtotal || 0) / firstItem.qty) : 0);

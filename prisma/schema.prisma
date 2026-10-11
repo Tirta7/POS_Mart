@@ -120,16 +120,37 @@ model Product {
   purchase_price Float   @default(0)
   selling_price  Float   @default(0)
   wholesale_price Float  @default(0)
-  stock          Int     @default(0)
-  min_stock      Int     @default(0)
+  stock          Float   @default(0)
+  min_stock      Float   @default(0)
+  unit           String  @default("Pcs") // satuan jual (Pcs, Kg, Gram, Liter, ...). Harga selalu per satuan ini.
   image_url      String?
 
   tenant               Tenant                 @relation(fields: [tenant_id], references: [id])
   category             Category?              @relation(fields: [category_id], references: [id])
   transactionItems     TransactionItem[]
   stockTransactionItems StockTransactionItem[]
+  variants             ProductVariant[]
 
   @@map("products")
+}
+
+// Varian produk (mis. warna/rasa). Stok dicatat per varian; Product.stock = total seluruh varian.
+// Harga bernilai null = ikut harga produk induk.
+model ProductVariant {
+  id              String   @id @default(uuid())
+  tenant_id       String
+  product_id      String
+  name            String
+  stock           Float    @default(0)
+  purchase_price  Float?
+  selling_price   Float?
+  wholesale_price Float?
+  created_at      DateTime @default(now())
+
+  product Product @relation(fields: [product_id], references: [id], onDelete: Cascade)
+
+  @@index([product_id])
+  @@map("product_variants")
 }
 
 model Transaction {
@@ -154,9 +175,11 @@ model TransactionItem {
   id             String @id @default(uuid())
   transaction_id String
   product_id     String
-  quantity       Int
+  quantity       Float
   price_at_time  Float
   subtotal       Float
+  variant_id     String?
+  variant_name   String?
 
   transaction Transaction @relation(fields: [transaction_id], references: [id])
   product     Product     @relation(fields: [product_id], references: [id])
@@ -187,11 +210,13 @@ model StockTransactionItem {
   id                  String @id @default(uuid())
   stock_transaction_id String
   product_id          String
-  qty                 Int
+  qty                 Float
   batch_no            String?
   expiry_date         String?
   purchase_price      Float
   subtotal            Float
+  variant_id          String?
+  variant_name        String?
 
   stockTransaction StockTransaction @relation(fields: [stock_transaction_id], references: [id])
   product          Product          @relation(fields: [product_id], references: [id])

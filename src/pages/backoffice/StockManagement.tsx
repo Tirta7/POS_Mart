@@ -9,10 +9,27 @@ import BarcodeLabelModal from '../../components/BarcodeLabelModal';
 import DraftReviewDrawer from '../../components/DraftReviewDrawer';
 import { generateInternalBarcode, isInternalBarcode } from '../../utils/barcode';
 import { recordStockMutation, makeDocNo } from '../../utils/stockMutation';
+import type { MutationLine } from '../../utils/stockMutation';
+import VariantEditor, { makeVariantId, sumVariantQty, findDuplicateVariant } from '../../components/VariantEditor';
+import type { VariantDraft } from '../../types';
 
 const makeGrNumber = () => {
   const d = new Date();
   return `GR-${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}-${String(Math.floor(Math.random()*900)+100)}`;
+};
+
+// Chip daftar varian + stok masing-masing (dipakai di tabel & kartu mobile)
+const VariantChips: React.FC<{ variants?: { id?: string; name: string; stock: number }[] }> = ({ variants }) => {
+  if (!variants || variants.length === 0) return null;
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '4px' }}>
+      {variants.map(v => (
+        <span key={v.id || v.name} style={{ fontSize: '10.5px', fontWeight: 700, background: '#ede9fe', color: '#5b21b6', padding: '1px 8px', borderRadius: '999px', whiteSpace: 'nowrap' }}>
+          {v.name}: <span style={{ color: v.stock > 0 ? '#065f46' : '#b91c1c' }}>{v.stock}</span>
+        </span>
+      ))}
+    </div>
+  );
 };
 
 const StockManagement: React.FC = () => {
@@ -33,6 +50,7 @@ const StockManagement: React.FC = () => {
   const [wholesalePrice, setWholesalePrice] = useState<number | string>('');
   const [minStock, setMinStock] = useState<number | string>('');
   const [image, setImage] = useState('');
+  const [variants, setVariants] = useState<VariantDraft[]>([]);
   const [newCategory, setNewCategory] = useState('');
   
   const [cameraScannerOpen, setCameraScannerOpen] = useState(false);
@@ -65,7 +83,9 @@ const StockManagement: React.FC = () => {
   const [restockProduct, setRestockProduct] = useState<any>(null);
   const [restockQty, setRestockQty] = useState<number | string>('');
   const [restockPrice, setRestockPrice] = useState<number | string>('');
-
+  // Restock produk bervarian: qty tambahan per varian lama + varian baru (opsional)
+  const [restockVarQty, setRestockVarQty] = useState<Record<string, number | string>>({});
+  const [restockNewVariants, setRestockNewVariants] = useState<VariantDraft[]>([]);
   // Tidak lagi menggunakan sessionItems terpisah, semua draf global
   const [draftToast, setDraftToast] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -96,6 +116,7 @@ const StockManagement: React.FC = () => {
     setWholesalePrice('');
     setMinStock('');
     setImage('');
+    setVariants([]);
     setIsFormOpen(false);
   };
 
@@ -118,9 +139,24 @@ const StockManagement: React.FC = () => {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!sku || !name || Number(qty) <= 0 || Number(sellingPrice) <= 0) return;
+
+    // Varian: baris tanpa nama diabaikan. Jika ada varian, stok produk = total qty semua varian.
+    const namedVariants = variants.filter(v => v.name.trim());
+    const hasVariants = namedVariants.length > 0;
+    const totalQty = hasVariants ? sumVariantQty(namedVariants) : Number(qty);
+
+    if (!sku || !name || Number(sellingPrice) <= 0) return;
+    if (!editingId && totalQty <= 0) {
+      if (hasVariants) alert('Isi jumlah (qty) minimal pada satu varian.');
+      return;
+    }
+    const dupVariant = findDuplicateVariant(namedVariants);
+    if (dupVariant) {
+      alert(`Nama varian "${dupVariant}" ganda. Setiap varian harus punya nama berbeda.`);
+      return;
+    }
     
     // Tanpa barcode -> buat barcode internal unik (SKxxxxxx), sama untuk ID & barcode
     const finalId = productId || generateInternalBarcode(products);
@@ -137,31 +173,61 @@ const StockManagement: React.FC = () => {
           return;
         }
 
-        updateProduct(editingId, {
-          ...original,
+        const origVariants = original.variants || [];
+        const baseCost = Number(purchasePrice);
+        const docNo = makeDocNo('ADJ');
+        const keptIds = new Set(namedVariants.map(v => v.id));
+
+        // a. Produk polos -> bervarian: kosongkan stok induk dulu, lalu isi lewat qty tiap varian
+        if (hasVariants && origVariants.length === 0 && original.stock !== 0) {
+          await recordStockMutation('ADJUSTMENT', docNo,
+            [{ productId: original.id, qty: -original.stock, purchasePrice: baseCost, name, unit }],
+            'Konversi stok produk ke varian');
+        }
+        // b. Varian yang dihapus: nol-kan stoknya lebih dulu agar tercatat di Mutasi Stok
+        const removed = origVariants.filter(v => !keptIds.has(v.id) && v.stock !== 0);
+        if (removed.length > 0) {
+          await recordStockMutation('ADJUSTMENT', docNo,
+            removed.map(v => ({ productId: original.id, variantId: v.id, variantName: v.name, qty: -v.stock, purchasePrice: baseCost, name, unit })),
+            'Varian dihapus via Edit Master Data');
+        }
+
+        // c. Simpan master data. Stok TIDAK dikirim: perubahan stok dicatat lewat mutasi (atomic di server)
+        const { stock: _stock, variants: _ov, ...baseFields } = original;
+        await updateProduct(editingId, {
+          ...baseFields,
           id: finalId, // Izinkan update ID/Barcode
           barcode: finalBarcode,
           sku,
           name,
           category,
           unit,
-          stock: Number(qty),
-          purchasePrice: Number(purchasePrice),
+          purchasePrice: baseCost,
           sellingPrice: Number(sellingPrice),
           wholesalePrice: Number(wholesalePrice),
           minStock: Number(minStock),
-          image: image || original.image
-        });
-        // Mutasi stok: jika qty diubah lewat Edit, catat sebagai penyesuaian (selisih)
-        const stockDelta = Number(qty) - original.stock;
-        if (stockDelta !== 0) {
-          recordStockMutation(
-            'ADJUSTMENT',
-            makeDocNo('ADJ'),
-            [{ productId: finalId, qty: stockDelta, purchasePrice: Number(purchasePrice), name, unit }],
-            `Koreksi stok via Edit Master Data (${original.stock} → ${Number(qty)})`
-          );
-        }
+          image: image || original.image,
+          variants: namedVariants.map(v => {
+            const old = origVariants.find(o => o.id === v.id);
+            return {
+              id: v.id,
+              name: v.name.trim(),
+              stock: old ? old.stock : 0, // varian baru mulai 0, diisi lewat mutasi di bawah
+              purchasePrice: old?.purchasePrice,
+              sellingPrice: Number(v.sellingPrice) > 0 ? Number(v.sellingPrice) : undefined,
+              wholesalePrice: Number(v.wholesalePrice) > 0 ? Number(v.wholesalePrice) : undefined,
+            };
+          })
+        } as any);
+
+        // d. Mutasi stok: jika qty diubah lewat Edit, catat sebagai penyesuaian (selisih)
+        const lines: MutationLine[] = hasVariants
+          ? namedVariants.map(v => {
+              const oldStock = origVariants.find(o => o.id === v.id)?.stock ?? 0;
+              return { productId: original.id, variantId: v.id, variantName: v.name.trim(), qty: (Number(v.qty) || 0) - oldStock, purchasePrice: baseCost, name, unit };
+            })
+          : [{ productId: original.id, qty: totalQty - (origVariants.length > 0 ? 0 : original.stock), purchasePrice: baseCost, name, unit }];
+        await recordStockMutation('ADJUSTMENT', docNo, lines, `Koreksi stok via Edit Master Data (${original.stock} → ${totalQty})`);
         setEditingId(null); // Keluar dari mode edit setelah berhasil simpan
       }
     } else {
@@ -182,24 +248,33 @@ const StockManagement: React.FC = () => {
         barcode: finalBarcode,
         sku, name, category, unit,
         location: 'Gudang Utama',
-        qty: Number(qty),
+        qty: totalQty,
         purchasePrice: Number(purchasePrice),
         sellingPrice: Number(sellingPrice),
         wholesalePrice: Number(wholesalePrice),
         minStock: Number(minStock),
         image: image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=300&q=80',
+        variants: hasVariants
+          ? namedVariants.map(v => ({
+              id: v.id,
+              name: v.name.trim(),
+              qty: Number(v.qty) || 0,
+              sellingPrice: Number(v.sellingPrice) || 0,
+              wholesalePrice: Number(v.wholesalePrice) || 0,
+            }))
+          : undefined,
       };
       const nextItems = [...draftItems, newItem];
       
       // Update global draft
       saveDrafts([{ grNumber: 'GLOBAL-DRAFT', savedAt: new Date().toISOString(), draftId: 'DRAFT-GLOBAL', items: nextItems }]);
       
-      setDraftToast(`"${name}" ditambahkan ke Draf. Belum tampil di Kasir POS sebelum diposting.`);
+      setDraftToast(`"${name}"${hasVariants ? ` (${namedVariants.length} varian)` : ''} ditambahkan ke Draf. Belum tampil di Kasir POS sebelum diposting.`);
       setTimeout(() => setDraftToast(null), 4500);
 
       // Barang tanpa barcode pabrikan -> langsung tawarkan cetak label stiker
       if (isInternalBarcode(finalId)) {
-        setLabelCopies(Math.max(1, Math.ceil(Number(qty))));
+        setLabelCopies(Math.max(1, Math.ceil(totalQty)));
         setLabelProduct({ id: finalId, barcode: finalId, sku, name, sellingPrice: Number(sellingPrice) });
       }
     }
@@ -236,6 +311,7 @@ const StockManagement: React.FC = () => {
       sellingPrice: Number(updated.sellingPrice),
       wholesalePrice: Number(updated.wholesalePrice || 0),
       image: updated.image || undefined,
+      variants: updated.variants && updated.variants.length > 0 ? updated.variants : undefined,
     };
     const next = drafts.map(d => ({
       ...d,
@@ -257,25 +333,69 @@ const StockManagement: React.FC = () => {
 
   // Terapkan item ke stok (stok bertambah / produk baru muncul di Kasir POS)
   const applyItemsToStock = async (items: any[], docNo: string) => {
-    const mutationLines: { productId: string; qty: number; purchasePrice: number; name: string; unit: string }[] = [];
+    const mutationLines: MutationLine[] = [];
     for (const item of items) {
       // Item draf lama (sebelum fitur ini) sudah pernah masuk stok -> jangan ditambah dua kali
       if (!item.pending) continue;
       const live = useInventoryStore.getState().products;
       const existing = live.find(p => p.id === item.id || p.barcode === item.id);
       const qtyIn = Number(item.qty);
+      const buyPrice = Number(item.purchasePrice);
+      // Varian pada draf (pastikan setiap varian punya ID agar bisa dipakai mutasi)
+      const draftVariants = ((item.variants || []) as any[])
+        .filter(v => String(v.name || '').trim())
+        .map(v => ({ ...v, id: v.id || makeVariantId(), name: String(v.name).trim() }));
+
       if (existing) {
-        mutationLines.push({ productId: existing.id, qty: qtyIn, purchasePrice: Number(item.purchasePrice), name: item.name, unit: item.unit });
+        const exVariants = existing.variants || [];
+        // Produk polos yang akan dijadikan bervarian: kosongkan stok induk dulu (diisi ulang via varian)
+        if (draftVariants.length > 0 && exVariants.length === 0 && existing.stock !== 0) {
+          await recordStockMutation('ADJUSTMENT', makeDocNo('ADJ'),
+            [{ productId: existing.id, qty: -existing.stock, purchasePrice: existing.purchasePrice, name: existing.name, unit: existing.unit }],
+            'Konversi stok produk ke varian');
+        }
+        const stockBefore = draftVariants.length > 0 && exVariants.length === 0 ? 0 : existing.stock;
         // Produk sudah ada -> tambah stok, HPP Moving Average
-        const newTotal = existing.stock + qtyIn;
+        const newTotal = stockBefore + qtyIn;
         const avg = newTotal > 0
-          ? Math.round(((existing.stock * existing.purchasePrice) + (qtyIn * Number(item.purchasePrice))) / newTotal)
-          : Number(item.purchasePrice);
-          
+          ? Math.round(((stockBefore * existing.purchasePrice) + (qtyIn * buyPrice)) / newTotal)
+          : buyPrice;
+
+        // Cocokkan varian draf dengan varian yang sudah ada (berdasarkan nama); sisanya dibuat baru
+        const variantsPayload: any[] = exVariants.map(v => ({
+          id: v.id, name: v.name, stock: v.stock,
+          purchasePrice: v.purchasePrice, sellingPrice: v.sellingPrice, wholesalePrice: v.wholesalePrice,
+        }));
+        const resolved: { id: string; name: string; qty: number }[] = [];
+        if (draftVariants.length > 0) {
+          for (const dv of draftVariants) {
+            const match = variantsPayload.find(x => String(x.name).trim().toLowerCase() === dv.name.toLowerCase());
+            if (match) {
+              resolved.push({ id: match.id, name: match.name, qty: Number(dv.qty) || 0 });
+            } else {
+              variantsPayload.push({
+                id: dv.id, name: dv.name, stock: 0,
+                sellingPrice: Number(dv.sellingPrice) > 0 ? Number(dv.sellingPrice) : undefined,
+                wholesalePrice: Number(dv.wholesalePrice) > 0 ? Number(dv.wholesalePrice) : undefined,
+              });
+              resolved.push({ id: dv.id, name: dv.name, qty: Number(dv.qty) || 0 });
+            }
+          }
+        } else if (exVariants.length > 0) {
+          // Produk bervarian tapi draf tanpa varian -> masuk ke varian pertama
+          resolved.push({ id: exVariants[0].id, name: exVariants[0].name, qty: qtyIn });
+        }
+
         // Mencegah Race Condition: Jangan update stok di sini! Biarkan Mutasi (recordStockMutation) 
         // yang melakukan INCREMENT secara atomic di sisi database.
-        const { stock, ...payload } = { ...existing, purchasePrice: avg };
-        await updateProduct(existing.id, payload as any);
+        const { stock, variants: _v, ...payload } = { ...existing, purchasePrice: avg };
+        await updateProduct(existing.id, { ...payload, variants: variantsPayload } as any);
+
+        if (resolved.length > 0) {
+          resolved.forEach(r => mutationLines.push({ productId: existing.id, variantId: r.id, variantName: r.name, qty: r.qty, purchasePrice: buyPrice, name: item.name, unit: item.unit }));
+        } else {
+          mutationLines.push({ productId: existing.id, qty: qtyIn, purchasePrice: buyPrice, name: item.name, unit: item.unit });
+        }
       } else {
         const createdProd = await addProduct({
           id: item.id,
@@ -287,17 +407,27 @@ const StockManagement: React.FC = () => {
           unit: item.unit,
           stock: 0, // Dikosongkan agar penambahan qty di mutasi tidak berlipat (doubled)
           baseUnitMultiplier: 1,
-          purchasePrice: Number(item.purchasePrice),
+          purchasePrice: buyPrice,
           sellingPrice: Number(item.sellingPrice),
           wholesalePrice: Number(item.wholesalePrice || 0),
           minStock: Number(item.minStock || 0),
           image: item.image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=300&q=80',
+          // Varian dibuat dengan stok 0; stok masuk lewat mutasi IN per varian
+          variants: draftVariants.map(dv => ({
+            id: dv.id, name: dv.name, stock: 0,
+            sellingPrice: Number(dv.sellingPrice) > 0 ? Number(dv.sellingPrice) : undefined,
+            wholesalePrice: Number(dv.wholesalePrice) > 0 ? Number(dv.wholesalePrice) : undefined,
+          })),
         });
-        mutationLines.push({ productId: createdProd.id, qty: qtyIn, purchasePrice: Number(item.purchasePrice), name: item.name, unit: item.unit });
+        if (draftVariants.length > 0) {
+          draftVariants.forEach(dv => mutationLines.push({ productId: createdProd.id, variantId: dv.id, variantName: dv.name, qty: Number(dv.qty) || 0, purchasePrice: buyPrice, name: item.name, unit: item.unit }));
+        } else {
+          mutationLines.push({ productId: createdProd.id, qty: qtyIn, purchasePrice: buyPrice, name: item.name, unit: item.unit });
+        }
       }
     }
     // Mutasi stok: Barang Masuk (IN) per dokumen GR
-    recordStockMutation('IN', docNo, mutationLines, 'Penerimaan Barang (GR)');
+    await recordStockMutation('IN', docNo, mutationLines, 'Penerimaan Barang (GR)');
   };
 
   const writePostedLog = (ref: string, items: any[]) => {
@@ -359,6 +489,13 @@ const StockManagement: React.FC = () => {
     setWholesalePrice(p.wholesalePrice || 0);
     setMinStock(p.minStock || 0);
     setImage(p.image || '');
+    setVariants((p.variants || []).map((v: any) => ({
+      id: v.id,
+      name: v.name,
+      qty: v.stock,
+      sellingPrice: v.sellingPrice ?? '',
+      wholesalePrice: v.wholesalePrice ?? '',
+    })));
     setIsFormOpen(true); // Buka popup
   };
 
@@ -370,15 +507,34 @@ const StockManagement: React.FC = () => {
     setRestockProduct(p);
     setRestockQty('');
     setRestockPrice(p.purchasePrice);
+    setRestockVarQty({});
+    setRestockNewVariants([]);
   };
 
-  const handleRestockSubmit = (e: React.FormEvent) => {
+  // Produk bervarian: total tambahan = jumlah qty tiap varian lama + varian baru
+  const restockHasVariants = !!restockProduct && (restockProduct.variants || []).length > 0;
+  const restockNewNamed = restockNewVariants.filter(v => v.name.trim());
+  const restockAddedQty = !restockProduct
+    ? 0
+    : restockHasVariants
+      ? Object.values(restockVarQty).reduce<number>((s, q) => s + (Number(q) || 0), 0) + sumVariantQty(restockNewNamed)
+      : Number(restockQty);
+
+  const handleRestockSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!restockProduct || Number(restockQty) <= 0 || Number(restockPrice) <= 0) return;
+    if (!restockProduct || restockAddedQty <= 0 || Number(restockPrice) <= 0) return;
+
+    const exVariants: any[] = restockProduct.variants || [];
+    const allNames = [...exVariants.map(v => ({ id: v.id, name: v.name, qty: 0 })), ...restockNewNamed.map(v => ({ id: v.id, name: v.name, qty: 0 }))];
+    const dup = findDuplicateVariant(allNames);
+    if (dup) {
+      alert(`Nama varian "${dup}" sudah ada.`);
+      return;
+    }
 
     const oldQty = restockProduct.stock;
     const oldPrice = restockProduct.purchasePrice;
-    const addedQty = Number(restockQty);
+    const addedQty = restockAddedQty;
     const newPrice = Number(restockPrice);
 
     const newTotalQty = oldQty + addedQty;
@@ -393,16 +549,30 @@ const StockManagement: React.FC = () => {
       // Harga jual tidak diubah otomatis
     };
     delete payload.stock;
+
+    if (restockHasVariants) {
+      payload.variants = [
+        ...exVariants.map(v => ({ id: v.id, name: v.name, stock: v.stock, purchasePrice: v.purchasePrice, sellingPrice: v.sellingPrice, wholesalePrice: v.wholesalePrice })),
+        ...restockNewNamed.map(v => ({
+          id: v.id, name: v.name.trim(), stock: 0,
+          sellingPrice: Number(v.sellingPrice) > 0 ? Number(v.sellingPrice) : undefined,
+          wholesalePrice: Number(v.wholesalePrice) > 0 ? Number(v.wholesalePrice) : undefined,
+        })),
+      ];
+    }
     
-    updateProduct(restockProduct.id, payload);
+    // Tunggu varian baru tersimpan sebelum mutasi mereferensikannya
+    await updateProduct(restockProduct.id, payload);
+
+    const lines: MutationLine[] = restockHasVariants
+      ? [
+          ...exVariants.map(v => ({ productId: restockProduct.id, variantId: v.id, variantName: v.name, qty: Number(restockVarQty[v.id]) || 0, purchasePrice: newPrice, name: restockProduct.name, unit: restockProduct.unit })),
+          ...restockNewNamed.map(v => ({ productId: restockProduct.id, variantId: v.id, variantName: v.name.trim(), qty: Number(v.qty) || 0, purchasePrice: newPrice, name: restockProduct.name, unit: restockProduct.unit })),
+        ]
+      : [{ productId: restockProduct.id, qty: addedQty, purchasePrice: newPrice, name: restockProduct.name, unit: restockProduct.unit }];
 
     // Mutasi stok: Barang Masuk (IN) dari restock
-    recordStockMutation(
-      'IN',
-      makeDocNo('RST'),
-      [{ productId: restockProduct.id, qty: addedQty, purchasePrice: newPrice, name: restockProduct.name, unit: restockProduct.unit }],
-      'Restock / Barang Masuk'
-    );
+    await recordStockMutation('IN', makeDocNo('RST'), lines, 'Restock / Barang Masuk');
 
     setRestockProduct(null);
   };
@@ -422,6 +592,7 @@ const StockManagement: React.FC = () => {
     wholesalePrice: si.wholesalePrice,
     minStock: si.minStock,
     image: si.image,
+    variants: (si.variants || []).map((v: any) => ({ id: v.id, name: v.name, stock: Number(v.qty) || 0 })),
     isPending: true
   }));
 
@@ -449,6 +620,7 @@ const StockManagement: React.FC = () => {
     (currentCategory === 'all' || (p.category && p.category.toLowerCase() === currentCategory.toLowerCase())) &&
     (p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
      (p.sku && p.sku.toLowerCase().includes(searchQuery.toLowerCase())) ||
+     (p.variants || []).some((v: any) => String(v.name || '').toLowerCase().includes(searchQuery.toLowerCase())) ||
      p.id.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
@@ -702,6 +874,7 @@ const StockManagement: React.FC = () => {
                               </span>
                             )}
                           </div>
+                          <VariantChips variants={p.variants} />
                         </td>
 
                         {/* Kategori */}
@@ -917,6 +1090,7 @@ const StockManagement: React.FC = () => {
                       <div className="mobile-card-id">
                         SKU: {p.sku || '-'} • ID: {p.barcode || p.id}
                       </div>
+                      <VariantChips variants={p.variants} />
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
                       <span className="mobile-badge mobile-badge-cat">{p.category}</span>
@@ -1020,10 +1194,43 @@ const StockManagement: React.FC = () => {
             </div>
 
             <form onSubmit={handleRestockSubmit}>
+              {restockHasVariants ? (
+                <div style={{ marginBottom: '12px' }}>
+                  <label className="bo-label">JUMLAH TAMBAHAN PER VARIAN (IN)</label>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '10px' }}>
+                    {(restockProduct.variants as any[]).map((v, i) => (
+                      <div key={v.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '6px 10px', background: '#f9fafb', border: '1px solid #f3f4f6', borderRadius: '8px' }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontWeight: 700, fontSize: '13px' }}>{v.name}</div>
+                          <div style={{ fontSize: '11px', color: '#6b7280' }}>Stok saat ini: {v.stock}</div>
+                        </div>
+                        <input
+                          type="number"
+                          step="any"
+                          className="bo-input"
+                          style={{ width: '90px', textAlign: 'center' }}
+                          placeholder="+ Qty"
+                          value={restockVarQty[v.id] ?? ''}
+                          onChange={(e) => setRestockVarQty(prev => ({ ...prev, [v.id]: e.target.value === '' ? '' : Number(e.target.value) }))}
+                          autoFocus={i === 0}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  <VariantEditor
+                    variants={restockNewVariants}
+                    onChange={setRestockNewVariants}
+                    title="Varian Baru (opsional)"
+                    qtyLabel="Masuk"
+                  />
+                  <div style={{ marginTop: '8px', fontSize: '12px', fontWeight: 700, color: '#065f46' }}>Total masuk: {restockAddedQty} {restockProduct.unit}</div>
+                </div>
+              ) : (
               <div style={{ marginBottom: '12px' }}>
                 <label className="bo-label">JUMLAH TAMBAHAN (IN)</label>
                 <input 
                   type="number" 
+                  step="any"
                   className="bo-input" 
                   value={restockQty} 
                   onChange={(e) => setRestockQty(e.target.value)} 
@@ -1031,6 +1238,7 @@ const StockManagement: React.FC = () => {
                   autoFocus
                 />
               </div>
+              )}
               <div style={{ marginBottom: '20px' }}>
                 <label className="bo-label">HARGA BELI BARU (MODAL / PCS)</label>
                 <input 
@@ -1045,10 +1253,10 @@ const StockManagement: React.FC = () => {
                   </div>
                 </div>
 
-                {Number(restockQty) > 0 && Number(restockPrice) > 0 && (() => {
+                {restockAddedQty > 0 && Number(restockPrice) > 0 && (() => {
                   const oldStock = restockProduct.stock;
                   const oldPrice = restockProduct.purchasePrice;
-                  const addedQty = Number(restockQty);
+                  const addedQty = restockAddedQty;
                   const addedPrice = Number(restockPrice);
                   const newTotalQty = oldStock + addedQty;
                   const newAvgPrice = Math.round(((oldStock * oldPrice) + (addedQty * addedPrice)) / newTotalQty);
@@ -1453,12 +1661,35 @@ const StockManagement: React.FC = () => {
                 </div>
               </div>
 
+              {/* SECTION: VARIAN PRODUK (OPSIONAL) */}
+              <div className="ios-section-header" style={{ marginTop: '20px' }}>
+                <span>VARIAN (OPSIONAL)</span>
+                <span className="ios-hint-gray">Warna / rasa / ukuran</span>
+              </div>
+              <VariantEditor
+                variants={variants}
+                onChange={setVariants}
+                qtyLabel={editingId ? 'Stok' : 'Qty'}
+                hint={editingId
+                  ? 'Ubah stok varian akan dicatat otomatis sebagai Penyesuaian di Mutasi Stok. Harga varian dikosongkan = ikut harga produk di bawah.'
+                  : 'Satu produk, banyak varian dengan harga sama? Cukup ketik nama varian dipisah koma lalu isi qty tiap varian. Harga varian dikosongkan = ikut harga produk di bawah.'}
+              />
+
               {/* SECTION: MANAJEMEN STOK & SATUAN */}
               <div className="ios-section-header" style={{ marginTop: '20px' }}>
                 <span>MANAJEMEN STOK &amp; SATUAN</span>
                 <span className="ios-hint-gray">Gudang Utama (POS 01)</span>
               </div>
               <div className="ios-group">
+                {variants.some(v => v.name.trim()) ? (
+                  <div className="ios-row-horiz">
+                    <div>
+                      <label>Total Stok (Otomatis)</label>
+                      <div className="ios-sublabel">Jumlah dari seluruh varian di atas</div>
+                    </div>
+                    <div style={{ fontSize: '20px', fontWeight: 800, color: '#065f46' }}>{sumVariantQty(variants)}</div>
+                  </div>
+                ) : (
                 <div className="ios-row-horiz">
                   <div>
                     <label>Jumlah Masuk (Stok Awal)</label>
@@ -1466,26 +1697,36 @@ const StockManagement: React.FC = () => {
                   </div>
                   <div className="ios-stepper">
                     <button type="button" onClick={() => setQty(Math.max(0, Number(qty) - 1))}>-</button>
-                    <input type="number" inputMode="decimal" value={qty} onChange={(e) => setQty(e.target.value === '' ? '' : Number(e.target.value))} required />
+                    <input type="number" step="any" inputMode="decimal" value={qty} onChange={(e) => setQty(e.target.value === '' ? '' : Number(e.target.value))} required />
                     <button type="button" onClick={() => setQty(Number(qty) + 1)}>+</button>
                   </div>
                 </div>
+                )}
                 
                 <div className="ios-row-vert" style={{ padding: '12px 16px' }}>
                   <label style={{ marginBottom: '8px', display: 'block', fontSize: '13px', fontWeight: 600 }}>Satuan Unit</label>
                   <div className="ios-segmented">
-                    {['Pcs', 'Box', 'Pack', 'Lusin'].map(u => (
+                    {['Pcs', 'Box', 'Kg', 'Liter'].map(u => (
                       <button type="button" key={u} className={unit === u ? 'active' : ''} onClick={() => setUnit(u)}>{u}</button>
                     ))}
                   </div>
-                  {/* Cadangan satuan lain jika tidak ada di segment */}
-                  {['Pcs', 'Box', 'Pack', 'Lusin'].indexOf(unit) === -1 && (
-                    <select value={unit} onChange={(e) => setUnit(e.target.value)} className="ios-input-gray" style={{ marginTop: '8px' }}>
-                      <option value="Kg">Kg</option>
-                      <option value="Gram">Gram</option>
-                      <option value="Liter">Liter</option>
-                      <option value="Dus">Dus</option>
-                    </select>
+                  {/* Satuan lain (Gram, Pack, Lusin, Dus) */}
+                  <select
+                    value={['Pcs', 'Box', 'Kg', 'Liter'].indexOf(unit) === -1 ? unit : ''}
+                    onChange={(e) => { if (e.target.value) setUnit(e.target.value); }}
+                    className="ios-input-gray"
+                    style={{ marginTop: '8px' }}
+                  >
+                    <option value="">Satuan lain...</option>
+                    <option value="Gram">Gram</option>
+                    <option value="Pack">Pack</option>
+                    <option value="Lusin">Lusin</option>
+                    <option value="Dus">Dus</option>
+                  </select>
+                  {['kg', 'gram', 'liter'].includes(unit.toLowerCase()) && (
+                    <div style={{ marginTop: '8px', fontSize: '11px', color: '#92400e', background: '#fef3c7', padding: '6px 10px', borderRadius: '8px', lineHeight: 1.4 }}>
+                      Barang timbangan: qty boleh desimal (mis. 2,5). <strong>Harga beli, jual &amp; grosir diisi per {unit}</strong>. Di kasir, klik produk lalu masukkan berat.
+                    </div>
                   )}
                 </div>
 
@@ -1496,7 +1737,7 @@ const StockManagement: React.FC = () => {
                       <div className="ios-sublabel">Peringatan saat stok di bawah nilai ini</div>
                     </div>
                   </div>
-                  <input type="number" inputMode="numeric" value={minStock} onChange={(e) => setMinStock(e.target.value === '' ? '' : Number(e.target.value))} className="ios-input-gray ios-input-small" style={{ width: '60px', textAlign: 'center' }} />
+                  <input type="number" step="any" inputMode="decimal" value={minStock} onChange={(e) => setMinStock(e.target.value === '' ? '' : Number(e.target.value))} className="ios-input-gray ios-input-small" style={{ width: '60px', textAlign: 'center' }} />
                 </div>
               </div>
 

@@ -1,5 +1,15 @@
 import React, { useState } from 'react';
 import { CheckCircle, X, Package, AlertTriangle, Trash2, Edit2, Save } from 'lucide-react';
+import VariantEditor, { sumVariantQty, findDuplicateVariant } from './VariantEditor';
+import type { VariantDraft } from '../types';
+
+export interface ReviewVariant {
+  id: string;
+  name: string;
+  qty: number;
+  sellingPrice?: number;
+  wholesalePrice?: number;
+}
 
 export interface ReviewItem {
   id: string;
@@ -16,6 +26,7 @@ export interface ReviewItem {
   image?: string;
   pending?: boolean;
   grNumber?: string;
+  variants?: ReviewVariant[];
 }
 
 interface Props {
@@ -61,6 +72,13 @@ const DraftReviewDrawer: React.FC<Props> = ({ items, mode, categories, onClose, 
       sellingPrice: item.sellingPrice,
       wholesalePrice: item.wholesalePrice ?? 0,
       image: item.image || '',
+      variants: (item.variants || []).map(v => ({
+        id: v.id,
+        name: v.name,
+        qty: v.qty,
+        sellingPrice: v.sellingPrice || '',
+        wholesalePrice: v.wholesalePrice || '',
+      })) as VariantDraft[],
     });
   };
 
@@ -68,8 +86,16 @@ const DraftReviewDrawer: React.FC<Props> = ({ items, mode, categories, onClose, 
   const setNum = (key: string, v: string) => setF(key, v === '' ? '' : Number(v));
 
   const saveEdit = (item: ReviewItem) => {
-    if (!String(form.name).trim() || !String(form.sku).trim() || Number(form.qty) <= 0 || Number(form.sellingPrice) <= 0) {
+    const named: VariantDraft[] = ((form.variants || []) as VariantDraft[]).filter(v => v.name.trim());
+    const hasVariants = named.length > 0;
+    const qty = hasVariants ? sumVariantQty(named) : Number(form.qty);
+    if (!String(form.name).trim() || !String(form.sku).trim() || qty <= 0 || Number(form.sellingPrice) <= 0) {
       alert('Nama, SKU, Qty (> 0) dan Harga Jual (> 0) wajib diisi.');
+      return;
+    }
+    const dup = findDuplicateVariant(named);
+    if (dup) {
+      alert(`Nama varian "${dup}" ganda.`);
       return;
     }
     onSaveItem({
@@ -78,12 +104,21 @@ const DraftReviewDrawer: React.FC<Props> = ({ items, mode, categories, onClose, 
       sku: String(form.sku).trim(),
       category: form.category,
       unit: form.unit,
-      qty: Number(form.qty),
+      qty,
       minStock: Number(form.minStock || 0),
       purchasePrice: Number(form.purchasePrice || 0),
       sellingPrice: Number(form.sellingPrice),
       wholesalePrice: Number(form.wholesalePrice || 0),
       image: form.image,
+      variants: hasVariants
+        ? named.map(v => ({
+            id: v.id,
+            name: v.name.trim(),
+            qty: Number(v.qty) || 0,
+            sellingPrice: Number(v.sellingPrice) || 0,
+            wholesalePrice: Number(v.wholesalePrice) || 0,
+          }))
+        : undefined,
     });
     setEditingId(null);
   };
@@ -198,6 +233,13 @@ const DraftReviewDrawer: React.FC<Props> = ({ items, mode, categories, onClose, 
                           <span className="bo-badge bo-badge-gray" style={{ fontSize: '10px', padding: '1px 6px' }}>{item.category}</span>
                           {!item.pending && <span className="bo-badge" style={{ background: '#fef3c7', color: '#92400e', fontSize: '10px', padding: '1px 6px' }}>Sudah masuk stok</span>}
                         </div>
+                        {item.variants && item.variants.length > 0 && (
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '4px' }}>
+                            {item.variants.map(v => (
+                              <span key={v.id} style={{ fontSize: '10px', fontWeight: 700, background: '#ede9fe', color: '#5b21b6', padding: '1px 7px', borderRadius: '999px' }}>{v.name}: {v.qty}</span>
+                            ))}
+                          </div>
+                        )}
                       </div>
                       <div style={{ display: 'flex', gap: '2px', flexShrink: 0 }}>
                         {item.pending && !isEditing && (
@@ -236,7 +278,11 @@ const DraftReviewDrawer: React.FC<Props> = ({ items, mode, categories, onClose, 
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
                           <div>
                             <label style={labelStyle}>Qty</label>
-                            <input type="number" min="0" step="any" className="bo-input" style={inputStyle} value={form.qty} onChange={e => setNum('qty', e.target.value)} />
+                            {((form.variants || []) as VariantDraft[]).some(v => v.name.trim()) ? (
+                              <div className="bo-input" style={{ ...inputStyle, display: 'flex', alignItems: 'center', fontWeight: 800, color: '#065f46', background: '#ecfdf5' }}>{sumVariantQty(form.variants || [])}</div>
+                            ) : (
+                              <input type="number" min="0" step="any" className="bo-input" style={inputStyle} value={form.qty} onChange={e => setNum('qty', e.target.value)} />
+                            )}
                           </div>
                           <div>
                             <label style={labelStyle}>Satuan</label>
@@ -267,6 +313,11 @@ const DraftReviewDrawer: React.FC<Props> = ({ items, mode, categories, onClose, 
                           <label style={labelStyle}>URL Gambar</label>
                           <input className="bo-input" style={inputStyle} value={form.image} onChange={e => setF('image', e.target.value)} placeholder="https://..." />
                         </div>
+                        <VariantEditor
+                          variants={(form.variants || []) as VariantDraft[]}
+                          onChange={(next) => setF('variants', next)}
+                          title="Varian"
+                        />
                         <div style={{ fontSize: '10px', color: '#9ca3af' }}>Barcode/ID <strong style={{ fontFamily: 'monospace' }}>{item.barcode || item.id}</strong> tidak dapat diubah.</div>
                         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
                           <button type="button" className="bo-btn bo-btn-secondary" style={{ padding: '4px 12px', fontSize: '12px' }} onClick={() => setEditingId(null)}>Batal</button>

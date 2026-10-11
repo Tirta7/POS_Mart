@@ -141,6 +141,8 @@ export const CustomerData = () => {
         cashier: s.employeeName,
         items: s.items.map(it => ({
           productId: it.productId,
+          variantId: it.variantId,
+          variantName: it.variantName,
           name: it.name,
           qty: it.qty,
           price: it.price,
@@ -167,6 +169,8 @@ export const CustomerData = () => {
         cashier: st.employeeId || 'Sistem',
         items: (st.items || []).map(it => ({
           productId: it.productId,
+          variantId: it.variantId,
+          variantName: it.variantName,
           name: it.productName || it.productId,
           qty: Math.abs(it.qty),
           price: it.purchasePrice || 0,
@@ -1256,7 +1260,7 @@ export const CustomerData = () => {
                                   <tr key={idx} style={{ borderBottom: '1px solid #f8fafc' }}>
                                     <td style={{ padding: '8px', color: '#9ca3af' }}>{idx + 1}</td>
                                     <td style={{ padding: '8px', fontWeight: 600, color: '#0f172a' }}>
-                                      {item.name}
+                                      {item.name}{item.variantName ? ` - ${item.variantName}` : ''}
                                     </td>
                                     <td style={{ padding: '8px', textAlign: 'center', fontWeight: 700, color: '#334155' }}>
                                       {item.qty} Pcs

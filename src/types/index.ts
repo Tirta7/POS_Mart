@@ -15,6 +15,27 @@ export interface Product {
   wholesalePrice?: number;
   image?: string;
   isPending?: boolean; // Flag to indicate if the product is a draft in Goods Receipt
+  variants?: ProductVariant[]; // Varian (mis. warna). Jika ada, stok produk = total stok varian
+}
+
+/** Varian produk. Harga kosong/0 = ikut harga produk induk. */
+export interface ProductVariant {
+  id: string;
+  name: string;
+  stock: number;
+  reserved?: number; // stok varian yang dikunci oleh HOLD
+  purchasePrice?: number;
+  sellingPrice?: number;
+  wholesalePrice?: number;
+}
+
+/** Varian untuk input form (qty/harga berupa string agar bisa dikosongkan saat mengetik) */
+export interface VariantDraft {
+  id: string;
+  name: string;
+  qty: number | string;
+  sellingPrice?: number | string;
+  wholesalePrice?: number | string;
 }
 
 export interface Supplier {
@@ -52,6 +73,8 @@ export interface StockTransaction {
 
 export interface StockTransactionItem {
   productId: string;
+  variantId?: string;
+  variantName?: string;
   productName?: string;
   unit?: string;
   qty: number; // ADJUSTMENT: bernilai selisih (+/-)
@@ -69,6 +92,8 @@ export interface CustomerOrder {
   cashier?: string;
   items: {
     productId: string;
+    variantId?: string;
+    variantName?: string;
     name: string;
     qty: number;
     price: number;
@@ -92,6 +117,8 @@ export interface SalesTransaction {
   employeeName?: string;
   items: {
     productId: string;
+    variantId?: string;
+    variantName?: string;
     name: string;
     qty: number;
     price: number;

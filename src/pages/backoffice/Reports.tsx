@@ -130,7 +130,7 @@ const Reports: React.FC = () => {
         sale.id.toLowerCase().includes(lowerQuery) || 
         (sale.customerName && sale.customerName.toLowerCase().includes(lowerQuery)) ||
         (sale.employeeName && sale.employeeName.toLowerCase().includes(lowerQuery)) ||
-        (sale.items || []).some(it => it.name && it.name.toLowerCase().includes(lowerQuery))
+        (sale.items || []).some(it => (it.name && it.name.toLowerCase().includes(lowerQuery)) || (it.variantName && it.variantName.toLowerCase().includes(lowerQuery)))
       );
     }
     
@@ -798,7 +798,7 @@ const Reports: React.FC = () => {
                               {(sale.items || []).slice(0, 2).map((it, i) => (
                                 <div key={i} style={{ fontSize: '12px', color: '#334155', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                   <span style={{ fontWeight: 800, color: '#0f172a' }}>{it.qty}x</span>
-                                  <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '200px' }}>{it.name}</span>
+                                  <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '200px' }}>{it.name}{it.variantName ? ` - ${it.variantName}` : ''}</span>
                                 </div>
                               ))}
                               {(sale.items || []).length > 2 && (
@@ -1133,7 +1133,7 @@ const Reports: React.FC = () => {
                             <div key={idx2} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                 <span style={{ fontWeight: 700, color: '#0f172a' }}>{it.qty}x</span>
-                                <span style={{ color: '#334155' }}>{it.name}</span>
+                                <span style={{ color: '#334155' }}>{it.name}{it.variantName ? ` - ${it.variantName}` : ''}</span>
                               </div>
                               <span style={{ fontWeight: 600, color: '#64748b' }}>
                                 {formatIDR(it.subtotal || it.price * it.qty)}

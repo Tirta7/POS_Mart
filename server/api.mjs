@@ -35,6 +35,67 @@ const notifyTenant = (tenantId, entity) => {
   }
 };
 
+// Produk selalu dikirim bersama kategori & daftar variannya
+const PRODUCT_INCLUDE = {
+  category: true,
+  variants: { orderBy: { created_at: 'asc' } }
+};
+
+const optNum = (v) => (v === undefined || v === null || v === '' || Number(v) <= 0 ? null : Number(v));
+// Qty boleh desimal (mis. 2,5 kg). Dibulatkan 3 angka di belakang koma agar tidak muncul sisa floating point.
+const round3 = (n) => Math.round(Number(n || 0) * 1000) / 1000;
+
+/**
+ * Sinkronkan daftar varian sebuah produk (dipanggil di dalam transaksi DB).
+ * - Varian dengan id yang sudah ada  -> nama & harga diperbarui (stok TIDAK diubah di sini;
+ *   perubahan stok harus lewat Mutasi Stok agar tercatat).
+ * - Varian baru                      -> dibuat dengan stok awal (umumnya 0, lalu diisi lewat mutasi IN).
+ * - Varian yang tidak dikirim lagi   -> dihapus.
+ * Setelah itu Product.stock = total stok semua varian.
+ */
+const syncProductVariants = async (tx, tenantId, productId, variants) => {
+  const existing = await tx.productVariant.findMany({ where: { product_id: productId } });
+  const existingIds = new Set(existing.map(v => v.id));
+  const incomingIds = new Set();
+
+  for (const v of variants) {
+    const name = String(v.name || '').trim();
+    if (!name) continue;
+    const prices = {
+      purchase_price: optNum(v.purchasePrice),
+      selling_price: optNum(v.sellingPrice),
+      wholesale_price: optNum(v.wholesalePrice)
+    };
+    if (v.id && existingIds.has(v.id)) {
+      incomingIds.add(v.id);
+      await tx.productVariant.update({ where: { id: v.id }, data: { name, ...prices } });
+    } else {
+      const created = await tx.productVariant.create({
+        data: {
+          ...(v.id ? { id: v.id } : {}),
+          tenant_id: tenantId,
+          product_id: productId,
+          name,
+          stock: round3(v.stock),
+          ...prices
+        }
+      });
+      incomingIds.add(created.id);
+    }
+  }
+
+  const toDelete = existing.filter(v => !incomingIds.has(v.id)).map(v => v.id);
+  if (toDelete.length > 0) {
+    await tx.productVariant.deleteMany({ where: { id: { in: toDelete } } });
+  }
+
+  if (incomingIds.size > 0) {
+    const agg = await tx.productVariant.aggregate({ where: { product_id: productId }, _sum: { stock: true } });
+    await tx.product.update({ where: { id: productId }, data: { stock: agg._sum.stock || 0 } });
+  }
+  return incomingIds.size;
+};
+
 // Middleware CORS dan Auth
 app.use('/api/saas', async (req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -163,7 +224,7 @@ app.get('/api/saas/products', async (req, res) => {
   try {
     const products = await prisma.product.findMany({
       where: { tenant_id: req.tenantId },
-      include: { category: true }
+      include: PRODUCT_INCLUDE
     });
     res.json(products);
   } catch (err) {
@@ -191,21 +252,29 @@ app.post('/api/saas/products', async (req, res) => {
       }
     }
 
-    const product = await prisma.product.create({
-      data: {
-        tenant_id: req.tenantId,
-        sku: data.sku,
-        barcode: data.barcode,
-        name: data.name,
-        category_id: categoryId,
-        purchase_price: Number(data.purchasePrice || 0),
-        selling_price: Number(data.sellingPrice || 0),
-        wholesale_price: Number(data.wholesalePrice || 0),
-        stock: Number(data.stock || 0),
-        min_stock: Number(data.minStock || 0),
-        image_url: data.image
-      },
-      include: { category: true }
+    const incomingVariants = Array.isArray(data.variants) ? data.variants.filter(v => v && String(v.name || '').trim()) : [];
+
+    const product = await prisma.$transaction(async (tx) => {
+      const created = await tx.product.create({
+        data: {
+          tenant_id: req.tenantId,
+          sku: data.sku,
+          barcode: data.barcode,
+          name: data.name,
+          category_id: categoryId,
+          purchase_price: Number(data.purchasePrice || 0),
+          selling_price: Number(data.sellingPrice || 0),
+          wholesale_price: Number(data.wholesalePrice || 0),
+          stock: incomingVariants.length > 0 ? 0 : round3(data.stock),
+          min_stock: Number(data.minStock || 0),
+          unit: data.unit ? String(data.unit) : 'Pcs',
+          image_url: data.image
+        }
+      });
+      if (incomingVariants.length > 0) {
+        await syncProductVariants(tx, req.tenantId, created.id, incomingVariants);
+      }
+      return tx.product.findUnique({ where: { id: created.id }, include: PRODUCT_INCLUDE });
     });
     notifyTenant(req.tenantId, 'products');
     res.json(product);
@@ -233,6 +302,11 @@ app.put('/api/saas/products/:id', async (req, res) => {
       }
     }
 
+    // Jika daftar varian dikirim -> sinkronkan; stok produk = total stok varian (data.stock diabaikan)
+    const variantsProvided = Array.isArray(data.variants);
+    const incomingVariants = variantsProvided ? data.variants.filter(v => v && String(v.name || '').trim()) : [];
+    const hasVariants = incomingVariants.length > 0;
+
     const updateData = {};
     if (data.sku !== undefined) updateData.sku = data.sku;
     if (data.barcode !== undefined) updateData.barcode = data.barcode;
@@ -241,14 +315,20 @@ app.put('/api/saas/products/:id', async (req, res) => {
     if (data.purchasePrice !== undefined) updateData.purchase_price = Number(data.purchasePrice);
     if (data.sellingPrice !== undefined) updateData.selling_price = Number(data.sellingPrice);
     if (data.wholesalePrice !== undefined) updateData.wholesale_price = Number(data.wholesalePrice);
-    if (data.stock !== undefined) updateData.stock = Number(data.stock);
+    if (data.stock !== undefined && !hasVariants) updateData.stock = Number(data.stock);
     if (data.minStock !== undefined) updateData.min_stock = Number(data.minStock);
+    if (data.unit !== undefined && data.unit) updateData.unit = String(data.unit);
     if (data.image !== undefined) updateData.image_url = data.image;
 
-    const product = await prisma.product.update({
-      where: { id: req.params.id, tenant_id: req.tenantId },
-      data: updateData,
-      include: { category: true }
+    const product = await prisma.$transaction(async (tx) => {
+      await tx.product.update({
+        where: { id: req.params.id, tenant_id: req.tenantId },
+        data: updateData
+      });
+      if (variantsProvided) {
+        await syncProductVariants(tx, req.tenantId, req.params.id, incomingVariants);
+      }
+      return tx.product.findUnique({ where: { id: req.params.id }, include: PRODUCT_INCLUDE });
     });
     notifyTenant(req.tenantId, 'products');
     res.json(product);
@@ -412,6 +492,8 @@ app.get('/api/saas/customers', async (req, res) => {
         customerName: t.customer_name,
         items: (t.items || []).map(i => ({
           productId: i.product_id,
+          variantId: i.variant_id || undefined,
+          variantName: i.variant_name || undefined,
           name: i.product?.name || 'Produk',
           qty: i.quantity,
           price: Number(i.price_at_time || 0),
@@ -433,6 +515,8 @@ app.get('/api/saas/customers', async (req, res) => {
         customerName: st.customer_name,
         items: (st.items || []).map(i => ({
           productId: i.product_id,
+          variantId: i.variant_id || undefined,
+          variantName: i.variant_name || undefined,
           name: i.product?.name || 'Produk',
           qty: i.qty,
           price: Number(i.purchase_price || 0),
@@ -624,14 +708,28 @@ app.post('/api/saas/transactions', async (req, res) => {
       });
 
       for (const item of items) {
+        // Validasi varian (jika item ini varian) & ambil nama varian sebagai snapshot
+        let variantId = null;
+        let variantName = null;
+        if (item.variant_id) {
+          const variant = await tx.productVariant.findFirst({
+            where: { id: item.variant_id, product_id: item.product_id, tenant_id: req.tenantId }
+          });
+          if (!variant) throw new Error('Varian produk tidak ditemukan: ' + (item.variant_name || item.variant_id));
+          variantId = variant.id;
+          variantName = variant.name;
+        }
+
         // Record di Nota
         await tx.transactionItem.create({
           data: {
             transaction_id: newTx.id,
             product_id: item.product_id,
-            quantity: item.quantity,
+            quantity: round3(item.quantity),
             price_at_time: item.price,
-            subtotal: item.subtotal
+            subtotal: item.subtotal,
+            variant_id: variantId,
+            variant_name: variantName
           }
         });
 
@@ -640,25 +738,38 @@ app.post('/api/saas/transactions', async (req, res) => {
           data: {
             stock_transaction_id: stockMutation.id,
             product_id: item.product_id,
-            qty: item.quantity,
+            qty: round3(item.quantity),
             purchase_price: item.price,
-            subtotal: item.subtotal
+            subtotal: item.subtotal,
+            variant_id: variantId,
+            variant_name: variantName
           }
         });
 
-        // Kurangi stok secara ATOMIC (Mencegah Race Condition)
+        // Kurangi stok varian (jika ada) secara ATOMIC
+        let variantStockAfter = null;
+        if (variantId) {
+          const uv = await tx.productVariant.update({
+            where: { id: variantId },
+            data: { stock: { decrement: round3(item.quantity) } }
+          });
+          variantStockAfter = uv.stock;
+        }
+
+        // Kurangi stok produk (total) secara ATOMIC (Mencegah Race Condition)
         const updatedProduct = await tx.product.update({
           where: { id: item.product_id, tenant_id: req.tenantId },
-          data: { stock: { decrement: item.quantity } }
+          data: { stock: { decrement: round3(item.quantity) } }
         });
 
         // Notify if stock is depleted
-        if (updatedProduct.stock <= 0) {
+        const depleted = variantId ? variantStockAfter <= 0 : updatedProduct.stock <= 0;
+        if (depleted) {
           const io = getIo();
           if (io) {
             io.to(req.tenantId).emit('stock_depleted', {
-              productName: updatedProduct.name,
-              stock: updatedProduct.stock
+              productName: variantName ? `${updatedProduct.name} - ${variantName}` : updatedProduct.name,
+              stock: variantId ? variantStockAfter : updatedProduct.stock
             });
           }
         }
@@ -742,22 +853,43 @@ app.post('/api/saas/stock-transactions', async (req, res) => {
 
       // 2. Masukkan Item dan Update Stok Produk
       for (const item of items) {
+        // Validasi varian (opsional) & snapshot nama varian
+        let variantId = null;
+        let variantName = null;
+        if (item.variantId) {
+          const variant = await tx.productVariant.findFirst({
+            where: { id: item.variantId, product_id: item.productId, tenant_id: req.tenantId }
+          });
+          if (!variant) throw new Error('Varian produk tidak ditemukan: ' + (item.variantName || item.variantId));
+          variantId = variant.id;
+          variantName = variant.name;
+        }
+
         await tx.stockTransactionItem.create({
           data: {
             stock_transaction_id: newTx.id,
             product_id: item.productId,
-            qty: item.qty,
+            qty: round3(item.qty),
             batch_no: item.batchNo,
             expiry_date: item.expiryDate,
             purchase_price: Number(item.purchasePrice),
-            subtotal: Number(item.subtotal)
+            subtotal: Number(item.subtotal),
+            variant_id: variantId,
+            variant_name: variantName
           }
         });
 
         // Update stok (qty bisa positif atau negatif tergantung IN/OUT/ADJUSTMENT)
-        let stockChange = Number(item.qty);
+        let stockChange = round3(item.qty);
         if (type === 'OUT') stockChange = -Math.abs(stockChange);
         else if (type === 'IN') stockChange = Math.abs(stockChange);
+
+        if (variantId) {
+          await tx.productVariant.update({
+            where: { id: variantId },
+            data: { stock: { increment: stockChange } }
+          });
+        }
 
         await tx.product.update({
           where: { id: item.productId, tenant_id: req.tenantId },
@@ -1030,7 +1162,7 @@ app.get('/api/saas/export/all', async (req, res) => {
     // 2. Products with category
     const products = await prisma.product.findMany({
       where: { tenant_id: tenantId },
-      include: { category: true },
+      include: PRODUCT_INCLUDE,
       orderBy: { name: 'asc' }
     });
 
@@ -1101,6 +1233,8 @@ app.get('/api/saas/export/all', async (req, res) => {
         customerName: t.customer_name,
         items: (t.items || []).map(i => ({
           productId: i.product_id,
+          variantId: i.variant_id || undefined,
+          variantName: i.variant_name || undefined,
           name: i.product?.name || 'Produk',
           qty: i.quantity,
           price: Number(i.price_at_time || 0),
@@ -1123,6 +1257,8 @@ app.get('/api/saas/export/all', async (req, res) => {
         customerName: st.customer_name,
         items: (st.items || []).map(i => ({
           productId: i.product_id,
+          variantId: i.variant_id || undefined,
+          variantName: i.variant_name || undefined,
           name: i.product?.name || 'Produk',
           qty: i.qty,
           price: Number(i.purchase_price || 0),
@@ -1261,7 +1397,10 @@ app.post('/api/saas/import/master', async (req, res) => {
               selling_price: pSellPrice > 0 ? pSellPrice : existing.selling_price,
               purchase_price: pBuyPrice > 0 ? pBuyPrice : existing.purchase_price,
               wholesale_price: pWholesalePrice > 0 ? pWholesalePrice : existing.wholesale_price,
-              stock: pStock !== undefined && !isNaN(pStock) ? pStock : existing.stock,
+              // Produk bervarian: stok dihitung dari total varian, jangan ditimpa lewat import
+              stock: (await prisma.productVariant.count({ where: { product_id: existing.id } })) > 0
+                ? existing.stock
+                : (pStock !== undefined && !isNaN(pStock) ? pStock : existing.stock),
               min_stock: pMinStock >= 0 ? pMinStock : existing.min_stock
             }
           });
