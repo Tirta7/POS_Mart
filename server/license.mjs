@@ -2,7 +2,7 @@ import { execSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import QRCode from 'qrcode';
-import { checkLicense, activateLicense } from './vocml-client.js';
+import { checkLicense, activateLicense, verifyLicenseKey, saveOfflineKey, isNetworkError } from './vocml-client.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -11,6 +11,7 @@ const VOCML_SERVER_URL = process.env.VOCML_SERVER_URL || 'https://vocml.vocpos.i
 const VOCML_PRODUCT = process.env.VOCML_PRODUCT || 'pos';
 const VOCML_API_KEY = process.env.VOCML_API_KEY || '';
 const CACHE_FILE = path.join(__dirname, 'data', 'license-cache.json');
+const OFFLINE_FILE = path.join(__dirname, 'data', 'license-offline.json');
 
 // 2. Kunci Publik VOC ML (Ed25519)
 const PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
@@ -121,6 +122,7 @@ export async function verifikasiAplikasi() {
       machineId: machineId,
       publicKeyPem: PUBLIC_KEY,
       cacheFile: CACHE_FILE,
+      offlineFile: OFFLINE_FILE,
       apiKey: VOCML_API_KEY,
       storeName: 'POS Mart Swalayan',
       appVersion: '1.0.0',
@@ -363,6 +365,35 @@ export function licenseMiddleware() {
         res.setHeader('Content-Type', 'application/json');
         res.end(JSON.stringify({ success: true, ...licenseState }));
       } catch (err) {
+        // Server VOCML mati / tidak terjangkau -> verifikasi key secara offline (tanda tangan + Machine ID)
+        if (isNetworkError(err)) {
+          const mid = getMachineId();
+          const v = verifyLicenseKey(key, mid, VOCML_PRODUCT, PUBLIC_KEY);
+          if (v.valid && !v.expired) {
+            saveOfflineKey(OFFLINE_FILE, key);
+            licenseState = {
+              allowed: true,
+              status: 'active',
+              reason: 'Aktivasi offline (server lisensi tidak terjangkau)',
+              machineId: mid,
+              expiresAt: v.expiresAt,
+              daysLeft: Math.ceil((new Date(v.expiresAt).getTime() - Date.now()) / 86400000),
+              licenseKey: String(key).trim(),
+              lockReason: '',
+              billing: null,
+              offline: true,
+            };
+            broadcastLicense(licenseState);
+            res.statusCode = 200;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ success: true, offlineActivation: true, ...licenseState }));
+            return;
+          }
+          res.statusCode = 400;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ success: false, error: v.valid ? 'License key sudah kedaluwarsa' : (v.reason || 'License key tidak valid') }));
+          return;
+        }
         res.statusCode = 400;
         res.setHeader('Content-Type', 'application/json');
         res.end(JSON.stringify({ success: false, error: err?.message || 'Aktivasi gagal' }));

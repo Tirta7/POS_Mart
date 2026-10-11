@@ -79,6 +79,32 @@ function writeCache(file, data) {
 
 const ALLOWED = new Set(['active', 'expiring']);
 
+// Toleransi offline untuk key yang diaktivasi manual saat server VOCML tidak terjangkau
+const OFFLINE_KEY_MAX_DAYS = 7;
+
+/** Simpan key aktivasi darurat (offline) untuk dipakai selama server VOCML mati. */
+export function saveOfflineKey(file, licenseKey) {
+  writeCache(file, { license_key: String(licenseKey).trim(), activatedAt: Date.now() });
+}
+
+/** True jika error berasal dari jaringan / server tidak merespons dengan benar (bukan penolakan lisensi). */
+export function isNetworkError(err) {
+  const msg = `${err?.message || ''} ${err?.cause?.code || ''}`;
+  return err?.name === 'TimeoutError' || err?.name === 'AbortError' || err instanceof TypeError
+    || err instanceof SyntaxError || /fetch failed|ECONN|ENOTFOUND|EAI_AGAIN|network/i.test(msg);
+}
+
+function tryOfflineKey({ offlineFile, normalizedMid, product, publicKeyPem }) {
+  const saved = offlineFile && readCache(offlineFile);
+  if (!saved?.license_key) return null;
+  const age = Date.now() - (saved.activatedAt || 0);
+  if (age < 0 || age > OFFLINE_KEY_MAX_DAYS * 86400000) return null;
+  const key = verifyLicenseKey(saved.license_key, normalizedMid, product, publicKeyPem);
+  if (!key.valid || key.expired) return null;
+  const daysLeft = Math.ceil((new Date(key.expiresAt).getTime() - Date.now()) / 86400000);
+  return { expiresAt: key.expiresAt, daysLeft, licenseKey: saved.license_key };
+}
+
 /** Pengecekan lisensi utama (checkLicense). */
 export async function checkLicense({
   serverUrl,
@@ -86,6 +112,7 @@ export async function checkLicense({
   machineId,
   publicKeyPem,
   cacheFile,
+  offlineFile = '',
   apiKey = '',
   storeName = '',
   appVersion = '',
@@ -174,6 +201,10 @@ export async function checkLicense({
     const cache = readCache(cacheFile);
     const payload = cache && verifyToken(cache.token, publicKeyPem);
     if (!payload || payload.machine_id !== normalizedMid) {
+      const fb = tryOfflineKey({ offlineFile, normalizedMid, product, publicKeyPem });
+      if (fb) {
+        return result(true, 'active', { ...fb, offline: true, lockReason: '', billing: null });
+      }
       return result(false, 'offline', {
         reason: 'Tidak dapat terhubung ke server lisensi',
         offline: true,
@@ -216,6 +247,11 @@ export async function checkLicense({
         offline: true,
         billing: null,
       });
+    }
+
+    const fb2 = tryOfflineKey({ offlineFile, normalizedMid, product, publicKeyPem });
+    if (fb2) {
+      return result(true, 'active', { ...fb2, offline: true, lockReason: '', billing: null });
     }
 
     return result(false, 'offline', {
