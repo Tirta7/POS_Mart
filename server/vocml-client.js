@@ -234,17 +234,28 @@ export async function checkLicense({
       });
     }
 
-    const graceDays = payload.grace_days ?? cache.grace_days ?? 5;
+    // FAIL-OPEN: server tidak terjangkau BUKAN alasan mengunci aplikasi.
+    // Selama snapshot terakhir (bertanda tangan server) berstatus aktif dan masa berlaku lisensi belum lewat,
+    // aplikasi tetap jalan. Hanya status locked/expired dari server (ditangani di atas) atau
+    // habisnya masa berlaku lisensi yang menyebabkan kunci.
+    const envGrace = Number(process.env.LICENSE_OFFLINE_GRACE_DAYS);
+    const serverGrace = payload.grace_days ?? cache.grace_days ?? 5;
+    const graceDays = Math.max(Number.isFinite(envGrace) && envGrace > 0 ? envGrace : 30, serverGrace);
     const graceMs = graceDays * 86400000;
-    const withinGrace = Date.now() - (cache.checkedAt || 0) <= graceMs && (cache.checkedAt || 0) <= Date.now();
+    const checkedAt = cache.checkedAt || 0;
+    const SKEW_MS = 86400000; // toleransi jam sistem mundur 1 hari
+    const withinGrace = Date.now() - checkedAt <= graceMs && checkedAt <= Date.now() + SKEW_MS;
     const key = payload.license_key ? verifyLicenseKey(payload.license_key, normalizedMid, product, publicKeyPem) : { valid: false };
+    const notExpired = payload.expires_at ? payload.expires_at >= todayStr() : false;
+    const licenseOk = payload.license_key ? (key.valid && !key.expired) : notExpired;
 
-    if (ALLOWED.has(payload.status) && withinGrace && key.valid && !key.expired) {
+    if (ALLOWED.has(payload.status) && withinGrace && licenseOk) {
       return result(true, payload.status, {
         expiresAt: payload.expires_at || key.expiresAt,
         daysLeft: payload.days_left,
         licenseKey: payload.license_key,
         offline: true,
+        offlineGraceEndsAt: new Date(checkedAt + graceMs).toISOString(),
         billing: null,
       });
     }
