@@ -35,9 +35,38 @@ export interface ParsedImportData {
   suppliers: any[];
   users: any[];
   totalRows: number;
+  totalVariants?: number;
 }
 
-const formatCurrency = (val: number | undefined | null) => Number(val || 0);
+export const parseNumber = (val: any, fallback = 0): number => {
+  if (val === undefined || val === null || val === '') return fallback;
+  if (typeof val === 'number') return isNaN(val) ? fallback : val;
+  let str = String(val).trim().replace(/^[Rr][Pp]\.?\s*/i, '').trim();
+  // Handle thousand and decimal separators:
+  if (str.includes('.') && !str.includes(',')) {
+    const parts = str.split('.');
+    if (parts.length > 2 || (parts.length === 2 && parts[1].length === 3)) {
+      str = str.replace(/\./g, '');
+    }
+  } else if (str.includes(',') && str.includes('.')) {
+    if (str.lastIndexOf(',') > str.lastIndexOf('.')) {
+      str = str.replace(/\./g, '').replace(',', '.');
+    } else {
+      str = str.replace(/,/g, '');
+    }
+  } else if (str.includes(',')) {
+    const parts = str.split(',');
+    if (parts.length > 2 || (parts.length === 2 && parts[1].length === 3)) {
+      str = str.replace(/,/g, '');
+    } else {
+      str = str.replace(',', '.');
+    }
+  }
+  const n = parseFloat(str);
+  return isNaN(n) ? fallback : n;
+};
+
+const formatCurrency = (val: number | undefined | null) => parseNumber(val, 0);
 
 const setSheetCols = (ws: XLSX.WorkSheet, colsWidth: number[]) => {
   ws['!cols'] = colsWidth.map(w => ({ wch: w }));
@@ -97,22 +126,31 @@ export const exportMasterExcel = (data: ExportDataPayload, customName?: string) 
 
   // 2. SHEET: MANAJEMEN STOK (PRODUK)
   const productRows = (data.products || []).map((p, idx) => {
-    const stock = Number(p.stock || 0);
-    const minStock = Number(p.min_stock || 0);
-    const buyPrice = Number(p.purchase_price || 0);
-    const sellPrice = Number(p.selling_price || 0);
-    const wholesalePrice = Number(p.wholesale_price || sellPrice);
+    const stock = parseNumber(p.stock, 0);
+    const minStock = parseNumber(p.minStock ?? p.min_stock, 0);
+    const buyPrice = parseNumber(p.purchasePrice ?? p.purchase_price, 0);
+    const sellPrice = parseNumber(p.sellingPrice ?? p.selling_price, 0);
+    const wholesalePrice = parseNumber(p.wholesalePrice ?? p.wholesale_price, sellPrice);
 
     let status = 'Aman';
     if (stock <= 0) status = 'Habis';
     else if (stock <= minStock) status = 'Menipis';
 
+    const barcodeVal = p.barcode || p.id || '';
+    const skuVal = p.sku || '';
+    const categoryName = typeof p.category === 'object' ? (p.category?.name || '-') : (p.category || p.category_name || '-');
+
+    const variantSummary = (p.variants && Array.isArray(p.variants) && p.variants.length > 0)
+      ? p.variants.map((v: any) => `${v.name}:${v.stock}`).join(', ')
+      : '-';
+
     return {
       'No': idx + 1,
       'ID Produk': p.id,
-      'Barcode / SKU': p.barcode || p.sku || '-',
+      'Barcode': barcodeVal,
+      'SKU': skuVal,
       'Nama Produk': p.name,
-      'Kategori': p.category?.name || p.category_name || '-',
+      'Kategori': categoryName,
       'Satuan': p.unit || 'Pcs',
       'Harga Beli (Modal)': buyPrice,
       'Harga Jual (Eceran)': sellPrice,
@@ -120,14 +158,43 @@ export const exportMasterExcel = (data: ExportDataPayload, customName?: string) 
       'Stok Saat Ini': stock,
       'Min. Stok': minStock,
       'Status Stok': status,
+      'Daftar Varian': variantSummary,
       'Total Nilai Modal (Rp)': stock * buyPrice,
       'Total Nilai Jual (Rp)': stock * sellPrice
     };
   });
 
   const wsProducts = XLSX.utils.json_to_sheet(productRows);
-  setSheetCols(wsProducts, [6, 20, 20, 32, 18, 10, 18, 18, 18, 14, 12, 14, 22, 22]);
+  setSheetCols(wsProducts, [6, 20, 20, 18, 32, 18, 10, 18, 18, 18, 14, 12, 14, 25, 22, 22]);
   XLSX.utils.book_append_sheet(wb, wsProducts, 'Manajemen Stok');
+
+  // 2b. SHEET: VARIAN PRODUK (RINCIAN VARIAN PER ITEM)
+  const variantRows: any[] = [];
+  let vIdx = 1;
+  (data.products || []).forEach(p => {
+    if (p.variants && Array.isArray(p.variants) && p.variants.length > 0) {
+      p.variants.forEach((v: any) => {
+        variantRows.push({
+          'No': vIdx++,
+          'ID Produk Induk': p.id,
+          'Barcode Induk': p.barcode || '',
+          'SKU Induk': p.sku || '',
+          'Nama Produk Induk': p.name,
+          'Nama Varian': v.name,
+          'Stok Varian': parseNumber(v.stock, 0),
+          'Harga Beli Varian': v.purchasePrice || v.purchase_price || '',
+          'Harga Jual Varian': v.sellingPrice || v.selling_price || '',
+          'Harga Grosir Varian': v.wholesalePrice || v.wholesale_price || ''
+        });
+      });
+    }
+  });
+
+  if (variantRows.length > 0) {
+    const wsVariants = XLSX.utils.json_to_sheet(variantRows);
+    setSheetCols(wsVariants, [6, 22, 18, 18, 30, 20, 14, 20, 20, 20]);
+    XLSX.utils.book_append_sheet(wb, wsVariants, 'Varian Produk');
+  }
 
   // 3. SHEET: MUTASI STOK (LOG PERGERAKAN BARANG)
   const mutationRows: any[] = [];
@@ -345,10 +412,19 @@ export const parseExcelFile = async (file: File): Promise<ParsedImportData> => {
         const normalizeRow = (row: any) => {
           const res: Record<string, any> = {};
           for (const key of Object.keys(row)) {
-            const cleanKey = key.trim().toLowerCase()
+            const rawKey = key.trim().toLowerCase();
+            // 1. Clean key with alphanumeric and underscore, stripping leading & trailing underscores
+            const cleanKey = rawKey
               .replace(/[^a-z0-9]/g, '_')
+              .replace(/^_+|_+$/g, '')
               .replace(/_+/g, '_');
             res[cleanKey] = row[key];
+
+            // 2. Also create an alpha-only key (e.g. "hargabelimodal", "hargajualeceran", "hargagrosir")
+            const alphaKey = rawKey.replace(/[^a-z0-9]/g, '');
+            if (alphaKey && !res[alphaKey]) {
+              res[alphaKey] = row[key];
+            }
           }
           return res;
         };
@@ -358,31 +434,234 @@ export const parseExcelFile = async (file: File): Promise<ParsedImportData> => {
           const rawRows: any[] = XLSX.utils.sheet_to_json(ws);
           if (rawRows.length === 0) return;
 
-          const sName = sheetName.toLowerCase();
+          const sName = sheetName.toLowerCase().trim();
 
-          // 1. Sheet Manajemen Stok / Produk
-          if (sName.includes('stok') || sName.includes('produk') || sName.includes('product') || sName.includes('barang')) {
+          // 1. Sheet Manajemen Stok / Produk (Katalog Produk)
+          // PENTING: Jangan masukkan sheet 'Mutasi Stok', 'Laporan', 'Transaksi' karena itu adalah riwayat/log pergerakan, bukan katalog
+          const isProductSheet = (
+            sName === 'manajemen stok' ||
+            sName === 'stok' ||
+            sName === 'produk' ||
+            sName === 'products' ||
+            sName === 'master produk' ||
+            sName === 'daftar produk' ||
+            sName === 'katalog' ||
+            ((sName.includes('produk') || sName.includes('product') || sName.includes('barang') || sName.includes('item') || sName.includes('katalog') || sName.includes('stok')) &&
+              !sName.includes('mutasi') &&
+              !sName.includes('laporan') &&
+              !sName.includes('transaksi') &&
+              !sName.includes('riwayat') &&
+              !sName.includes('log') &&
+              !sName.includes('order') &&
+              !sName.includes('pembelian'))
+          );
+
+          if (isProductSheet) {
             rawRows.forEach(r => {
               const n = normalizeRow(r);
-              const name = n.nama_produk || n.nama || n.name || n.product_name || n.deskripsi;
+              const name = n.nama_produk || n.nama || n.name || n.product_name || n.deskripsi || n.namaproduk;
               if (!name) return;
 
-              products.push({
+              const buyPrice = parseNumber(
+                n.harga_beli_modal ?? n.harga_beli ?? n.modal ?? n.harga_modal ?? n.beli ?? n.purchase_price ?? n.hargabelimodal ?? n.hargabeli,
+                0
+              );
+              const sellPrice = parseNumber(
+                n.harga_jual_eceran ?? n.harga_jual ?? n.selling_price ?? n.harga ?? n.jual ?? n.eceran ?? n.hargajualeceran ?? n.hargajual,
+                0
+              );
+              const wholesalePrice = parseNumber(
+                n.harga_grosir ?? n.wholesale_price ?? n.grosir ?? n.hargagrosir,
+                sellPrice
+              );
+              const stock = parseNumber(
+                n.stok_saat_ini ?? n.stok ?? n.stock ?? n.qty ?? n.stoksaatini,
+                0
+              );
+              const minStock = parseNumber(
+                n.min_stok ?? n.minimum_stok ?? n.min_stock ?? n.stok_minimum ?? n.minstok,
+                0
+              );
+
+              const barcodeRaw = String(n.barcode || n.barcode_sku || n.kode_barang || n.kode || '').trim();
+              const barcode = barcodeRaw === '-' ? '' : barcodeRaw;
+
+              const skuRaw = String(n.sku || (n.barcode_sku && !n.barcode ? n.barcode_sku : '') || '').trim();
+              const sku = skuRaw === '-' ? '' : skuRaw;
+
+              const idRaw = String(n.id_produk || n.id || '').trim();
+              const id = idRaw === '-' ? '' : idRaw;
+
+              const existingIdx = products.findIndex(p => 
+                (barcode && p.barcode === barcode) || 
+                (sku && p.sku === sku) || 
+                (p.name.toLowerCase() === String(name).trim().toLowerCase())
+              );
+
+              // Deteksi varian inline di baris produk jika ada (misal "S: 138, M: 232, H: 130")
+              const rawVariantStr = String(n.daftar_varian || n.varian || n.variant || n.variants || n.opsi || '').trim();
+              let parsedVariants: any[] = [];
+              if (rawVariantStr && rawVariantStr !== '-') {
+                const parts = rawVariantStr.split(/[,;\n]/).map(s => s.trim()).filter(Boolean);
+                for (const part of parts) {
+                  if (part.includes(':')) {
+                    const vParts = part.split(':').map(s => s.trim());
+                    const vName = vParts[0];
+                    const vStock = parseNumber(vParts[1], 0);
+                    const vSell = vParts[2] ? parseNumber(vParts[2], 0) : undefined;
+                    const vBuy = vParts[3] ? parseNumber(vParts[3], 0) : undefined;
+                    const vWholesale = vParts[4] ? parseNumber(vParts[4], 0) : undefined;
+                    if (vName) {
+                      parsedVariants.push({
+                        name: vName,
+                        stock: vStock,
+                        sellingPrice: vSell,
+                        purchasePrice: vBuy,
+                        wholesalePrice: vWholesale
+                      });
+                    }
+                  } else if (/\(([^)]+)\)/.test(part)) {
+                    const match = part.match(/^(.*?)\s*\(([^)]+)\)$/);
+                    if (match) {
+                      const vName = match[1].trim();
+                      const vStock = parseNumber(match[2], 0);
+                      if (vName) {
+                        parsedVariants.push({ name: vName, stock: vStock });
+                      }
+                    }
+                  } else {
+                    parsedVariants.push({ name: part, stock: 0 });
+                  }
+                }
+              }
+
+              const itemObj: any = {
+                id: id || undefined,
                 name: String(name).trim(),
-                barcode: n.barcode_sku || n.barcode || n.sku || n.kode_barang || '',
-                category: n.kategori || n.category || '',
-                unit: n.satuan || n.unit || 'Pcs',
-                purchase_price: Number(n.harga_beli_modal || n.harga_beli || n.modal || n.purchase_price || 0),
-                selling_price: Number(n.harga_jual_eceran || n.harga_jual || n.selling_price || n.harga || 0),
-                wholesale_price: Number(n.harga_grosir || n.wholesale_price || n.harga_jual || 0),
-                stock: Number(n.stok_saat_ini || n.stok || n.stock || n.qty || 0),
-                min_stock: Number(n.min_stok || n.minimum_stok || n.min_stock || 0)
-              });
+                barcode: barcode,
+                sku: sku,
+                category: String(n.kategori || n.category || '').trim(),
+                unit: String(n.satuan || n.unit || 'Pcs').trim(),
+                purchase_price: buyPrice,
+                selling_price: sellPrice,
+                wholesale_price: wholesalePrice,
+                purchasePrice: buyPrice,
+                sellingPrice: sellPrice,
+                wholesalePrice: wholesalePrice,
+                stock: parsedVariants.length > 0 ? parsedVariants.reduce((sum, v) => sum + v.stock, 0) : stock,
+                min_stock: minStock,
+                minStock: minStock,
+                variants: parsedVariants.length > 0 ? parsedVariants : undefined
+              };
+
+              if (existingIdx >= 0) {
+                // Jangan timpa harga valid dengan harga 0
+                const cur = products[existingIdx];
+                products[existingIdx] = {
+                  ...cur,
+                  ...itemObj,
+                  purchase_price: buyPrice > 0 ? buyPrice : cur.purchase_price,
+                  selling_price: sellPrice > 0 ? sellPrice : cur.selling_price,
+                  wholesale_price: wholesalePrice > 0 ? wholesalePrice : cur.wholesale_price,
+                  purchasePrice: buyPrice > 0 ? buyPrice : cur.purchasePrice,
+                  sellingPrice: sellPrice > 0 ? sellPrice : cur.sellingPrice,
+                  wholesalePrice: wholesalePrice > 0 ? wholesalePrice : cur.wholesalePrice,
+                  stock: parsedVariants.length > 0 ? parsedVariants.reduce((sum, v) => sum + v.stock, 0) : (stock !== 0 ? stock : cur.stock),
+                  variants: parsedVariants.length > 0 ? parsedVariants : cur.variants
+                };
+              } else {
+                products.push(itemObj);
+              }
+            });
+          }
+
+          // 1b. Sheet Varian Produk (Rincian per varian terpisah)
+          const isVariantSheet = (
+            sName === 'varian produk' ||
+            sName === 'varian' ||
+            sName === 'variants' ||
+            sName === 'product variants' ||
+            sName === 'opsi produk' ||
+            ((sName.includes('varian') || sName.includes('variant')) && !sName.includes('laporan') && !sName.includes('mutasi'))
+          );
+
+          if (isVariantSheet) {
+            rawRows.forEach(r => {
+              const n = normalizeRow(r);
+              const prodName = String(n.nama_produk_induk || n.nama_produk || n.produk || n.nama || '').trim();
+              const barcode = String(n.barcode_induk || n.barcode || '').trim();
+              const sku = String(n.sku_induk || n.sku || '').trim();
+              const id = String(n.id_produk_induk || n.id_produk || n.id || '').trim();
+              const vName = String(n.nama_varian || n.varian || n.variant || n.opsi || '').trim();
+              if (!vName) return;
+
+              const vStock = parseNumber(n.stok_varian ?? n.stok ?? n.stock ?? n.qty, 0);
+              const vBuy = parseNumber(n.harga_beli_varian ?? n.harga_beli_modal ?? n.harga_beli ?? n.modal, 0);
+              const vSell = parseNumber(n.harga_jual_varian ?? n.harga_jual_eceran ?? n.harga_jual ?? n.harga, 0);
+              const vWholesale = parseNumber(n.harga_grosir_varian ?? n.harga_grosir ?? n.grosir, 0);
+
+              let targetProd = products.find(p =>
+                (id && p.id === id) ||
+                (barcode && p.barcode === barcode) ||
+                (sku && p.sku === sku) ||
+                (prodName && p.name.toLowerCase() === prodName.toLowerCase())
+              );
+
+              if (!targetProd && prodName) {
+                targetProd = {
+                  name: prodName,
+                  barcode: barcode || '',
+                  sku: sku || '',
+                  category: 'Uncategorized',
+                  unit: 'Pcs',
+                  purchase_price: vBuy,
+                  selling_price: vSell,
+                  wholesale_price: vWholesale,
+                  purchasePrice: vBuy,
+                  sellingPrice: vSell,
+                  wholesalePrice: vWholesale,
+                  stock: 0,
+                  min_stock: 0,
+                  minStock: 0,
+                  variants: []
+                };
+                products.push(targetProd);
+              }
+
+              if (targetProd) {
+                if (!targetProd.variants) targetProd.variants = [];
+                const existingVIdx = targetProd.variants.findIndex((v: any) => v.name.toLowerCase() === vName.toLowerCase());
+                const vObj = {
+                  name: vName,
+                  stock: vStock,
+                  purchasePrice: vBuy > 0 ? vBuy : undefined,
+                  sellingPrice: vSell > 0 ? vSell : undefined,
+                  wholesalePrice: vWholesale > 0 ? vWholesale : undefined
+                };
+                if (existingVIdx >= 0) {
+                  targetProd.variants[existingVIdx] = { ...targetProd.variants[existingVIdx], ...vObj };
+                } else {
+                  targetProd.variants.push(vObj);
+                }
+                targetProd.stock = targetProd.variants.reduce((sum: number, v: any) => sum + (v.stock || 0), 0);
+              }
             });
           }
 
           // 2. Sheet Data Pelanggan
-          if (sName.includes('pelanggan') || sName.includes('customer') || sName.includes('member')) {
+          const isCustomerSheet = (
+            sName === 'data pelanggan' ||
+            sName === 'pelanggan' ||
+            sName === 'customers' ||
+            sName === 'customer' ||
+            ((sName.includes('pelanggan') || sName.includes('customer') || sName.includes('member')) &&
+              !sName.includes('riwayat') &&
+              !sName.includes('order') &&
+              !sName.includes('transaksi') &&
+              !sName.includes('laporan'))
+          );
+
+          if (isCustomerSheet) {
             rawRows.forEach(r => {
               const n = normalizeRow(r);
               const name = n.nama_pelanggan || n.nama || n.name || n.customer;
@@ -397,7 +676,20 @@ export const parseExcelFile = async (file: File): Promise<ParsedImportData> => {
           }
 
           // 3. Sheet Data Supplier
-          if (sName.includes('supplier') || sName.includes('pemasok') || sName.includes('vendor')) {
+          const isSupplierSheet = (
+            sName === 'data supplier' ||
+            sName === 'supplier' ||
+            sName === 'suppliers' ||
+            sName === 'pemasok' ||
+            ((sName.includes('supplier') || sName.includes('pemasok') || sName.includes('vendor')) &&
+              !sName.includes('pembelian') &&
+              !sName.includes('hutang') &&
+              !sName.includes('transaksi') &&
+              !sName.includes('draft') &&
+              !sName.includes('riwayat'))
+          );
+
+          if (isSupplierSheet) {
             rawRows.forEach(r => {
               const n = normalizeRow(r);
               const name = n.nama_supplier || n.nama || n.name || n.supplier;
@@ -414,7 +706,20 @@ export const parseExcelFile = async (file: File): Promise<ParsedImportData> => {
           }
 
           // 4. Sheet Data Karyawan
-          if (sName.includes('karyawan') || sName.includes('user') || sName.includes('pegawai') || sName.includes('staf')) {
+          const isUserSheet = (
+            sName === 'data karyawan' ||
+            sName === 'karyawan' ||
+            sName === 'users' ||
+            sName === 'user' ||
+            sName === 'pegawai' ||
+            ((sName.includes('karyawan') || sName.includes('pegawai') || sName.includes('staf') || sName.includes('user')) &&
+              !sName.includes('gaji') &&
+              !sName.includes('absen') &&
+              !sName.includes('transaksi') &&
+              !sName.includes('laporan'))
+          );
+
+          if (isUserSheet) {
             rawRows.forEach(r => {
               const n = normalizeRow(r);
               const username = n.username || n.id_karyawan;
@@ -438,19 +743,53 @@ export const parseExcelFile = async (file: File): Promise<ParsedImportData> => {
           rawRows.forEach(r => {
             const n = normalizeRow(r);
             // Cek apakah produk
-            if (n.nama_produk || n.harga_jual || n.stok || n.barcode) {
-              const name = n.nama_produk || n.nama || n.name;
+            if (n.nama_produk || n.harga_jual || n.harga_jual_eceran || n.harga_beli || n.stok || n.barcode || n.namaproduk) {
+              const name = n.nama_produk || n.nama || n.name || n.namaproduk;
               if (name) {
+                const buyPrice = parseNumber(
+                  n.harga_beli_modal ?? n.harga_beli ?? n.modal ?? n.harga_modal ?? n.purchase_price ?? n.hargabelimodal ?? n.hargabeli,
+                  0
+                );
+                const sellPrice = parseNumber(
+                  n.harga_jual_eceran ?? n.harga_jual ?? n.selling_price ?? n.harga ?? n.hargajualeceran ?? n.hargajual ?? n.jual,
+                  0
+                );
+                const wholesalePrice = parseNumber(
+                  n.harga_grosir ?? n.wholesale_price ?? n.grosir ?? n.hargagrosir,
+                  sellPrice
+                );
+                const stock = parseNumber(
+                  n.stok_saat_ini ?? n.stok ?? n.stock ?? n.qty ?? n.stoksaatini,
+                  0
+                );
+                const minStock = parseNumber(
+                  n.min_stok ?? n.minimum_stok ?? n.min_stock ?? n.stok_minimum ?? n.minstok,
+                  0
+                );
+
+                const barcodeRaw = String(n.barcode || n.barcode_sku || n.kode_barang || n.kode || '').trim();
+                const barcode = barcodeRaw === '-' ? '' : barcodeRaw;
+                const skuRaw = String(n.sku || '').trim();
+                const sku = skuRaw === '-' ? '' : skuRaw;
+                const idRaw = String(n.id_produk || n.id || '').trim();
+                const id = idRaw === '-' ? '' : idRaw;
+
                 products.push({
+                  id: id || undefined,
                   name: String(name).trim(),
-                  barcode: n.barcode || n.sku || '',
-                  category: n.kategori || '',
-                  unit: n.satuan || 'Pcs',
-                  purchase_price: Number(n.harga_beli || n.modal || 0),
-                  selling_price: Number(n.harga_jual || n.harga || 0),
-                  wholesale_price: Number(n.harga_grosir || n.harga_jual || 0),
-                  stock: Number(n.stok || n.qty || 0),
-                  min_stock: Number(n.min_stok || 0)
+                  barcode: barcode,
+                  sku: sku,
+                  category: String(n.kategori || n.category || '').trim(),
+                  unit: String(n.satuan || n.unit || 'Pcs').trim(),
+                  purchase_price: buyPrice,
+                  selling_price: sellPrice,
+                  wholesale_price: wholesalePrice,
+                  purchasePrice: buyPrice,
+                  sellingPrice: sellPrice,
+                  wholesalePrice: wholesalePrice,
+                  stock: stock,
+                  min_stock: minStock,
+                  minStock: minStock
                 });
               }
             }
@@ -468,6 +807,7 @@ export const parseExcelFile = async (file: File): Promise<ParsedImportData> => {
           });
         }
 
+        const totalVariants = products.reduce((sum, p) => sum + (p.variants?.length || 0), 0);
         const totalRows = products.length + customers.length + suppliers.length + users.length;
 
         resolve({
@@ -478,7 +818,8 @@ export const parseExcelFile = async (file: File): Promise<ParsedImportData> => {
           customers,
           suppliers,
           users,
-          totalRows
+          totalRows,
+          totalVariants
         });
       } catch (err) {
         reject(err);
@@ -500,31 +841,117 @@ export const downloadExcelTemplate = (type: 'MASTER' | 'PRODUCT' | 'CUSTOMER' | 
   if (type === 'MASTER' || type === 'PRODUCT') {
     const sampleProducts = [
       {
-        'Barcode / SKU': 'SKU-001',
-        'Nama Produk': 'STICK CUETECH SVB',
-        'Kategori': 'Stick Billiard',
+        'ID Produk': '',
+        'Barcode': '8999909013278',
+        'SKU': 'SKU-RK-0001',
+        'Nama Produk': 'SAMPOERNA MILD',
+        'Kategori': 'Rokok',
         'Satuan': 'Pcs',
-        'Harga Beli (Modal)': 10000000,
-        'Harga Jual (Eceran)': 13000000,
-        'Harga Grosir': 12500000,
-        'Stok Saat Ini': 20,
-        'Min. Stok': 2
+        'Harga Beli (Modal)': 25000,
+        'Harga Jual (Eceran)': 27500,
+        'Harga Grosir': 26500,
+        'Stok Saat Ini': 25,
+        'Min. Stok': 5,
+        'Daftar Varian': '-'
       },
       {
-        'Barcode / SKU': 'SKU-002',
-        'Nama Produk': 'PREDATOR CUE TIP',
-        'Kategori': 'Aksesoris',
+        'ID Produk': '',
+        'Barcode': 'SK000004',
+        'SKU': 'SKU-BR-0001',
+        'Nama Produk': 'Beras Premium',
+        'Kategori': 'Beras',
+        'Satuan': 'Kg',
+        'Harga Beli (Modal)': 10000,
+        'Harga Jual (Eceran)': 13000,
+        'Harga Grosir': 12590,
+        'Stok Saat Ini': 146,
+        'Min. Stok': 10,
+        'Daftar Varian': 'PinPin: 31, Lele: 115'
+      },
+      {
+        'ID Produk': '',
+        'Barcode': 'SK000018',
+        'SKU': 'Col-01',
+        'Nama Produk': 'Cue tip colins brown JP',
+        'Kategori': 'Bola & Aksesoris',
         'Satuan': 'Pcs',
-        'Harga Beli (Modal)': 450000,
-        'Harga Jual (Eceran)': 600000,
-        'Harga Grosir': 550000,
-        'Stok Saat Ini': 50,
-        'Min. Stok': 5
+        'Harga Beli (Modal)': 48400,
+        'Harga Jual (Eceran)': 300000,
+        'Harga Grosir': 185000,
+        'Stok Saat Ini': 500,
+        'Min. Stok': 10,
+        'Daftar Varian': 'S: 138, M: 232, H: 130'
       }
     ];
     const wsProd = XLSX.utils.json_to_sheet(sampleProducts);
-    setSheetCols(wsProd, [18, 30, 20, 10, 18, 18, 18, 14, 12]);
+    setSheetCols(wsProd, [15, 20, 18, 32, 18, 10, 18, 18, 18, 14, 12, 25]);
     XLSX.utils.book_append_sheet(wb, wsProd, 'Manajemen Stok');
+
+    const sampleVariants = [
+      {
+        'No': 1,
+        'ID Produk Induk': '',
+        'Barcode Induk': 'SK000004',
+        'SKU Induk': 'SKU-BR-0001',
+        'Nama Produk Induk': 'Beras Premium',
+        'Nama Varian': 'PinPin',
+        'Stok Varian': 31,
+        'Harga Beli Varian': '',
+        'Harga Jual Varian': '',
+        'Harga Grosir Varian': ''
+      },
+      {
+        'No': 2,
+        'ID Produk Induk': '',
+        'Barcode Induk': 'SK000004',
+        'SKU Induk': 'SKU-BR-0001',
+        'Nama Produk Induk': 'Beras Premium',
+        'Nama Varian': 'Lele',
+        'Stok Varian': 115,
+        'Harga Beli Varian': '',
+        'Harga Jual Varian': '',
+        'Harga Grosir Varian': ''
+      },
+      {
+        'No': 3,
+        'ID Produk Induk': '',
+        'Barcode Induk': 'SK000018',
+        'SKU Induk': 'Col-01',
+        'Nama Produk Induk': 'Cue tip colins brown JP',
+        'Nama Varian': 'S',
+        'Stok Varian': 138,
+        'Harga Beli Varian': '',
+        'Harga Jual Varian': '',
+        'Harga Grosir Varian': ''
+      },
+      {
+        'No': 4,
+        'ID Produk Induk': '',
+        'Barcode Induk': 'SK000018',
+        'SKU Induk': 'Col-01',
+        'Nama Produk Induk': 'Cue tip colins brown JP',
+        'Nama Varian': 'M',
+        'Stok Varian': 232,
+        'Harga Beli Varian': '',
+        'Harga Jual Varian': '',
+        'Harga Grosir Varian': ''
+      },
+      {
+        'No': 5,
+        'ID Produk Induk': '',
+        'Barcode Induk': 'SK000018',
+        'SKU Induk': 'Col-01',
+        'Nama Produk Induk': 'Cue tip colins brown JP',
+        'Nama Varian': 'H',
+        'Stok Varian': 130,
+        'Harga Beli Varian': '',
+        'Harga Jual Varian': '',
+        'Harga Grosir Varian': ''
+      }
+    ];
+    const wsVar = XLSX.utils.json_to_sheet(sampleVariants);
+    setSheetCols(wsVar, [6, 20, 18, 18, 30, 18, 14, 18, 18, 18]);
+    XLSX.utils.book_append_sheet(wb, wsVar, 'Varian Produk');
   }
 
   if (type === 'MASTER' || type === 'CUSTOMER') {

@@ -62,13 +62,21 @@ const syncProductVariants = async (tx, tenantId, productId, variants) => {
     const name = String(v.name || '').trim();
     if (!name) continue;
     const prices = {
-      purchase_price: optNum(v.purchasePrice),
-      selling_price: optNum(v.sellingPrice),
-      wholesale_price: optNum(v.wholesalePrice)
+      purchase_price: optNum(v.purchasePrice ?? v.purchase_price ?? v.harga_beli),
+      selling_price: optNum(v.sellingPrice ?? v.selling_price ?? v.harga_jual),
+      wholesale_price: optNum(v.wholesalePrice ?? v.wholesale_price ?? v.harga_grosir)
     };
-    if (v.id && existingIds.has(v.id)) {
-      incomingIds.add(v.id);
-      await tx.productVariant.update({ where: { id: v.id }, data: { name, ...prices } });
+
+    const matchByName = existing.find(e => e.name.toLowerCase() === name.toLowerCase());
+    const vId = (v.id && existingIds.has(v.id)) ? v.id : (matchByName ? matchByName.id : null);
+
+    if (vId && existingIds.has(vId)) {
+      incomingIds.add(vId);
+      const updateData = { name, ...prices };
+      if (v.stock !== undefined && !isNaN(v.stock)) {
+        updateData.stock = round3(v.stock);
+      }
+      await tx.productVariant.update({ where: { id: vId }, data: updateData });
     } else {
       const created = await tx.productVariant.create({
         data: {
@@ -76,7 +84,7 @@ const syncProductVariants = async (tx, tenantId, productId, variants) => {
           tenant_id: tenantId,
           product_id: productId,
           name,
-          stock: round3(v.stock),
+          stock: round3(v.stock || 0),
           ...prices
         }
       });
@@ -1689,20 +1697,24 @@ app.post('/api/saas/import/master', async (req, res) => {
   try {
     const tenantId = req.tenantId;
     const { products, customers, suppliers, users } = req.body;
-    const stats = { products: 0, customers: 0, suppliers: 0, users: 0, updatedProducts: 0 };
+    const stats = { products: 0, customers: 0, suppliers: 0, users: 0, updatedProducts: 0, variants: 0 };
 
     // 1. Import Produk
     if (Array.isArray(products) && products.length > 0) {
       for (const p of products) {
         if (!p.name && !p.nama) continue;
         const pName = String(p.name || p.nama || '').trim();
-        const pBarcode = p.barcode ? String(p.barcode).trim() : null;
+        const pId = p.id ? String(p.id).trim() : null;
+        const pBarcode = (p.barcode && String(p.barcode).trim() !== '-') ? String(p.barcode).trim() : null;
+        const pSku = (p.sku && String(p.sku).trim() !== '-') ? String(p.sku).trim() : null;
         const pCategory = p.category || p.kategori ? String(p.category || p.kategori).trim() : null;
-        const pSellPrice = Number(p.selling_price || p.harga_jual || p.hargaJual || 0);
-        const pBuyPrice = Number(p.purchase_price || p.harga_beli || p.hargaBeli || 0);
-        const pWholesalePrice = Number(p.wholesale_price || p.harga_grosir || p.hargaGrosir || pSellPrice);
-        const pStock = Number(p.stock || p.stok || 0);
-        const pMinStock = Number(p.min_stock || p.min_stok || 0);
+        const pUnit = p.unit || p.satuan ? String(p.unit || p.satuan).trim() : 'Pcs';
+
+        const pSellPrice = Number(p.selling_price ?? p.sellingPrice ?? p.harga_jual ?? p.hargaJual ?? 0);
+        const pBuyPrice = Number(p.purchase_price ?? p.purchasePrice ?? p.harga_beli ?? p.hargaBeli ?? 0);
+        const pWholesalePrice = Number(p.wholesale_price ?? p.wholesalePrice ?? p.harga_grosir ?? p.hargaGrosir ?? pSellPrice);
+        const pStock = Number(p.stock ?? p.stok ?? 0);
+        const pMinStock = Number(p.min_stock ?? p.minStock ?? p.min_stok ?? 0);
 
         let categoryId = null;
         if (pCategory) {
@@ -1718,50 +1730,93 @@ app.post('/api/saas/import/master', async (req, res) => {
         }
 
         let existing = null;
-        if (pBarcode) {
+        // Priority 1: Match by Product ID (unique primary key from database)
+        if (pId) {
+          existing = await prisma.product.findFirst({
+            where: { tenant_id: tenantId, deleted_at: null, id: pId }
+          });
+        }
+        // Priority 2: Match by Barcode
+        if (!existing && pBarcode) {
           existing = await prisma.product.findFirst({
             where: { tenant_id: tenantId, deleted_at: null, barcode: pBarcode }
           });
         }
+        // Priority 3: Match by SKU
+        if (!existing && pSku) {
+          existing = await prisma.product.findFirst({
+            where: { tenant_id: tenantId, deleted_at: null, sku: pSku }
+          });
+        }
+        // Priority 4: Match by exact or normalized product name
         if (!existing) {
           existing = await prisma.product.findFirst({
             where: { tenant_id: tenantId, deleted_at: null, name: { equals: pName, mode: 'insensitive' } }
           });
+          if (!existing) {
+            // Check normalized whitespace (e.g. multiple spaces in name)
+            const normName = pName.replace(/\s+/g, ' ').trim().toLowerCase();
+            const allCandidates = await prisma.product.findMany({
+              where: { tenant_id: tenantId, deleted_at: null }
+            });
+            existing = allCandidates.find(c => c.name.replace(/\s+/g, ' ').trim().toLowerCase() === normName) || null;
+          }
         }
 
+        let targetProdId = null;
         if (existing) {
           await prisma.product.update({
             where: { id: existing.id },
             data: {
               name: pName,
+              sku: pSku || existing.sku,
               barcode: pBarcode || existing.barcode,
+              unit: pUnit || existing.unit || 'Pcs',
               category_id: categoryId || existing.category_id,
+              // Jangan timpa harga valid dengan 0 jika data impor bernilai 0/kosong
               selling_price: pSellPrice > 0 ? pSellPrice : existing.selling_price,
               purchase_price: pBuyPrice > 0 ? pBuyPrice : existing.purchase_price,
               wholesale_price: pWholesalePrice > 0 ? pWholesalePrice : existing.wholesale_price,
               // Produk bervarian: stok dihitung dari total varian, jangan ditimpa lewat import
               stock: (await prisma.productVariant.count({ where: { product_id: existing.id } })) > 0
                 ? existing.stock
-                : (pStock !== undefined && !isNaN(pStock) ? pStock : existing.stock),
-              min_stock: pMinStock >= 0 ? pMinStock : existing.min_stock
+                : (pStock !== undefined && !isNaN(pStock) && pStock !== 0 ? pStock : existing.stock),
+              min_stock: !isNaN(pMinStock) && pMinStock >= 0 ? pMinStock : existing.min_stock
             }
           });
+          targetProdId = existing.id;
           stats.updatedProducts++;
         } else {
-          await prisma.product.create({
+          let safeId = undefined;
+          if (pId) {
+            const idTaken = await prisma.product.findUnique({ where: { id: pId } });
+            if (!idTaken) safeId = pId;
+          }
+
+          const created = await prisma.product.create({
             data: {
+              id: safeId,
               tenant_id: tenantId,
               name: pName,
+              sku: pSku,
               barcode: pBarcode,
+              unit: pUnit,
               category_id: categoryId,
-              selling_price: pSellPrice,
-              purchase_price: pBuyPrice,
-              wholesale_price: pWholesalePrice,
-              stock: pStock,
-              min_stock: pMinStock
+              selling_price: !isNaN(pSellPrice) && pSellPrice >= 0 ? pSellPrice : 0,
+              purchase_price: !isNaN(pBuyPrice) && pBuyPrice >= 0 ? pBuyPrice : 0,
+              wholesale_price: !isNaN(pWholesalePrice) && pWholesalePrice >= 0 ? pWholesalePrice : pSellPrice,
+              stock: !isNaN(pStock) ? pStock : 0,
+              min_stock: !isNaN(pMinStock) ? pMinStock : 0
             }
           });
+          targetProdId = created.id;
           stats.products++;
+        }
+
+        // Sinkronisasi varian jika data produk memiliki rincian varian
+        if (targetProdId && Array.isArray(p.variants) && p.variants.length > 0) {
+          const varCount = await syncProductVariants(prisma, tenantId, targetProdId, p.variants);
+          stats.variants = (stats.variants || 0) + (varCount || 0);
         }
       }
       notifyTenant(tenantId, 'products');
@@ -1773,30 +1828,41 @@ app.post('/api/saas/import/master', async (req, res) => {
       for (const c of customers) {
         if (!c.name && !c.nama) continue;
         const cName = String(c.name || c.nama || '').trim();
+        const cId = c.id ? String(c.id).trim() : null;
         const cPhone = String(c.phone || c.telepon || c.no_telp || c.no_telepon || '0').trim();
         const cAddress = String(c.address || c.alamat || '').trim();
 
-        const existing = await prisma.customer.findFirst({
-          where: {
-            tenant_id: tenantId,
-            OR: [
-              { name: { equals: cName, mode: 'insensitive' } },
-              ...(cPhone && cPhone !== '0' ? [{ phone: cPhone }] : [])
-            ]
-          }
-        });
+        let existing = null;
+        if (cId) {
+          existing = await prisma.customer.findFirst({
+            where: { tenant_id: tenantId, id: cId }
+          });
+        }
+        if (!existing && cPhone && cPhone !== '0' && cPhone !== '-') {
+          existing = await prisma.customer.findFirst({
+            where: { tenant_id: tenantId, phone: cPhone }
+          });
+        }
+        if (!existing) {
+          existing = await prisma.customer.findFirst({
+            where: { tenant_id: tenantId, name: { equals: cName, mode: 'insensitive' } }
+          });
+        }
 
         if (existing) {
           await prisma.customer.update({
             where: { id: existing.id },
             data: {
-              phone: cPhone || existing.phone,
+              name: cName,
+              phone: (cPhone && cPhone !== '0' && cPhone !== '-') ? cPhone : existing.phone,
               address: cAddress || existing.address
             }
           });
+          stats.updatedCustomers = (stats.updatedCustomers || 0) + 1;
         } else {
           await prisma.customer.create({
             data: {
+              id: cId || undefined,
               tenant_id: tenantId,
               name: cName,
               phone: cPhone,
@@ -1814,28 +1880,40 @@ app.post('/api/saas/import/master', async (req, res) => {
       for (const s of suppliers) {
         if (!s.name && !s.nama) continue;
         const sName = String(s.name || s.nama || '').trim();
+        const sId = s.id ? String(s.id).trim() : null;
         const sContact = String(s.contact || s.kontak || '').trim();
         const sPhone = String(s.phone || s.telepon || '').trim();
         const sTerm = Number(s.payment_term_days || s.termin || 0);
         const sPayable = Number(s.payable || s.hutang || 0);
 
-        const existing = await prisma.supplier.findFirst({
-          where: { tenant_id: tenantId, name: { equals: sName, mode: 'insensitive' } }
-        });
+        let existing = null;
+        if (sId) {
+          existing = await prisma.supplier.findFirst({
+            where: { tenant_id: tenantId, id: sId }
+          });
+        }
+        if (!existing) {
+          existing = await prisma.supplier.findFirst({
+            where: { tenant_id: tenantId, name: { equals: sName, mode: 'insensitive' } }
+          });
+        }
 
         if (existing) {
           await prisma.supplier.update({
             where: { id: existing.id },
             data: {
+              name: sName,
               contact: sContact || existing.contact,
               phone: sPhone || existing.phone,
               payment_term_days: sTerm >= 0 ? sTerm : existing.payment_term_days,
               payable: sPayable >= 0 ? sPayable : existing.payable
             }
           });
+          stats.updatedSuppliers = (stats.updatedSuppliers || 0) + 1;
         } else {
           await prisma.supplier.create({
             data: {
+              id: sId || undefined,
               tenant_id: tenantId,
               name: sName,
               contact: sContact,
@@ -1855,22 +1933,33 @@ app.post('/api/saas/import/master', async (req, res) => {
       for (const u of users) {
         if (!u.username) continue;
         const username = String(u.username).trim().toLowerCase();
+        const uId = u.id ? String(u.id).trim() : null;
         const name = String(u.name || u.nama || username).trim();
         const role = String(u.role || u.peran || 'Cashier').trim();
         const pin = String(u.pin || '123456');
 
-        const existing = await prisma.user.findFirst({
-          where: { tenant_id: tenantId, username }
-        });
+        let existing = null;
+        if (uId) {
+          existing = await prisma.user.findFirst({
+            where: { tenant_id: tenantId, id: uId }
+          });
+        }
+        if (!existing) {
+          existing = await prisma.user.findFirst({
+            where: { tenant_id: tenantId, username }
+          });
+        }
 
         if (existing) {
           await prisma.user.update({
             where: { id: existing.id },
             data: { name, role, pin }
           });
+          stats.updatedUsers = (stats.updatedUsers || 0) + 1;
         } else {
           await prisma.user.create({
             data: {
+              id: uId || undefined,
               tenant_id: tenantId,
               username,
               name,

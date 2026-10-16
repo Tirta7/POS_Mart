@@ -161,9 +161,12 @@ export const ExportImportSettings: React.FC = () => {
             <div style={{ fontSize: '13px', color: '#047857', display: 'flex', flexWrap: 'wrap', gap: '12px', marginTop: '4px' }}>
               <span>📦 <strong>{importResult.stats?.products || 0}</strong> Produk Baru</span>
               <span>🔄 <strong>{importResult.stats?.updatedProducts || 0}</strong> Produk Diperbarui</span>
-              <span>👥 <strong>{importResult.stats?.customers || 0}</strong> Pelanggan Ditambahkan</span>
-              <span>🏢 <strong>{importResult.stats?.suppliers || 0}</strong> Supplier Ditambahkan</span>
-              <span>👤 <strong>{importResult.stats?.users || 0}</strong> Karyawan Ditambahkan</span>
+              {importResult.stats?.variants > 0 && (
+                <span>✨ <strong>{importResult.stats.variants}</strong> Varian Diperbarui</span>
+              )}
+              <span>👥 <strong>{importResult.stats?.customers || 0}</strong> Pelanggan Baru {importResult.stats?.updatedCustomers > 0 ? `(${importResult.stats.updatedCustomers} diperbarui)` : ''}</span>
+              <span>🏢 <strong>{importResult.stats?.suppliers || 0}</strong> Supplier Baru {importResult.stats?.updatedSuppliers > 0 ? `(${importResult.stats.updatedSuppliers} diperbarui)` : ''}</span>
+              <span>👤 <strong>{importResult.stats?.users || 0}</strong> Karyawan Baru {importResult.stats?.updatedUsers > 0 ? `(${importResult.stats.updatedUsers} diperbarui)` : ''}</span>
             </div>
           </div>
         </div>
@@ -369,6 +372,11 @@ export const ExportImportSettings: React.FC = () => {
               <div style={{ fontSize: '18px', fontWeight: 800, color: '#0f172a', marginTop: '2px' }}>
                 {parsedData.products.length} <span style={{ fontSize: '12px', fontWeight: 500, color: '#64748b' }}>produk</span>
               </div>
+              {parsedData.totalVariants !== undefined && parsedData.totalVariants > 0 && (
+                <div style={{ fontSize: '11px', color: '#7c3aed', fontWeight: 700, marginTop: '4px' }}>
+                  ✨ {parsedData.totalVariants} varian terdeteksi
+                </div>
+              )}
             </div>
 
             <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px 14px' }}>
@@ -406,19 +414,35 @@ export const ExportImportSettings: React.FC = () => {
                       <th style={{ padding: '8px 12px' }}>Barcode / SKU</th>
                       <th style={{ padding: '8px 12px' }}>Nama Produk</th>
                       <th style={{ padding: '8px 12px' }}>Kategori</th>
+                      <th style={{ padding: '8px 12px' }}>Varian</th>
                       <th style={{ padding: '8px 12px', textAlign: 'right' }}>Harga Beli</th>
                       <th style={{ padding: '8px 12px', textAlign: 'right' }}>Harga Jual</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'center' }}>Stok</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'right' }}>Harga Grosir</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'center' }}>Total Stok</th>
                     </tr>
                   </thead>
                   <tbody>
                     {parsedData.products.slice(0, 5).map((p, idx) => (
                       <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                        <td style={{ padding: '8px 12px', fontFamily: 'monospace' }}>{p.barcode || '-'}</td>
+                        <td style={{ padding: '8px 12px', fontFamily: 'monospace' }}>{p.barcode || p.sku || '-'}</td>
                         <td style={{ padding: '8px 12px', fontWeight: 600 }}>{p.name}</td>
                         <td style={{ padding: '8px 12px' }}>{p.category || '-'}</td>
-                        <td style={{ padding: '8px 12px', textAlign: 'right' }}>Rp {Number(p.purchase_price || 0).toLocaleString('id-ID')}</td>
-                        <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700 }}>Rp {Number(p.selling_price || 0).toLocaleString('id-ID')}</td>
+                        <td style={{ padding: '8px 12px' }}>
+                          {p.variants && p.variants.length > 0 ? (
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                              {p.variants.map((v: any, vIdx: number) => (
+                                <span key={vIdx} style={{ fontSize: '10.5px', background: '#f3e8ff', color: '#7e22ce', padding: '1px 6px', borderRadius: '4px', fontWeight: 600 }}>
+                                  {v.name}: {v.stock}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span style={{ color: '#94a3b8' }}>-</span>
+                          )}
+                        </td>
+                        <td style={{ padding: '8px 12px', textAlign: 'right' }}>Rp {Number(p.purchase_price ?? p.purchasePrice ?? 0).toLocaleString('id-ID')}</td>
+                        <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: '#16a34a' }}>Rp {Number(p.selling_price ?? p.sellingPrice ?? 0).toLocaleString('id-ID')}</td>
+                        <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: '#0284c7' }}>Rp {Number(p.wholesale_price ?? p.wholesalePrice ?? 0).toLocaleString('id-ID')}</td>
                         <td style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 700 }}>{p.stock}</td>
                       </tr>
                     ))}
