@@ -11,12 +11,12 @@ import {
   Scissors,
   Zap,
   RefreshCw,
-  Check,
   FileText,
   Building2,
   CreditCard,
   Save,
-  Eye
+  Eye,
+  Trash2
 } from 'lucide-react';
 import { printDistributorInvoice } from '../../utils/distributorInvoice';
 import type { SalesTransaction } from '../../types';
@@ -30,14 +30,18 @@ const PrinterSettings: React.FC = () => {
     paperWidth,
     autoCut,
     autoPrintOnCheckout,
+    autoReconnect,
     lastPrintedAt,
     error,
     connect,
+    reconnectSavedDevice,
     disconnect,
+    forgetDevice,
     testPrint,
     setPaperWidth,
     setAutoCut,
     setAutoPrintOnCheckout,
+    setAutoReconnect,
     clearError
   } = usePrinterStore();
 
@@ -311,6 +315,38 @@ const PrinterSettings: React.FC = () => {
                     <span>Putuskan</span>
                   </button>
                 </>
+              ) : deviceName ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => reconnectSavedDevice(false)}
+                    disabled={isConnecting || !isSupported}
+                    style={{
+                      padding: '11px 20px', borderRadius: '9px', border: 'none',
+                      background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+                      color: 'white', fontWeight: 700, fontSize: '13.5px',
+                      cursor: (isConnecting || !isSupported) ? 'not-allowed' : 'pointer',
+                      display: 'flex', alignItems: 'center', gap: '8px',
+                      boxShadow: '0 4px 10px rgba(37, 99, 235, 0.35)'
+                    }}
+                  >
+                    {isConnecting ? <RefreshCw size={16} className="spin" /> : <BluetoothConnected size={17} />}
+                    <span>{isConnecting ? 'Menyambungkan...' : `Sambungkan ke ${deviceName}`}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={connect}
+                    disabled={isConnecting || !isSupported}
+                    title="Cari dan pilih printer Bluetooth baru"
+                    style={{
+                      padding: '11px 16px', borderRadius: '9px', border: '1px solid #475569',
+                      background: '#1e293b', color: '#e2e8f0', fontWeight: 600, fontSize: '13px',
+                      cursor: (isConnecting || !isSupported) ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    Cari Printer Baru
+                  </button>
+                </>
               ) : (
                 <button
                   type="button"
@@ -365,31 +401,93 @@ const PrinterSettings: React.FC = () => {
                   Perangkat Aktif
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0', flexWrap: 'wrap', gap: '12px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                     <div style={{
-                      width: '40px', height: '40px', borderRadius: '8px',
-                      background: isConnected ? '#dcfce7' : '#f1f5f9',
-                      color: isConnected ? '#16a34a' : '#94a3b8',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center'
+                      width: '42px', height: '42px', borderRadius: '8px',
+                      background: isConnected ? '#dcfce7' : deviceName ? '#fef3c7' : '#f1f5f9',
+                      color: isConnected ? '#16a34a' : deviceName ? '#d97706' : '#94a3b8',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
                     }}>
                       <Bluetooth size={22} />
                     </div>
                     <div>
-                      <div style={{ fontWeight: 800, fontSize: '14px', color: '#0f172a' }}>
-                        {deviceName || 'Belum Ada Printer Terpilih'}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontWeight: 800, fontSize: '14.5px', color: '#0f172a' }}>
+                          {deviceName || 'Belum Ada Printer Terpilih'}
+                        </span>
+                        {deviceName && (
+                          <span style={{
+                            fontSize: '11px',
+                            fontWeight: 700,
+                            padding: '2px 8px',
+                            borderRadius: '12px',
+                            background: isConnected ? '#ecfdf5' : '#fef3c7',
+                            color: isConnected ? '#059669' : '#b45309'
+                          }}>
+                            {isConnected ? 'TERHUBUNG' : 'TERSIMPAN (TERPUTUS)'}
+                          </span>
+                        )}
                       </div>
-                      <div style={{ fontSize: '12px', color: '#64748b' }}>
-                        {isConnected ? 'Terhubung via Bluetooth GATT' : 'Klik "Cari & Hubungkan Printer" untuk menghubungkan'}
+                      <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
+                        {isConnected
+                          ? 'Terhubung via Bluetooth GATT — Siap mencetak nota kasir'
+                          : deviceName
+                          ? 'Perangkat tersimpan. Klik "Sambungkan Sekarang" untuk langsung koneksi tanpa scan ulang'
+                          : 'Klik "Cari & Hubungkan Printer" untuk menghubungkan printer'}
                       </div>
                     </div>
                   </div>
 
-                  {isConnected && (
-                    <span style={{ fontSize: '12px', color: '#16a34a', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <Check size={16} /> Aktif
-                    </span>
-                  )}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    {!isConnected && deviceName && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => reconnectSavedDevice(false)}
+                          disabled={isConnecting}
+                          style={{
+                            padding: '8px 14px', borderRadius: '8px', border: 'none',
+                            background: '#2563eb', color: 'white', fontWeight: 700, fontSize: '12.5px',
+                            cursor: isConnecting ? 'not-allowed' : 'pointer',
+                            display: 'flex', alignItems: 'center', gap: '6px',
+                            boxShadow: '0 2px 4px rgba(37,99,235,0.25)'
+                          }}
+                        >
+                          <RefreshCw size={13} className={isConnecting ? "spin" : ""} />
+                          <span>{isConnecting ? 'Menyambungkan...' : 'Sambungkan Sekarang'}</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={forgetDevice}
+                          title="Hapus memori printer tersimpan"
+                          style={{
+                            padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0',
+                            background: 'white', color: '#dc2626', fontWeight: 600, fontSize: '12px',
+                            cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px'
+                          }}
+                        >
+                          <Trash2 size={13} />
+                          <span>Ganti Printer</span>
+                        </button>
+                      </>
+                    )}
+
+                    {isConnected && (
+                      <button
+                        type="button"
+                        onClick={disconnect}
+                        style={{
+                          padding: '8px 12px', borderRadius: '8px', border: '1px solid #cbd5e1',
+                          background: 'white', color: '#475569', fontWeight: 600, fontSize: '12px',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Putuskan
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {lastPrintedAt && (
@@ -457,6 +555,22 @@ const PrinterSettings: React.FC = () => {
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', padding: '10px 14px', borderRadius: '8px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <RefreshCw size={18} color="#10b981" />
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: '13.5px', color: '#0f172a' }}>Otomatis Sambung Kembali saat Buka Halaman / Refresh</div>
+                        <div style={{ fontSize: '11.5px', color: '#64748b' }}>Secara otomatis memulihkan koneksi ke printer {deviceName ? `(${deviceName})` : ''} tanpa perlu scan ulang</div>
+                      </div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={autoReconnect}
+                      onChange={(e) => setAutoReconnect(e.target.checked)}
+                      style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                    />
+                  </label>
+
                   <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', padding: '10px 14px', borderRadius: '8px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                       <Zap size={18} color="#3b82f6" />
