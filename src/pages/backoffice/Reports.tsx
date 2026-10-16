@@ -11,7 +11,7 @@ import {
   TrendingUp, AlertTriangle, DollarSign, Search, 
   CreditCard, CheckCircle2, Printer, Copy, Download, 
   FileSpreadsheet, RefreshCw, X, MessageSquare,
-  Package, Check
+  Package, Check, Tag, Eye, Info
 } from 'lucide-react';
 import { exportMasterExcel } from '../../utils/excelExportImport';
 
@@ -41,13 +41,28 @@ const Reports: React.FC = () => {
   const [reprint, setReprint] = useState<{ sale: SalesTransaction; options: ReceiptOptions } | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
+  // Local date helper to avoid UTC timezone off-by-one errors
+  const toLocalDateStr = (val?: string | Date | number) => {
+    if (!val) return '';
+    const d = new Date(val);
+    if (isNaN(d.getTime())) return '';
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = toLocalDateStr(new Date());
   const [startDate, setStartDate] = useState(todayStr);
   const [endDate, setEndDate] = useState(todayStr);
   const [paymentMethod, setPaymentMethod] = useState('ALL');
   const [sortBy, setSortBy] = useState<'latest' | 'oldest'>('latest');
+  const [specialPriceOnly, setSpecialPriceOnly] = useState(false);
+
+  // Detail Modal for Sales / Custom Price
+  const [selectedSaleDetail, setSelectedSaleDetail] = useState<any | null>(null);
 
   // Supplier Debt modal
   const [isDebtModalOpen, setIsDebtModalOpen] = useState(false);
@@ -69,8 +84,7 @@ const Reports: React.FC = () => {
   };
 
   const setPresetRange = (preset: 'ALL' | 'TODAY' | '7D' | '30D') => {
-    const now = new Date();
-    const today = now.toISOString().split('T')[0];
+    const today = toLocalDateStr(new Date());
     if (preset === 'ALL') {
       setStartDate('');
       setEndDate('');
@@ -78,12 +92,14 @@ const Reports: React.FC = () => {
       setStartDate(today);
       setEndDate(today);
     } else if (preset === '7D') {
-      const d = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-      setStartDate(d.toISOString().split('T')[0]);
+      const d = new Date();
+      d.setDate(d.getDate() - 7);
+      setStartDate(toLocalDateStr(d));
       setEndDate(today);
     } else if (preset === '30D') {
-      const d = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-      setStartDate(d.toISOString().split('T')[0]);
+      const d = new Date();
+      d.setDate(d.getDate() - 30);
+      setStartDate(toLocalDateStr(d));
       setEndDate(today);
     }
   };
@@ -110,15 +126,32 @@ const Reports: React.FC = () => {
 
       const profitMargin = (sale.subtotal || sale.total) - totalPurchasePrice;
 
+      const hasSpecialPrice = (sale.items || []).some(it => it.isCustomPrice);
+      const specialPriceCount = (sale.items || []).filter(it => it.isCustomPrice).length;
+      const totalSpecialSavings = (sale.items || []).reduce((acc, it) => {
+        if (it.isCustomPrice && it.originalPrice && it.originalPrice > it.price) {
+          return acc + ((it.originalPrice - it.price) * (it.qty || 1));
+        }
+        return acc;
+      }, 0);
+
       return {
         ...sale,
         customerName,
         customerPhone,
         profitMargin,
-        totalPurchasePrice
+        totalPurchasePrice,
+        hasSpecialPrice,
+        specialPriceCount,
+        totalSpecialSavings
       };
     });
   }, [sales, customers, products]);
+
+  // Total transactions containing special prices
+  const totalSpecialPriceTx = useMemo(() => {
+    return enrichedSales.filter(s => s.hasSpecialPrice).length;
+  }, [enrichedSales]);
 
   // Apply filters
   const filteredSales = useMemo(() => {
@@ -130,26 +163,30 @@ const Reports: React.FC = () => {
         sale.id.toLowerCase().includes(lowerQuery) || 
         (sale.customerName && sale.customerName.toLowerCase().includes(lowerQuery)) ||
         (sale.employeeName && sale.employeeName.toLowerCase().includes(lowerQuery)) ||
-        (sale.items || []).some(it => (it.name && it.name.toLowerCase().includes(lowerQuery)) || (it.variantName && it.variantName.toLowerCase().includes(lowerQuery)))
+        (sale.items || []).some(it => (it.name && it.name.toLowerCase().includes(lowerQuery)) || (it.variantName && it.variantName.toLowerCase().includes(lowerQuery)) || (it.customPriceNote && it.customPriceNote.toLowerCase().includes(lowerQuery)))
       );
     }
     
     if (startDate) {
       result = result.filter(sale => {
-        const saleDate = new Date(sale.date).toISOString().split('T')[0];
-        return saleDate >= startDate;
+        const saleDateStr = toLocalDateStr(sale.date);
+        return saleDateStr >= startDate;
       });
     }
     
     if (endDate) {
       result = result.filter(sale => {
-        const saleDate = new Date(sale.date).toISOString().split('T')[0];
-        return saleDate <= endDate;
+        const saleDateStr = toLocalDateStr(sale.date);
+        return saleDateStr <= endDate;
       });
     }
 
     if (paymentMethod !== 'ALL') {
       result = result.filter(sale => sale.paymentMethod === paymentMethod);
+    }
+
+    if (specialPriceOnly) {
+      result = result.filter(sale => sale.hasSpecialPrice);
     }
 
     result.sort((a, b) => {
@@ -159,7 +196,7 @@ const Reports: React.FC = () => {
     });
 
     return result;
-  }, [enrichedSales, searchQuery, startDate, endDate, paymentMethod, sortBy]);
+  }, [enrichedSales, searchQuery, startDate, endDate, paymentMethod, specialPriceOnly, sortBy]);
 
   // Summaries
   const totalRevenue = enrichedSales.reduce((sum, sale) => sum + (sale.total || sale.subtotal || 0), 0);
@@ -635,6 +672,31 @@ const Reports: React.FC = () => {
                 />
               </div>
 
+              {/* Special Price Filter Button */}
+              <button
+                type="button"
+                onClick={() => setSpecialPriceOnly(!specialPriceOnly)}
+                style={{
+                  border: specialPriceOnly ? '1.5px solid #f59e0b' : '1px solid #cbd5e1',
+                  borderRadius: '8px',
+                  height: '34px',
+                  padding: '0 11px',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  background: specialPriceOnly ? '#fef3c7' : '#ffffff',
+                  color: specialPriceOnly ? '#b45309' : '#475569',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease'
+                }}
+                title="Filter transaksi dengan Special Price / Input Manual"
+              >
+                <Tag size={13} color={specialPriceOnly ? '#b45309' : '#64748b'} />
+                <span>Special Price ({totalSpecialPriceTx})</span>
+              </button>
+
               {/* Payment Method filter */}
               <select
                 value={paymentMethod}
@@ -687,7 +749,7 @@ const Reports: React.FC = () => {
                     <th style={{ padding: '12px 16px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right', width: '140px' }}>TOTAL OMZET</th>
                     <th style={{ padding: '12px 16px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right', width: '150px' }}>LABA BERSIH</th>
                     <th style={{ padding: '12px 16px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', width: '90px' }}>STATUS</th>
-                    <th style={{ padding: '12px 16px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', width: '110px' }}>AKSI</th>
+                    <th style={{ padding: '12px 16px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', width: '130px' }}>AKSI</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -726,7 +788,11 @@ const Reports: React.FC = () => {
                           {/* No. Invoice */}
                           <td style={{ padding: '12px 16px', whiteSpace: 'nowrap' }}>
                             <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#f8fafc', padding: '3px 8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
-                              <span style={{ fontFamily: 'monospace', fontWeight: 800, color: '#0f172a', fontSize: '12px' }}>
+                              <span 
+                                onClick={() => setSelectedSaleDetail(sale)}
+                                style={{ fontFamily: 'monospace', fontWeight: 800, color: '#0f172a', fontSize: '12px', cursor: 'pointer', textDecoration: 'underline' }}
+                                title="Klik untuk lihat detail transaksi"
+                              >
                                 {sale.id}
                               </span>
                               <button
@@ -794,17 +860,64 @@ const Reports: React.FC = () => {
 
                           {/* Items Dibeli */}
                           <td style={{ padding: '12px 16px' }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                               {(sale.items || []).slice(0, 2).map((it, i) => (
-                                <div key={i} style={{ fontSize: '12px', color: '#334155', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                  <span style={{ fontWeight: 800, color: '#0f172a' }}>{it.qty}x</span>
-                                  <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '200px' }}>{it.name}{it.variantName ? ` - ${it.variantName}` : ''}</span>
+                                <div key={i} style={{ fontSize: '12px', color: '#334155' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <span style={{ fontWeight: 800, color: '#0f172a' }}>{it.qty}x</span>
+                                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '170px' }}>
+                                      {it.name}{it.variantName ? ` - ${it.variantName}` : ''}
+                                    </span>
+                                    {it.isCustomPrice && (
+                                      <span style={{
+                                        background: '#fef3c7', color: '#b45309', border: '1px solid #fde68a',
+                                        borderRadius: '4px', padding: '1px 5px', fontSize: '9.5px', fontWeight: 800,
+                                        display: 'inline-flex', alignItems: 'center', gap: '2px', flexShrink: 0
+                                      }}>
+                                        <Tag size={9} /> Special
+                                      </span>
+                                    )}
+                                  </div>
+                                  {it.isCustomPrice && (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '10.5px', marginTop: '1px', paddingLeft: '18px' }}>
+                                      {it.originalPrice && it.originalPrice !== it.price && (
+                                        <span style={{ textDecoration: 'line-through', color: '#94a3b8' }}>
+                                          {formatIDR(it.originalPrice)}
+                                        </span>
+                                      )}
+                                      <span style={{ color: '#b45309', fontWeight: 700 }}>
+                                        {formatIDR(it.price)}
+                                      </span>
+                                      {it.customPriceNote && (
+                                        <span style={{ color: '#78350f', fontStyle: 'italic', fontSize: '10px' }}>
+                                          ({it.customPriceNote})
+                                        </span>
+                                      )}
+                                    </div>
+                                  )}
                                 </div>
                               ))}
                               {(sale.items || []).length > 2 && (
-                                <span style={{ fontSize: '10.5px', color: '#64748b', fontWeight: 600 }}>
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedSaleDetail(sale)}
+                                  style={{
+                                    border: 'none', background: 'none', padding: 0,
+                                    fontSize: '11px', color: '#2563eb', fontWeight: 600,
+                                    cursor: 'pointer', textAlign: 'left'
+                                  }}
+                                >
                                   +{(sale.items || []).length - 2} produk lainnya...
-                                </span>
+                                </button>
+                              )}
+                              {sale.hasSpecialPrice && (
+                                <div style={{
+                                  display: 'inline-flex', alignItems: 'center', gap: '4px',
+                                  background: '#fffbeb', color: '#b45309', border: '1px dashed #fcd34d',
+                                  borderRadius: '4px', padding: '1px 6px', fontSize: '10px', fontWeight: 700, width: 'fit-content'
+                                }}>
+                                  <Tag size={10} /> Ada Item Harga Manual
+                                </div>
                               )}
                             </div>
                           </td>
@@ -846,20 +959,34 @@ const Reports: React.FC = () => {
                             </span>
                           </td>
 
-                          {/* Aksi: Cetak Nota */}
+                          {/* Aksi: Detail & Cetak Nota */}
                           <td style={{ padding: '12px 16px', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                            <button
-                              type="button"
-                              onClick={() => setReprint({ sale, options: { storeName: appName, customerName: sale.customerName, taxEnabled, taxRate } })}
-                              style={{
-                                background: '#f8fafc', border: '1px solid #cbd5e1', color: '#0f172a',
-                                borderRadius: '8px', padding: '5px 10px', fontSize: '11.5px', fontWeight: 700,
-                                display: 'inline-flex', alignItems: 'center', gap: '5px', cursor: 'pointer'
-                              }}
-                              title="Cetak Ulang Struk"
-                            >
-                              <Printer size={13} /> Cetak
-                            </button>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                              <button
+                                type="button"
+                                onClick={() => setSelectedSaleDetail(sale)}
+                                style={{
+                                  background: '#f8fafc', border: '1px solid #cbd5e1', color: '#0f172a',
+                                  borderRadius: '8px', padding: '5px 8px', fontSize: '11.5px', fontWeight: 700,
+                                  display: 'inline-flex', alignItems: 'center', gap: '4px', cursor: 'pointer'
+                                }}
+                                title="Lihat Detail & Analisis Transaksi"
+                              >
+                                <Eye size={13} /> Detail
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setReprint({ sale, options: { storeName: appName, customerName: sale.customerName, taxEnabled, taxRate } })}
+                                style={{
+                                  background: '#f8fafc', border: '1px solid #cbd5e1', color: '#0f172a',
+                                  borderRadius: '8px', padding: '5px 8px', fontSize: '11.5px', fontWeight: 700,
+                                  display: 'inline-flex', alignItems: 'center', gap: '4px', cursor: 'pointer'
+                                }}
+                                title="Cetak Ulang Struk"
+                              >
+                                <Printer size={13} />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -978,6 +1105,30 @@ const Reports: React.FC = () => {
                   <option value="oldest">Terlama (Asc)</option>
                 </select>
               </div>
+
+              {/* Mobile Special Price Filter Button */}
+              <button
+                type="button"
+                onClick={() => setSpecialPriceOnly(!specialPriceOnly)}
+                style={{
+                  border: specialPriceOnly ? '1.5px solid #f59e0b' : '1px solid #e2e8f0',
+                  borderRadius: '10px',
+                  height: '38px',
+                  padding: '0 12px',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  background: specialPriceOnly ? '#fef3c7' : '#f8fafc',
+                  color: specialPriceOnly ? '#b45309' : '#475569',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  cursor: 'pointer'
+                }}
+              >
+                <Tag size={13} color={specialPriceOnly ? '#b45309' : '#64748b'} />
+                <span>Hanya Special Price ({totalSpecialPriceTx} transaksi)</span>
+              </button>
             </div>
 
             {/* Restock Alert Banner */}
@@ -1055,7 +1206,10 @@ const Reports: React.FC = () => {
                         display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fafbfc'
                       }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span style={{ fontWeight: 800, fontSize: '13.5px', fontFamily: 'monospace', color: '#0f172a' }}>
+                          <span 
+                            onClick={() => setSelectedSaleDetail(sale)}
+                            style={{ fontWeight: 800, fontSize: '13.5px', fontFamily: 'monospace', color: '#0f172a', cursor: 'pointer', textDecoration: 'underline' }}
+                          >
                             {sale.id}
                           </span>
                           <button
@@ -1128,18 +1282,56 @@ const Reports: React.FC = () => {
 
                       {/* Items List */}
                       <div style={{ padding: '0 14px 12px 14px' }}>
-                        <div style={{ background: '#f8fafc', borderRadius: '10px', padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        <div style={{ background: '#f8fafc', borderRadius: '10px', padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                           {(sale.items || []).map((it, idx2) => (
-                            <div key={idx2} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <span style={{ fontWeight: 700, color: '#0f172a' }}>{it.qty}x</span>
-                                <span style={{ color: '#334155' }}>{it.name}{it.variantName ? ` - ${it.variantName}` : ''}</span>
+                            <div key={idx2} style={{ display: 'flex', flexDirection: 'column', gap: '2px', borderBottom: idx2 < (sale.items || []).length - 1 ? '1px dashed #e2e8f0' : 'none', paddingBottom: idx2 < (sale.items || []).length - 1 ? '6px' : 0 }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', fontSize: '12px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1, minWidth: 0 }}>
+                                  <span style={{ fontWeight: 700, color: '#0f172a' }}>{it.qty}x</span>
+                                  <span style={{ color: '#334155', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {it.name}{it.variantName ? ` - ${it.variantName}` : ''}
+                                  </span>
+                                  {it.isCustomPrice && (
+                                    <span style={{
+                                      background: '#fef3c7', color: '#b45309', border: '1px solid #fde68a',
+                                      borderRadius: '4px', padding: '1px 5px', fontSize: '9px', fontWeight: 800, flexShrink: 0
+                                    }}>
+                                      Special
+                                    </span>
+                                  )}
+                                </div>
+                                <span style={{ fontWeight: 700, color: '#0f172a', marginLeft: '8px' }}>
+                                  {formatIDR(it.subtotal || it.price * it.qty)}
+                                </span>
                               </div>
-                              <span style={{ fontWeight: 600, color: '#64748b' }}>
-                                {formatIDR(it.subtotal || it.price * it.qty)}
-                              </span>
+                              {it.isCustomPrice && (
+                                <div style={{ fontSize: '11px', display: 'flex', alignItems: 'center', gap: '6px', paddingLeft: '18px', color: '#b45309' }}>
+                                  {it.originalPrice && it.originalPrice !== it.price && (
+                                    <span style={{ textDecoration: 'line-through', color: '#94a3b8' }}>
+                                      {formatIDR(it.originalPrice)}
+                                    </span>
+                                  )}
+                                  <span style={{ fontWeight: 700 }}>
+                                    {formatIDR(it.price)}/unit
+                                  </span>
+                                  {it.customPriceNote && (
+                                    <span style={{ color: '#78350f', fontStyle: 'italic', fontSize: '10.5px' }}>
+                                      • "{it.customPriceNote}"
+                                    </span>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           ))}
+                          {sale.hasSpecialPrice && (
+                            <div style={{
+                              display: 'inline-flex', alignItems: 'center', gap: '4px',
+                              background: '#fffbeb', color: '#b45309', border: '1px dashed #fcd34d',
+                              borderRadius: '6px', padding: '3px 8px', fontSize: '10.5px', fontWeight: 700, marginTop: '2px', width: 'fit-content'
+                            }}>
+                              <Tag size={11} /> Menggunakan Harga Khusus (Manual)
+                            </div>
+                          )}
                         </div>
                       </div>
 
@@ -1157,17 +1349,30 @@ const Reports: React.FC = () => {
                           </div>
                         </div>
 
-                        <button
-                          type="button"
-                          onClick={() => setReprint({ sale, options: { storeName: appName, customerName: sale.customerName, taxEnabled, taxRate } })}
-                          style={{
-                            background: '#f8fafc', border: '1px solid #cbd5e1', color: '#0f172a',
-                            borderRadius: '8px', padding: '7px 12px', fontSize: '12px', fontWeight: 700,
-                            display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer'
-                          }}
-                        >
-                          <Printer size={13} /> Cetak Struk
-                        </button>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedSaleDetail(sale)}
+                            style={{
+                              background: '#f8fafc', border: '1px solid #cbd5e1', color: '#0f172a',
+                              borderRadius: '8px', padding: '7px 10px', fontSize: '12px', fontWeight: 700,
+                              display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer'
+                            }}
+                          >
+                            <Eye size={13} /> Detail
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setReprint({ sale, options: { storeName: appName, customerName: sale.customerName, taxEnabled, taxRate } })}
+                            style={{
+                              background: '#f8fafc', border: '1px solid #cbd5e1', color: '#0f172a',
+                              borderRadius: '8px', padding: '7px 12px', fontSize: '12px', fontWeight: 700,
+                              display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer'
+                            }}
+                          >
+                            <Printer size={13} /> Struk
+                          </button>
+                        </div>
                       </div>
                     </div>
                   );
@@ -1833,6 +2038,335 @@ const Reports: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* =====================================================================
+          MODAL: DETAIL TRANSAKSI & ANALISIS HARGA KHUSUS
+          ===================================================================== */}
+      {selectedSaleDetail && (
+        <div style={{
+          position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.65)',
+          backdropFilter: 'blur(5px)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 9999, padding: '16px'
+        }}>
+          <div style={{
+            background: '#ffffff', borderRadius: '20px', width: '100%', maxWidth: '780px',
+            maxHeight: '90vh', display: 'flex', flexDirection: 'column',
+            boxShadow: '0 25px 60px rgba(15, 23, 42, 0.3)', overflow: 'hidden'
+          }}>
+            {/* Modal Header */}
+            <div style={{
+              padding: '18px 24px', borderBottom: '1px solid #f1f5f9', background: '#fafbfc',
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{
+                  width: '40px', height: '40px', borderRadius: '12px',
+                  background: selectedSaleDetail.hasSpecialPrice ? '#fef3c7' : '#eff6ff',
+                  color: selectedSaleDetail.hasSpecialPrice ? '#d97706' : '#2563eb',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center'
+                }}>
+                  {selectedSaleDetail.hasSpecialPrice ? <Tag size={20} /> : <Eye size={20} />}
+                </div>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 800, color: '#0f172a' }}>
+                      Detail Transaksi
+                    </h3>
+                    <span style={{
+                      fontFamily: 'monospace', fontSize: '12px', fontWeight: 800,
+                      background: '#e2e8f0', color: '#1e293b', padding: '2px 8px', borderRadius: '6px'
+                    }}>
+                      {selectedSaleDetail.id}
+                    </span>
+                    <span style={{
+                      background: '#dcfce7', color: '#15803d', fontSize: '11px', fontWeight: 800,
+                      padding: '2px 8px', borderRadius: '6px'
+                    }}>
+                      LUNAS
+                    </span>
+                  </div>
+                  <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#64748b' }}>
+                    {new Date(selectedSaleDetail.date).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} • {new Date(selectedSaleDetail.date).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} WIB
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setSelectedSaleDetail(null)}
+                style={{
+                  background: '#f1f5f9', border: 'none', borderRadius: '10px',
+                  width: '34px', height: '34px', display: 'flex', alignItems: 'center',
+                  justifyContent: 'center', cursor: 'pointer', color: '#64748b'
+                }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div style={{ padding: '20px 24px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {/* Special Price Highlight Alert Banner */}
+              {selectedSaleDetail.hasSpecialPrice && (
+                <div style={{
+                  background: 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)',
+                  border: '1.5px solid #fde68a', borderRadius: '14px', padding: '14px 18px',
+                  display: 'flex', alignItems: 'flex-start', gap: '14px'
+                }}>
+                  <div style={{
+                    width: '36px', height: '36px', borderRadius: '10px', background: '#f59e0b',
+                    color: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
+                  }}>
+                    <Tag size={18} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '14px', fontWeight: 800, color: '#92400e' }}>
+                      Transaksi Memuat Harga Khusus (Input Manual Kasir)
+                    </div>
+                    <div style={{ fontSize: '12.5px', color: '#b45309', marginTop: '2px', lineHeight: 1.4 }}>
+                      Ditemukan <strong>{selectedSaleDetail.specialPriceCount} item</strong> yang diberikan penyesuaian harga manual oleh kasir di luar harga standar master.
+                      {selectedSaleDetail.totalSpecialSavings > 0 && (
+                        <span> Total selisih hemat/potongan khusus untuk pelanggan: <strong style={{ textDecoration: 'underline' }}>{formatIDR(selectedSaleDetail.totalSpecialSavings)}</strong>.</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Transaction Key Info Grid */}
+              <div style={{
+                display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px'
+              }}>
+                <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                  <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Pelanggan</div>
+                  <div style={{ fontSize: '13.5px', fontWeight: 800, color: '#0f172a', marginTop: '2px' }}>
+                    {selectedSaleDetail.customerName || 'Umum (Guest)'}
+                  </div>
+                  <div style={{ fontSize: '11px', color: '#94a3b8' }}>{selectedSaleDetail.customerPhone || 'Tanpa Kontak'}</div>
+                </div>
+
+                <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                  <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Kasir Bertugas</div>
+                  <div style={{ fontSize: '13.5px', fontWeight: 800, color: '#0f172a', marginTop: '2px' }}>
+                    {selectedSaleDetail.employeeName || 'Administrator'}
+                  </div>
+                  <div style={{ fontSize: '11px', color: '#94a3b8' }}>ID: {selectedSaleDetail.employeeId || '-'}</div>
+                </div>
+
+                <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                  <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Metode Pembayaran</div>
+                  <div style={{ fontSize: '13.5px', fontWeight: 800, color: '#0f172a', marginTop: '2px' }}>
+                    {selectedSaleDetail.paymentMethod || 'TUNAI'}
+                  </div>
+                  <div style={{ fontSize: '11px', color: '#16a34a', fontWeight: 700 }}>● Terverifikasi</div>
+                </div>
+
+                <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                  <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Estimasi Laba Transaksi</div>
+                  <div style={{ fontSize: '13.5px', fontWeight: 800, color: '#16a34a', marginTop: '2px' }}>
+                    +{formatIDR(selectedSaleDetail.profitMargin || 0)}
+                  </div>
+                  <div style={{ fontSize: '11px', color: '#059669', fontWeight: 700 }}>
+                    Margin {selectedSaleDetail.subtotal ? ((selectedSaleDetail.profitMargin / selectedSaleDetail.subtotal) * 100).toFixed(1) : 0}%
+                  </div>
+                </div>
+              </div>
+
+              {/* Items Breakdown Table */}
+              <div>
+                <div style={{ fontSize: '13px', fontWeight: 800, color: '#334155', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span>Daftar Produk & Rincian Harga</span>
+                  <span style={{ fontSize: '11px', background: '#f1f5f9', color: '#64748b', padding: '1px 8px', borderRadius: '999px', fontWeight: 700 }}>
+                    {(selectedSaleDetail.items || []).length} jenis item
+                  </span>
+                </div>
+
+                <div style={{ border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12.5px' }}>
+                    <thead>
+                      <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase' }}>
+                        <th style={{ padding: '10px 14px' }}>Item / Produk</th>
+                        <th style={{ padding: '10px 14px', textAlign: 'center' }}>Qty</th>
+                        <th style={{ padding: '10px 14px' }}>Skema Harga</th>
+                        <th style={{ padding: '10px 14px', textAlign: 'right' }}>Harga Normal</th>
+                        <th style={{ padding: '10px 14px', textAlign: 'right' }}>Harga Dikenakan</th>
+                        <th style={{ padding: '10px 14px', textAlign: 'right' }}>Subtotal</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(selectedSaleDetail.items || []).map((it: any, idx: number) => {
+                        const isSpecial = Boolean(it.isCustomPrice);
+                        const hasDiff = isSpecial && it.originalPrice && it.originalPrice !== it.price;
+                        const diffPerUnit = hasDiff ? (it.originalPrice - it.price) : 0;
+
+                        return (
+                          <tr key={idx} style={{
+                            borderBottom: idx < (selectedSaleDetail.items || []).length - 1 ? '1px solid #f1f5f9' : 'none',
+                            background: isSpecial ? '#fffdf7' : 'transparent'
+                          }}>
+                            {/* Nama Produk */}
+                            <td style={{ padding: '12px 14px' }}>
+                              <div style={{ fontWeight: 700, color: '#0f172a' }}>
+                                {it.name}
+                              </div>
+                              {it.variantName && (
+                                <div style={{ fontSize: '11px', color: '#64748b' }}>
+                                  Varian: {it.variantName}
+                                </div>
+                              )}
+                              {isSpecial && it.customPriceNote && (
+                                <div style={{
+                                  fontSize: '11px', color: '#92400e', background: '#fef3c7',
+                                  padding: '2px 8px', borderRadius: '4px', width: 'fit-content',
+                                  marginTop: '4px', fontStyle: 'italic', display: 'flex', alignItems: 'center', gap: '4px'
+                                }}>
+                                  <Info size={11} /> Catatan Kasir: "{it.customPriceNote}"
+                                </div>
+                              )}
+                            </td>
+
+                            {/* Qty */}
+                            <td style={{ padding: '12px 14px', textAlign: 'center', fontWeight: 800, color: '#0f172a' }}>
+                              {it.qty}
+                            </td>
+
+                            {/* Skema Harga */}
+                            <td style={{ padding: '12px 14px' }}>
+                              {isSpecial ? (
+                                <span style={{
+                                  background: '#fef3c7', color: '#b45309', border: '1px solid #fde68a',
+                                  borderRadius: '6px', padding: '3px 8px', fontSize: '11px', fontWeight: 800,
+                                  display: 'inline-flex', alignItems: 'center', gap: '4px'
+                                }}>
+                                  <Tag size={11} /> SPECIAL (Manual)
+                                </span>
+                              ) : (
+                                <span style={{
+                                  background: '#f1f5f9', color: '#64748b',
+                                  borderRadius: '6px', padding: '3px 8px', fontSize: '11px', fontWeight: 700
+                                }}>
+                                  Standard POS
+                                </span>
+                              )}
+                            </td>
+
+                            {/* Harga Normal */}
+                            <td style={{ padding: '12px 14px', textAlign: 'right', color: '#64748b' }}>
+                              {formatIDR(it.originalPrice || it.price)}
+                            </td>
+
+                            {/* Harga Dikenakan */}
+                            <td style={{ padding: '12px 14px', textAlign: 'right' }}>
+                              <div style={{ fontWeight: 800, color: isSpecial ? '#b45309' : '#0f172a' }}>
+                                {formatIDR(it.price)}
+                              </div>
+                              {hasDiff && (
+                                <div style={{ fontSize: '10.5px', color: diffPerUnit > 0 ? '#16a34a' : '#dc2626', fontWeight: 700 }}>
+                                  {diffPerUnit > 0 ? `Hemat ${formatIDR(diffPerUnit)}/unit` : `Markup +${formatIDR(Math.abs(diffPerUnit))}`}
+                                </div>
+                              )}
+                            </td>
+
+                            {/* Subtotal */}
+                            <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 800, color: '#0f172a' }}>
+                              {formatIDR(it.subtotal || it.price * it.qty)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Financial Calculation Summary */}
+              <div style={{
+                background: '#f8fafc', borderRadius: '14px', padding: '16px',
+                border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '8px'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#64748b' }}>
+                  <span>Subtotal Belanja</span>
+                  <span style={{ fontWeight: 700, color: '#0f172a' }}>{formatIDR(selectedSaleDetail.subtotal || selectedSaleDetail.total)}</span>
+                </div>
+
+                {selectedSaleDetail.hasSpecialPrice && selectedSaleDetail.totalSpecialSavings > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#b45309', fontWeight: 700 }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <Tag size={13} /> Total Penghematan Special Price
+                    </span>
+                    <span>-{formatIDR(selectedSaleDetail.totalSpecialSavings)}</span>
+                  </div>
+                )}
+
+                {selectedSaleDetail.tax ? (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#64748b' }}>
+                    <span>Pajak (PB1 / PPN)</span>
+                    <span style={{ fontWeight: 700, color: '#0f172a' }}>+{formatIDR(selectedSaleDetail.tax)}</span>
+                  </div>
+                ) : null}
+
+                {selectedSaleDetail.discount ? (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#dc2626' }}>
+                    <span>Diskon Tambahan Nota</span>
+                    <span style={{ fontWeight: 700 }}>-{formatIDR(selectedSaleDetail.discount)}</span>
+                  </div>
+                ) : null}
+
+                <div style={{
+                  borderTop: '1px solid #e2e8f0', paddingTop: '10px', marginTop: '4px',
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                }}>
+                  <div>
+                    <div style={{ fontSize: '12px', fontWeight: 700, color: '#64748b' }}>Total Akhir Transaksi</div>
+                    <div style={{ fontSize: '11px', color: '#94a3b8' }}>Metode: {selectedSaleDetail.paymentMethod || 'TUNAI'}</div>
+                  </div>
+                  <div style={{ fontSize: '20px', fontWeight: 900, color: '#0f172a' }}>
+                    {formatIDR(selectedSaleDetail.total || selectedSaleDetail.subtotal)}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer Actions */}
+            <div style={{
+              padding: '14px 24px', borderTop: '1px solid #f1f5f9', background: '#fafbfc',
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+            }}>
+              <button
+                type="button"
+                onClick={() => setSelectedSaleDetail(null)}
+                style={{
+                  background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '10px',
+                  padding: '9px 18px', fontSize: '13px', fontWeight: 700, color: '#475569', cursor: 'pointer'
+                }}
+              >
+                Tutup
+              </button>
+
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const saleToReprint = selectedSaleDetail;
+                    setSelectedSaleDetail(null);
+                    setReprint({
+                      sale: saleToReprint,
+                      options: { storeName: appName, customerName: saleToReprint.customerName, taxEnabled, taxRate }
+                    });
+                  }}
+                  style={{
+                    background: '#0f172a', border: 'none', borderRadius: '10px',
+                    padding: '9px 18px', fontSize: '13px', fontWeight: 700, color: '#ffffff',
+                    display: 'inline-flex', alignItems: 'center', gap: '6px', cursor: 'pointer'
+                  }}
+                >
+                  <Printer size={15} /> Cetak Struk / Invoice
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

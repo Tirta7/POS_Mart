@@ -175,14 +175,17 @@ model Transaction {
 }
 
 model TransactionItem {
-  id             String @id @default(uuid())
-  transaction_id String
-  product_id     String
-  quantity       Float
-  price_at_time  Float
-  subtotal       Float
-  variant_id     String?
-  variant_name   String?
+  id                String   @id @default(uuid())
+  transaction_id    String
+  product_id        String
+  quantity          Float
+  price_at_time     Float
+  subtotal          Float
+  variant_id        String?
+  variant_name      String?
+  original_price    Float?
+  is_custom_price   Boolean? @default(false)
+  custom_price_note String?
 
   transaction Transaction @relation(fields: [transaction_id], references: [id])
   product     Product     @relation(fields: [product_id], references: [id])

@@ -14,7 +14,7 @@ interface SalesState {
 }
 
 export const useSalesStore = create<SalesState>()(
-  (set) => ({
+  (set, get) => ({
       sales: [],
       fetchSales: async () => {
         try {
@@ -51,7 +51,10 @@ export const useSalesStore = create<SalesState>()(
                     name: i.product?.name || 'Unknown',
                     qty: i.quantity,
                     price: i.price_at_time,
-                    subtotal: i.subtotal
+                    subtotal: i.subtotal,
+                    originalPrice: i.original_price != null ? Number(i.original_price) : undefined,
+                    isCustomPrice: Boolean(i.is_custom_price),
+                    customPriceNote: i.custom_price_note || undefined
                   }))
                 };
               });
@@ -83,7 +86,10 @@ export const useSalesStore = create<SalesState>()(
                 name: item.name,
                 qty: item.qty,
                 price: item.price,
-                subtotal: item.subtotal
+                subtotal: item.subtotal,
+                originalPrice: item.originalPrice,
+                isCustomPrice: item.isCustomPrice,
+                customPriceNote: item.customPriceNote
               }))
             });
           }
@@ -107,7 +113,10 @@ export const useSalesStore = create<SalesState>()(
               variant_name: item.variantName || null,
               quantity: item.qty,
               price: item.price,
-              subtotal: item.subtotal
+              subtotal: item.subtotal,
+              original_price: item.originalPrice != null ? item.originalPrice : item.price,
+              is_custom_price: Boolean(item.isCustomPrice),
+              custom_price_note: item.customPriceNote || (item.isCustomPrice ? 'Harga Khusus' : null)
             }))
           };
 
@@ -123,10 +132,15 @@ export const useSalesStore = create<SalesState>()(
             useInventoryStore.getState().fetchTransactions();
             useInventoryStore.getState().fetchProducts();
             useCustomerStore.getState().fetchCustomers();
+            get().fetchSales();
+          } else {
+            const errData = await res.json().catch(() => ({}));
+            console.error("Gagal sinkronisasi transaksi ke server:", errData);
+            alert(`Peringatan Transaksi: ${errData.error || 'Server gagal menyimpan transaksi'}`);
           }
         } catch (error) {
           console.error("Gagal sinkronisasi transaksi ke server:", error);
-          // TODO: Simpan di queue offline untuk dikirim ulang nanti
+          alert("Koneksi ke server gagal. Pastikan server online.");
         }
       },
       clearSales: () => set({ sales: [] }),

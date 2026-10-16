@@ -73,11 +73,15 @@ export const buildReceiptHtml = (sale: SalesTransaction, opts: ReceiptOptions): 
     .map((i, idx) => {
       const p = products.find(x => x.id === i.productId);
       const unit = p?.unit || 'Pcs';
+      const isCustom = Boolean(i.isCustomPrice || (i.originalPrice && i.originalPrice !== i.price));
+      const customLabel = i.customPriceNote ? `* Special Price: ${esc(i.customPriceNote)}` : '* Special Price (Input Manual)';
+      const origNote = (isCustom && i.originalPrice) ? ` (Normal: ${idr(i.originalPrice)})` : '';
       return `
       <div class="item">
         <div class="iname"><span class="no">${idx + 1}.</span> ${esc(i.name)}</div>
         ${i.variantName ? `<div class="sku">Varian: ${esc(i.variantName)}</div>` : ''}
         ${p?.sku ? `<div class="sku">${esc(p.sku)}</div>` : ''}
+        ${isCustom ? `<div class="sku" style="font-weight: 700;">${customLabel}${origNote}</div>` : ''}
         <div class="row"><span>${num(i.qty)} ${esc(unit)} x ${idr(i.price)}</span><span class="amt">${idr(i.subtotal)}</span></div>
       </div>`;
     })

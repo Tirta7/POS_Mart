@@ -789,7 +789,10 @@ app.post('/api/saas/transactions', async (req, res) => {
             price_at_time: item.price,
             subtotal: item.subtotal,
             variant_id: variantId,
-            variant_name: variantName
+            variant_name: variantName,
+            original_price: item.original_price != null ? Number(item.original_price) : (item.originalPrice != null ? Number(item.originalPrice) : item.price),
+            is_custom_price: Boolean(item.is_custom_price || item.isCustomPrice),
+            custom_price_note: item.custom_price_note || item.customPriceNote || (Boolean(item.is_custom_price || item.isCustomPrice) ? 'Harga Khusus' : null)
           }
         });
 
@@ -1574,7 +1577,10 @@ app.get('/api/saas/export/all', async (req, res) => {
           name: i.product?.name || 'Produk',
           qty: i.quantity,
           price: Number(i.price_at_time || 0),
-          subtotal: Number(i.subtotal || 0)
+          subtotal: Number(i.subtotal || 0),
+          originalPrice: i.original_price != null ? Number(i.original_price) : undefined,
+          isCustomPrice: Boolean(i.is_custom_price),
+          customPriceNote: i.custom_price_note || undefined
         }))
       });
     }

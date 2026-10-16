@@ -477,21 +477,42 @@ body {
   /* ---------- Grid produk full-screen ---------- */
   .main-content {
     position: relative;
+    min-height: 0;
+  }
+  .left-panel {
+    min-height: 0;
+  }
+  .categories-header-row {
+    padding-right: max(10px, var(--sar));
+    background-color: white;
   }
   .categories-bar {
-    padding: 0.6rem max(12px, var(--sal));
+    padding: 0.5rem max(10px, var(--sal));
+  }
+  .view-mode-btn span.hide-mobile {
+    display: none;
+  }
+  .view-mode-btn {
+    padding: 6px 7px;
   }
   .product-grid {
     grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
     gap: 0.6rem;
     padding: 10px max(10px, var(--sar)) calc(100px + var(--sab)) max(10px, var(--sal));
     -webkit-overflow-scrolling: touch;
+    min-height: 0;
+  }
+  .product-grid.mode-compact {
+    grid-template-columns: 1fr;
   }
   .product-img {
     height: 100px;
+    min-height: 100px;
+    max-height: 100px;
   }
   .product-card {
     border-radius: 12px;
+    min-height: 200px;
   }
 
   /* ---------- Keranjang: bottom sheet bergaya iOS ---------- */

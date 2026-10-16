@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { 
   Search, Printer, ShoppingBag, Truck, Package, ShoppingCart,
   CreditCard, QrCode, Banknote, Ticket, Trash2, PauseCircle,
-  LayoutGrid, Plus, Minus, X, LogOut, Camera, ChevronUp, Settings2
+  LayoutGrid, Plus, Minus, X, LogOut, Camera, ChevronUp, Settings2,
+  Grid, List, Tag, Edit3, Check
 } from 'lucide-react';
 import './index.css';
 import { useNavigate, Link } from 'react-router-dom';
@@ -79,6 +80,80 @@ function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
 
+  // View Mode: 'grid' (standar foto), 'compact' (ringkas hemat ruang), 'list' (daftar cepat)
+  const [viewMode, setViewMode] = useState<'grid' | 'compact' | 'list'>(() => {
+    try {
+      return (localStorage.getItem('pos_view_mode') as 'grid' | 'compact' | 'list') || 'grid';
+    } catch {
+      return 'grid';
+    }
+  });
+
+  const handleViewModeChange = (mode: 'grid' | 'compact' | 'list') => {
+    setViewMode(mode);
+    try {
+      localStorage.setItem('pos_view_mode', mode);
+    } catch {}
+  };
+
+  // State Ubah Harga Manual (Harga Khusus)
+  const [customPriceModalOpen, setCustomPriceModalOpen] = useState(false);
+  const [editingCartItem, setEditingCartItem] = useState<any>(null);
+  const [customPriceInput, setCustomPriceInput] = useState<string>('');
+  const [customPriceNoteInput, setCustomPriceNoteInput] = useState<string>('');
+
+  const openCustomPriceModal = (item: any) => {
+    setEditingCartItem(item);
+    setCustomPriceInput(String(item.price || 0));
+    setCustomPriceNoteInput(item.customPriceNote || (item.isCustomPrice ? 'Harga Khusus' : ''));
+    setCustomPriceModalOpen(true);
+  };
+
+  const handleSaveCustomPrice = () => {
+    if (!editingCartItem) return;
+    const newPrice = Math.max(0, parseInt(customPriceInput.replace(/\D/g, '') || '0', 10));
+    const origPrice = editingCartItem.originalPrice != null ? editingCartItem.originalPrice : editingCartItem.price;
+    const isDifferent = newPrice !== origPrice;
+
+    setCart(prev => prev.map(item => {
+      if (item.cartId === editingCartItem.cartId) {
+        return {
+          ...item,
+          price: newPrice,
+          originalPrice: origPrice,
+          isCustomPrice: isDifferent,
+          customPriceNote: isDifferent ? (customPriceNoteInput.trim() || 'Harga Khusus') : ''
+        };
+      }
+      return item;
+    }));
+
+    setCustomPriceModalOpen(false);
+    setEditingCartItem(null);
+  };
+
+  const handleResetCustomPrice = () => {
+    if (!editingCartItem) return;
+    const storeItem = storeProducts.find(p => p.id === editingCartItem.id);
+    const standardPrice = storeItem ? resolvePrice(storeItem, editingCartItem.variantId, orderType) : (editingCartItem.originalPrice || editingCartItem.price);
+
+    setCart(prev => prev.map(item => {
+      if (item.cartId === editingCartItem.cartId) {
+        return {
+          ...item,
+          price: standardPrice,
+          originalPrice: standardPrice,
+          isCustomPrice: false,
+          customPriceNote: ''
+        };
+      }
+      return item;
+    }));
+
+    setCustomPriceModalOpen(false);
+    setEditingCartItem(null);
+  };
+
   // Mobile: keranjang tampil sebagai bottom sheet (gaya iOS)
   const [cartSheetOpen, setCartSheetOpen] = useState(false);
   // Perangkat sentuh (HP/tablet): jangan auto-focus search agar keyboard tidak langsung muncul
@@ -137,12 +212,14 @@ function App() {
     };
   });
 
-  // Automatically update prices in the cart if the order type changes
+  // Automatically update prices in the cart if the order type changes (kecuali item dengan harga khusus manual)
   useEffect(() => {
     setCart(prev => prev.map(item => {
+      if (item.isCustomPrice) return item;
       const storeItem = storeProducts.find(p => p.id === item.id);
       if (storeItem) {
-        return { ...item, price: resolvePrice(storeItem, item.variantId, orderType) };
+        const standardPrice = resolvePrice(storeItem, item.variantId, orderType);
+        return { ...item, price: standardPrice, originalPrice: standardPrice };
       }
       return item;
     }));
@@ -262,7 +339,17 @@ function App() {
         alert(`Stok tidak mencukupi! Hanya tersedia ${product.availableStock} ${product.unit}`);
         return prev;
       }
-      return [...prev, { ...product, cartId: Date.now().toString() + Math.random().toString(36).slice(2, 6), qty: qtyToAdd }];
+      return [
+        ...prev,
+        {
+          ...product,
+          cartId: Date.now().toString() + Math.random().toString(36).slice(2, 6),
+          qty: qtyToAdd,
+          originalPrice: product.price,
+          isCustomPrice: false,
+          customPriceNote: ''
+        }
+      ];
     });
   };
 
@@ -509,19 +596,51 @@ function App() {
         
         {/* LEFT PANEL */}
         <div className="left-panel">
-          <div className="categories-bar">
-            {CATEGORIES.map(cat => (
+          <div className="categories-header-row">
+            <div className="categories-bar">
+              {CATEGORIES.map(cat => (
+                <button 
+                  key={cat.id} 
+                  className={`cat-btn ${activeCat === cat.id ? 'active' : ''}`}
+                  onClick={() => setActiveCat(cat.id)}
+                >
+                  {cat.icon} {cat.name}
+                </button>
+              ))}
+            </div>
+
+            <div className="view-mode-controls" aria-label="Pilih Mode Tampilan">
               <button 
-                key={cat.id} 
-                className={`cat-btn ${activeCat === cat.id ? 'active' : ''}`}
-                onClick={() => setActiveCat(cat.id)}
+                type="button"
+                className={`view-mode-btn ${viewMode === 'grid' ? 'active' : ''}`}
+                onClick={() => handleViewModeChange('grid')}
+                title="Tampilan Grid Standar"
               >
-                {cat.icon} {cat.name}
+                <LayoutGrid size={14} />
+                <span className="hide-mobile">Grid</span>
               </button>
-            ))}
+              <button 
+                type="button"
+                className={`view-mode-btn ${viewMode === 'compact' ? 'active' : ''}`}
+                onClick={() => handleViewModeChange('compact')}
+                title="Tampilan Ringkas (Muat Lebih Banyak)"
+              >
+                <Grid size={14} />
+                <span className="hide-mobile">Ringkas</span>
+              </button>
+              <button 
+                type="button"
+                className={`view-mode-btn ${viewMode === 'list' ? 'active' : ''}`}
+                onClick={() => handleViewModeChange('list')}
+                title="Tampilan Daftar / List"
+              >
+                <List size={14} />
+                <span className="hide-mobile">List</span>
+              </button>
+            </div>
           </div>
 
-          <div className="product-grid">
+          <div className={`product-grid ${viewMode === 'compact' ? 'mode-compact' : viewMode === 'list' ? 'mode-list' : ''}`}>
             {PRODUCTS.filter(p => {
               const catMatch = activeCat === 'all' || p.type.toLowerCase() === activeCat.toLowerCase();
               const isSearching = searchQuery.trim().length > 0;
@@ -543,31 +662,102 @@ function App() {
               }
 
               return catMatch;
-            }).map(product => (
-              <div key={product.id} className="product-card" onClick={() => handleProductClick(product)}>
-                <img src={product.img} alt={product.name} className="product-img" />
-                {product.badge && <div className="product-num">#{product.badge}</div>}
-                {product.tag && (
-                  <div className={`product-badge ${product.tagColor === 'promo' ? 'promo' : ''}`}>
-                    {product.tag}
+            }).map(product => {
+              if (viewMode === 'list') {
+                return (
+                  <div key={product.id} className="product-list-row" onClick={() => handleProductClick(product)}>
+                    <span className="product-list-num">#{product.badge}</span>
+                    <img 
+                      src={product.img} 
+                      alt={product.name} 
+                      className="product-list-img"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=300&q=80';
+                      }}
+                    />
+                    <div className="product-list-main">
+                      <div className="product-list-name" title={product.name}>{product.name}</div>
+                      <div className="product-list-meta">
+                        <span>{product.sku || product.barcode || product.type}</span>
+                        <span>•</span>
+                        {product.variants.length > 0 && (
+                          <span className="tag" style={{ backgroundColor: '#ede9fe', color: '#5b21b6', fontWeight: 'bold' }}>
+                            {product.variants.length} Varian
+                          </span>
+                        )}
+                        <span 
+                          className="tag" 
+                          style={{ 
+                            backgroundColor: product.availableStock <= 0 ? '#fee2e2' : '#dcfce7', 
+                            color: product.availableStock <= 0 ? '#991b1b' : '#166534', 
+                            fontWeight: 'bold' 
+                          }}
+                        >
+                          Stok: {product.availableStock} {product.unit}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="product-list-right">
+                      <div className="product-list-price">
+                        {formatIDR(product.price)}
+                        <div style={{ fontSize: '10px', color: '#94a3b8', fontWeight: 'normal' }}>/{product.unit}</div>
+                      </div>
+                      <button className="product-list-add-btn" title="Tambah ke keranjang">
+                        <Plus size={16} />
+                      </button>
+                    </div>
                   </div>
-                )}
-                <div className="product-info">
-                  <div className="product-title">{product.name}</div>
-                  <div className="product-tags">
-                    {product.variants.length > 0 && <span className="tag" style={{ backgroundColor: '#ede9fe', color: '#5b21b6', fontWeight: 'bold' }}>{product.variants.length} Varian</span>}
-                    {product.type && <span className="tag">{product.type}</span>}
-                    <span className="tag" style={{ backgroundColor: product.availableStock <= 0 ? '#fee2e2' : '#dcfce7', color: product.availableStock <= 0 ? '#991b1b' : '#166534', fontWeight: 'bold' }}>
-                      Stok: {product.availableStock} {product.unit}
-                    </span>
-                  </div>
-                  <div className="product-bottom">
-                    <span className="product-category">{product.type}</span>
-                    <span className="product-price">{formatIDR(product.price)}<span style={{fontSize: '10px', color: '#999', fontWeight: 'normal'}}>/{product.unit}</span></span>
+                );
+              }
+
+              // Standard Grid & Compact Grid
+              return (
+                <div key={product.id} className="product-card" onClick={() => handleProductClick(product)}>
+                  <img 
+                    src={product.img} 
+                    alt={product.name} 
+                    className="product-img" 
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=300&q=80';
+                    }}
+                  />
+                  {product.badge && <div className="product-num">#{product.badge}</div>}
+                  {product.tag && (
+                    <div className={`product-badge ${product.tagColor === 'promo' ? 'promo' : ''}`}>
+                      {product.tag}
+                    </div>
+                  )}
+                  <div className="product-info">
+                    <div className="product-title" title={product.name}>{product.name}</div>
+                    <div className="product-tags">
+                      {product.variants.length > 0 && (
+                        <span className="tag" style={{ backgroundColor: '#ede9fe', color: '#5b21b6', fontWeight: 'bold' }}>
+                          {product.variants.length} Varian
+                        </span>
+                      )}
+                      {product.type && <span className="tag">{product.type}</span>}
+                      <span 
+                        className="tag" 
+                        style={{ 
+                          backgroundColor: product.availableStock <= 0 ? '#fee2e2' : '#dcfce7', 
+                          color: product.availableStock <= 0 ? '#991b1b' : '#166534', 
+                          fontWeight: 'bold' 
+                        }}
+                      >
+                        Stok: {product.availableStock} {product.unit}
+                      </span>
+                    </div>
+                    <div className="product-bottom">
+                      <span className="product-category" title={product.type}>{product.type}</span>
+                      <span className="product-price">
+                        {formatIDR(product.price)}
+                        <span style={{ fontSize: '10px', color: '#94a3b8', fontWeight: 'normal' }}>/{product.unit}</span>
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
@@ -623,10 +813,62 @@ function App() {
             {cart.map(item => (
               <div key={item.cartId} className="cart-item">
                 <div className="item-details">
-                  <div className="item-title">{item.name}{item.variantName && <span style={{ marginLeft: '6px', fontSize: '11px', fontWeight: 700, backgroundColor: '#ede9fe', color: '#5b21b6', padding: '1px 8px', borderRadius: '999px' }}>{item.variantName}</span>}</div>
+                  <div className="item-title">
+                    {item.name}
+                    {item.variantName && (
+                      <span style={{ marginLeft: '6px', fontSize: '11px', fontWeight: 700, backgroundColor: '#ede9fe', color: '#5b21b6', padding: '1px 8px', borderRadius: '999px' }}>
+                        {item.variantName}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Harga satuan & Tombol Ubah Harga Manual */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '3px', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '11.5px', color: '#64748b', fontWeight: 600 }}>
+                      @{formatIDR(item.price)}
+                    </span>
+                    <button 
+                      type="button"
+                      onClick={() => openCustomPriceModal(item)}
+                      style={{
+                        border: item.isCustomPrice ? '1px solid #fde68a' : '1px solid #e2e8f0',
+                        background: item.isCustomPrice ? '#fef3c7' : '#f8fafc',
+                        color: item.isCustomPrice ? '#b45309' : '#475569',
+                        padding: '1px 7px',
+                        borderRadius: '4px',
+                        fontSize: '10.5px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '3px',
+                        transition: 'all 0.15s ease'
+                      }}
+                      title="Ubah harga satuan secara manual (Harga Khusus)"
+                    >
+                      <Edit3 size={10} />
+                      {item.isCustomPrice ? 'Harga Khusus' : 'Ubah Harga'}
+                    </button>
+                    {item.isCustomPrice && item.originalPrice && item.originalPrice !== item.price && (
+                      <span style={{ fontSize: '10.5px', textDecoration: 'line-through', color: '#94a3b8' }}>
+                        {formatIDR(item.originalPrice)}
+                      </span>
+                    )}
+                  </div>
+
+                  {item.isCustomPrice && item.customPriceNote && (
+                    <div style={{ fontSize: '10.5px', color: '#b45309', fontWeight: 600, marginTop: '2px' }}>
+                      * {item.customPriceNote}
+                    </div>
+                  )}
+
                   {item.note && <div className="item-note">{item.note}</div>}
                 </div>
-                <div className="item-price">{formatIDR(Math.round(item.price * item.qty))}</div>
+
+                <div className="item-price">
+                  {formatIDR(Math.round(item.price * item.qty))}
+                </div>
+
                 <div className="item-controls">
                   <div className="qty-wrapper" style={{ display: 'flex', alignItems: 'center' }}>
                     <button className="qty-btn" onClick={() => updateQty(item.cartId, -1)}><Minus size={14}/></button>
@@ -779,7 +1021,7 @@ function App() {
             <button 
               className={`checkout-btn ${tendered < total && paymentMethod === 'TUNAI' ? 'disabled' : ''}`}
               disabled={tendered < total && paymentMethod === 'TUNAI'}
-              onClick={() => {
+              onClick={async () => {
                 const retailCustomer = customers.find(c => (c.name || '').trim().toLowerCase() === 'retail');
                 const effectiveCustomer = selectedCustomer || retailCustomer;
                 const saleId = 'INV-' + Date.now();
@@ -797,7 +1039,10 @@ function App() {
                       name: item.name,
                       qty: item.qty,
                       price: item.price,
-                      subtotal: Math.round(item.price * item.qty)
+                      subtotal: Math.round(item.price * item.qty),
+                      originalPrice: item.originalPrice != null ? item.originalPrice : item.price,
+                      isCustomPrice: Boolean(item.isCustomPrice),
+                      customPriceNote: item.customPriceNote || (item.isCustomPrice ? 'Harga Khusus' : '')
                     }))
                   };
                   addOrderToCustomer(effectiveCustomer.id, order);
@@ -825,10 +1070,13 @@ function App() {
                     name: item.name,
                     qty: item.qty,
                     price: item.price,
-                    subtotal: Math.round(item.price * item.qty)
+                    subtotal: Math.round(item.price * item.qty),
+                    originalPrice: item.originalPrice != null ? item.originalPrice : item.price,
+                    isCustomPrice: Boolean(item.isCustomPrice),
+                    customPriceNote: item.customPriceNote || (item.isCustomPrice ? 'Harga Khusus' : '')
                   }))
                 };
-                addSale(sale);
+                await addSale(sale);
 
                 // Web Push "Uang Masuk" ke semua device yang mengaktifkan notifikasi
                 sendSaleNotification(sale, selectedCustomer?.name, currentUser?.name);
@@ -1152,6 +1400,179 @@ function App() {
           </div>
         </div>
       )}
+
+      {/* MODAL UBAH HARGA MANUAL / SPECIAL PRICE */}
+      {customPriceModalOpen && editingCartItem && (
+        <div 
+          className="modal-overlay" 
+          onClick={() => setCustomPriceModalOpen(false)}
+          style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '16px' }}
+        >
+          <div 
+            className="modal-content" 
+            onClick={(e) => e.stopPropagation()}
+            style={{ width: '100%', maxWidth: '420px', background: 'white', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)' }}
+          >
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: '#fef3c7', color: '#b45309', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Tag size={18} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 800, color: '#0f172a' }}>Ubah Harga Khusus (Manual)</h3>
+                  <p style={{ margin: 0, fontSize: '11.5px', color: '#64748b' }}>Atur harga satuan khusus untuk pelanggan</p>
+                </div>
+              </div>
+              <button 
+                type="button" 
+                onClick={() => setCustomPriceModalOpen(false)}
+                style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#64748b', padding: '4px' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div style={{ padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              {/* Product Info Summary */}
+              <div style={{ background: '#f8fafc', padding: '12px 14px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                <div style={{ fontWeight: 800, fontSize: '13.5px', color: '#0f172a' }}>{editingCartItem.name}</div>
+                {editingCartItem.variantName && (
+                  <div style={{ fontSize: '11px', color: '#5b21b6', fontWeight: 700, marginTop: '2px' }}>
+                    Varian: {editingCartItem.variantName}
+                  </div>
+                )}
+                <div style={{ display: 'flex', gap: '16px', marginTop: '8px', fontSize: '12px', color: '#64748b' }}>
+                  <div>Harga Normal: <strong style={{ color: '#0f172a' }}>{formatIDR(editingCartItem.originalPrice || editingCartItem.price)}</strong></div>
+                  {editingCartItem.wholesalePrice > 0 && (
+                    <div>Harga Grosir: <strong style={{ color: '#0284c7' }}>{formatIDR(editingCartItem.wholesalePrice)}</strong></div>
+                  )}
+                </div>
+              </div>
+
+              {/* Price Input */}
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                  Harga Khusus Baru (per {editingCartItem.unit || 'item'}):
+                </label>
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                  <span style={{ position: 'absolute', left: '12px', fontWeight: 800, color: '#64748b', fontSize: '14px' }}>Rp</span>
+                  <input 
+                    type="text" 
+                    inputMode="numeric"
+                    autoFocus
+                    value={customPriceInput ? Number(customPriceInput.replace(/\D/g, '')).toLocaleString('id-ID') : ''}
+                    onChange={(e) => {
+                      const raw = e.target.value.replace(/\D/g, '');
+                      setCustomPriceInput(raw);
+                    }}
+                    placeholder="Contoh: 35000"
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px 10px 40px',
+                      fontSize: '16px',
+                      fontWeight: 800,
+                      color: '#0f172a',
+                      border: '2px solid #cbd5e1',
+                      borderRadius: '8px',
+                      outline: 'none',
+                      transition: 'border-color 0.2s'
+                    }}
+                    onFocus={(e) => e.target.style.borderColor = 'var(--primary)'}
+                    onBlur={(e) => e.target.style.borderColor = '#cbd5e1'}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleSaveCustomPrice();
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Note / Reason Input */}
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                  Keterangan / Alasan (Dicetak di struk & laporan):
+                </label>
+                <input 
+                  type="text" 
+                  value={customPriceNoteInput}
+                  onChange={(e) => setCustomPriceNoteInput(e.target.value)}
+                  placeholder="Misal: Diskon Langganan, Harga Teman, Promo Khusus"
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    fontSize: '12.5px',
+                    border: '1px solid #cbd5e1',
+                    borderRadius: '8px',
+                    outline: 'none'
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleSaveCustomPrice();
+                  }}
+                />
+              </div>
+
+              {/* Quick Preset Buttons */}
+              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                {editingCartItem.wholesalePrice > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCustomPriceInput(String(editingCartItem.wholesalePrice));
+                      setCustomPriceNoteInput('Pakai Harga Grosir');
+                    }}
+                    style={{ fontSize: '11px', padding: '4px 8px', borderRadius: '6px', border: '1px solid #bae6fd', background: '#f0f9ff', color: '#0369a1', cursor: 'pointer', fontWeight: 600 }}
+                  >
+                    Gunakan Grosir ({formatIDR(editingCartItem.wholesalePrice)})
+                  </button>
+                )}
+                {editingCartItem.originalPrice && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const disc = Math.round(editingCartItem.originalPrice * 0.9);
+                      setCustomPriceInput(String(disc));
+                      setCustomPriceNoteInput('Diskon Khusus 10%');
+                    }}
+                    style={{ fontSize: '11px', padding: '4px 8px', borderRadius: '6px', border: '1px solid #e2e8f0', background: '#f8fafc', color: '#475569', cursor: 'pointer', fontWeight: 600 }}
+                  >
+                    Diskon 10% ({formatIDR(Math.round(editingCartItem.originalPrice * 0.9))})
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div style={{ padding: '14px 20px', background: '#f8fafc', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              {editingCartItem.isCustomPrice ? (
+                <button
+                  type="button"
+                  onClick={handleResetCustomPrice}
+                  style={{ border: 'none', background: 'transparent', color: '#dc2626', fontSize: '12px', fontWeight: 700, cursor: 'pointer', padding: '6px 8px' }}
+                >
+                  Reset Harga Normal
+                </button>
+              ) : <div />}
+
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  type="button"
+                  onClick={() => setCustomPriceModalOpen(false)}
+                  style={{ border: '1px solid #cbd5e1', background: 'white', color: '#475569', borderRadius: '8px', padding: '8px 14px', fontSize: '12.5px', fontWeight: 700, cursor: 'pointer' }}
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveCustomPrice}
+                  style={{ border: 'none', background: 'var(--primary)', color: 'white', borderRadius: '8px', padding: '8px 16px', fontSize: '12.5px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <Check size={16} /> Terapkan Harga
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* CAMERA SCANNER MODAL */}
       {cameraScannerOpen && (
         <BarcodeScannerCamera 

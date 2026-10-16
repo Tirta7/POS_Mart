@@ -103,6 +103,9 @@ export interface CustomerOrder {
     qty: number;
     price: number;
     subtotal: number;
+    originalPrice?: number;
+    isCustomPrice?: boolean;
+    customPriceNote?: string;
   }[];
 }
 
@@ -128,6 +131,9 @@ export interface SalesTransaction {
     qty: number;
     price: number;
     subtotal: number;
+    originalPrice?: number;
+    isCustomPrice?: boolean;
+    customPriceNote?: string;
   }[];
 }
 
