@@ -1,8 +1,28 @@
 import React, { useState, useEffect } from 'react';
 import { useSettingsStore, DEFAULT_INVOICE_FOOTER, defaultInvoiceHeader } from '../../store/useSettingsStore';
-import { Settings as SettingsIcon, Save, Percent, RefreshCw, Receipt, Bell, ShieldCheck, AlertTriangle, XOctagon, FileSpreadsheet, QrCode, KeyRound, Copy, CheckCircle } from 'lucide-react';
+import {
+  Settings as SettingsIcon,
+  Save,
+  Percent,
+  RefreshCw,
+  Receipt,
+  Bell,
+  ShieldCheck,
+  AlertTriangle,
+  XOctagon,
+  FileSpreadsheet,
+  QrCode,
+  KeyRound,
+  Copy,
+  CheckCircle,
+  Printer,
+  CreditCard,
+  Building2,
+  FileText
+} from 'lucide-react';
 import NotificationSettings from './NotificationSettings';
 import ExportImportSettings from './ExportImportSettings';
+import PrinterSettings from './PrinterSettings';
 
 const ROUNDING_OPTIONS = [
   { label: 'Tanpa Pembulatan', value: 0 },
@@ -11,21 +31,41 @@ const ROUNDING_OPTIONS = [
   { label: 'Bulatkan ke 1.000', value: 1000 },
 ];
 
-type TabId = 'general' | 'tax' | 'rounding' | 'invoice' | 'notification' | 'license' | 'export_import';
+type TabId = 'general' | 'tax' | 'rounding' | 'invoice' | 'printer' | 'notification' | 'license' | 'export_import';
 
 const TABS: { id: TabId; label: string; desc: string; Icon: React.ElementType }[] = [
   { id: 'general', label: 'Umum', desc: 'Nama aplikasi', Icon: SettingsIcon },
   { id: 'tax', label: 'PPN / Pajak', desc: 'Aktif & persentase', Icon: Percent },
   { id: 'rounding', label: 'Pembulatan', desc: 'Total tagihan', Icon: RefreshCw },
-  { id: 'invoice', label: 'Invoice', desc: 'Header & footer struk', Icon: Receipt },
+  { id: 'invoice', label: 'Invoice & Rekening', desc: 'Header, B2B & Bank', Icon: Receipt },
+  { id: 'printer', label: 'Printer Bluetooth', desc: 'Thermal ESC/POS & USB', Icon: Printer },
   { id: 'notification', label: 'Notifikasi', desc: 'Push uang masuk', Icon: Bell },
   { id: 'license', label: 'Lisensi', desc: 'Detail lisensi aktif', Icon: ShieldCheck },
   { id: 'export_import', label: 'Export & Import', desc: 'Backup data Excel', Icon: FileSpreadsheet },
 ];
 
 const Settings: React.FC = () => {
-  const { appName, appLogo, taxEnabled, taxRate, roundingUnit, invoiceHeader, invoiceFooter } = useSettingsStore();
+  const {
+    appName,
+    appLogo,
+    taxEnabled,
+    taxRate,
+    roundingUnit,
+    invoiceHeader,
+    invoiceFooter,
+    companyAddress,
+    companyPhone,
+    companyEmail,
+    companyNpwp,
+    bankName,
+    bankAccount,
+    bankHolder,
+    distributorTerms
+  } = useSettingsStore();
+
   const [activeTab, setActiveTab] = useState<TabId>('general');
+  const [invoiceSubTab, setInvoiceSubTab] = useState<'distributor' | 'thermal'>('distributor');
+
   const [localAppName, setLocalAppName] = useState(appName);
   const [localAppLogo, setLocalAppLogo] = useState<string | null>(appLogo);
   const [localTaxEnabled, setLocalTaxEnabled] = useState(taxEnabled);
@@ -35,6 +75,17 @@ const Settings: React.FC = () => {
   const effectiveFooter = (invoiceFooter || '').trim() ? invoiceFooter : DEFAULT_INVOICE_FOOTER;
   const [localHeader, setLocalHeader] = useState(effectiveHeader);
   const [localFooter, setLocalFooter] = useState(effectiveFooter);
+
+  // Bank & Faktur Distributor B2B
+  const [localBankName, setLocalBankName] = useState(bankName);
+  const [localBankAccount, setLocalBankAccount] = useState(bankAccount);
+  const [localBankHolder, setLocalBankHolder] = useState(bankHolder);
+  const [localCompanyAddress, setLocalCompanyAddress] = useState(companyAddress);
+  const [localCompanyPhone, setLocalCompanyPhone] = useState(companyPhone);
+  const [localCompanyEmail, setLocalCompanyEmail] = useState(companyEmail);
+  const [localCompanyNpwp, setLocalCompanyNpwp] = useState(companyNpwp);
+  const [localDistributorTerms, setLocalDistributorTerms] = useState(distributorTerms);
+
   const [isSaved, setIsSaved] = useState(false);
   const [licenseData, setLicenseData] = useState<any>(null);
   const [licenseLoading, setLicenseLoading] = useState(false);
@@ -75,7 +126,18 @@ const Settings: React.FC = () => {
     setLocalRounding(roundingUnit);
     setLocalHeader(effectiveHeader);
     setLocalFooter(effectiveFooter);
-  }, [appName, appLogo, taxEnabled, taxRate, roundingUnit, effectiveHeader, effectiveFooter]);
+    setLocalBankName(bankName);
+    setLocalBankAccount(bankAccount);
+    setLocalBankHolder(bankHolder);
+    setLocalCompanyAddress(companyAddress);
+    setLocalCompanyPhone(companyPhone);
+    setLocalCompanyEmail(companyEmail);
+    setLocalCompanyNpwp(companyNpwp);
+    setLocalDistributorTerms(distributorTerms);
+  }, [
+    appName, appLogo, taxEnabled, taxRate, roundingUnit, effectiveHeader, effectiveFooter,
+    bankName, bankAccount, bankHolder, companyAddress, companyPhone, companyEmail, companyNpwp, distributorTerms
+  ]);
 
   // Keep localHeader in sync if user changes localAppName and the header is currently the default
   useEffect(() => {
@@ -105,6 +167,14 @@ const Settings: React.FC = () => {
       roundingUnit: localRounding,
       invoiceHeader: localHeader,
       invoiceFooter: localFooter,
+      bankName: localBankName,
+      bankAccount: localBankAccount,
+      bankHolder: localBankHolder,
+      companyAddress: localCompanyAddress,
+      companyPhone: localCompanyPhone,
+      companyEmail: localCompanyEmail,
+      companyNpwp: localCompanyNpwp,
+      distributorTerms: localDistributorTerms,
     };
     await useSettingsStore.getState().saveSettings(newSettings);
     setIsSaved(true);
@@ -133,7 +203,15 @@ const Settings: React.FC = () => {
     localTaxRate !== taxRate ||
     localRounding !== roundingUnit ||
     localHeader !== effectiveHeader ||
-    localFooter !== effectiveFooter;
+    localFooter !== effectiveFooter ||
+    localBankName !== bankName ||
+    localBankAccount !== bankAccount ||
+    localBankHolder !== bankHolder ||
+    localCompanyAddress !== companyAddress ||
+    localCompanyPhone !== companyPhone ||
+    localCompanyEmail !== companyEmail ||
+    localCompanyNpwp !== companyNpwp ||
+    localDistributorTerms !== distributorTerms;
 
   const CalcPreview = () => (
     <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '10px', padding: '14px 16px', maxWidth: '360px' }}>
@@ -380,50 +458,315 @@ const Settings: React.FC = () => {
                 </>
               )}
 
-              {/* Invoice */}
+              {/* Invoice & Rekening */}
               {activeTab === 'invoice' && (
-                <div style={{ display: 'flex', gap: '28px', flexWrap: 'wrap', alignItems: 'flex-start' }}>
-                  <div style={{ flex: '1 1 340px', display: 'flex', flexDirection: 'column', gap: '16px', minWidth: 0 }}>
-                    <div className="bo-form-group">
-                      <label className="bo-label">Header Struk</label>
-                      <textarea
-                        className="bo-input"
-                        rows={4}
-                        value={localHeader}
-                        onChange={(e) => setLocalHeader(e.target.value)}
-                        placeholder={'Nama toko\nAlamat toko\nTelp / WhatsApp'}
-                        style={{ fontFamily: 'monospace', resize: 'vertical' }}
-                      />
-                      <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-                        Satu baris per baris struk, tampil rata tengah di bagian atas. Contoh: nama toko, alamat, nomor telepon.
-                      </p>
-                    </div>
-                    <div className="bo-form-group">
-                      <label className="bo-label">Footer Struk</label>
-                      <textarea
-                        className="bo-input"
-                        rows={4}
-                        value={localFooter}
-                        onChange={(e) => setLocalFooter(e.target.value)}
-                        placeholder={'Terima kasih\nSyarat & ketentuan'}
-                        style={{ fontFamily: 'monospace', resize: 'vertical' }}
-                      />
-                      <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-                        Tampil rata tengah di bagian bawah. Maksimal ±40 karakter per baris untuk kertas 80mm.
-                      </p>
-                    </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                  {/* SUB-TAB NAVIGATOR */}
+                  <div style={{ display: 'flex', background: '#f1f5f9', padding: '4px', borderRadius: '10px', width: 'fit-content', gap: '6px' }}>
+                    <button
+                      type="button"
+                      onClick={() => setInvoiceSubTab('distributor')}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '8px 18px',
+                        borderRadius: '8px',
+                        border: 'none',
+                        background: invoiceSubTab === 'distributor' ? '#2563eb' : 'transparent',
+                        color: invoiceSubTab === 'distributor' ? 'white' : '#64748b',
+                        fontWeight: 700,
+                        fontSize: '13px',
+                        cursor: 'pointer',
+                        boxShadow: invoiceSubTab === 'distributor' ? '0 2px 6px rgba(37,99,235,0.25)' : 'none',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      <FileText size={16} />
+                      <span>Faktur Distributor & Rekening Bank (A4)</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setInvoiceSubTab('thermal')}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '8px 18px',
+                        borderRadius: '8px',
+                        border: 'none',
+                        background: invoiceSubTab === 'thermal' ? 'white' : 'transparent',
+                        color: invoiceSubTab === 'thermal' ? '#0f172a' : '#64748b',
+                        fontWeight: 700,
+                        fontSize: '13px',
+                        cursor: 'pointer',
+                        boxShadow: invoiceSubTab === 'thermal' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      <Receipt size={16} />
+                      <span>Struk Kasir (Thermal 58/80mm)</span>
+                    </button>
                   </div>
 
-                  <div style={{ flex: '0 0 300px' }}>
-                    <div style={{ fontSize: '12px', fontWeight: 700, color: '#6b7280', marginBottom: '6px' }}>PRATINJAU</div>
-                    <div style={{ background: 'white', border: '1px solid #e5e7eb', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', padding: '14px 12px', fontFamily: "'Courier New', Consolas, monospace", fontSize: '11px', lineHeight: 1.3, color: '#000' }}>
-                      {previewLines(localHeader).map((l, i) => <div key={'h' + i} style={{ textAlign: 'center' }}>{l}</div>)}
-                      <div style={{ borderTop: '1px dashed #000', margin: '5px 0' }} />
-                      <div style={{ color: '#9ca3af', textAlign: 'center' }}>… isi transaksi …</div>
-                      <div style={{ borderTop: '1px dashed #000', margin: '5px 0' }} />
-                      {previewLines(localFooter).map((l, i) => <div key={'f' + i} style={{ textAlign: 'center' }}>{l}</div>)}
+                  {invoiceSubTab === 'distributor' ? (
+                    /* SUB-TAB 1: FAKTUR DISTRIBUTOR & REKENING BANK */
+                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.35fr) minmax(0, 1fr)', gap: '24px', alignItems: 'start' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+                        
+                        {/* CARD 1: INFORMASI REKENING BANK PEMBAYARAN */}
+                        <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0', padding: '18px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                            <CreditCard size={18} color="#059669" />
+                            <span style={{ fontSize: '13px', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase' }}>
+                              Rekening Pembayaran Bank Resmi
+                            </span>
+                          </div>
+                          <p style={{ fontSize: '11.5px', color: '#64748b', margin: '0 0 14px 0' }}>
+                            Informasi ini akan tercetak otomatis pada kotak <strong>PEMBAYARAN TRANSFER BANK</strong> di invoice / faktur distributor A4.
+                          </p>
+
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '12px' }}>
+                              <div className="bo-form-group">
+                                <label className="bo-label">Nama Bank</label>
+                                <input
+                                  type="text"
+                                  className="bo-input"
+                                  value={localBankName}
+                                  onChange={(e) => setLocalBankName(e.target.value)}
+                                  placeholder="Contoh: BCA (Bank Central Asia)"
+                                />
+                              </div>
+
+                              <div className="bo-form-group">
+                                <label className="bo-label">Nomor Rekening</label>
+                                <input
+                                  type="text"
+                                  className="bo-input"
+                                  value={localBankAccount}
+                                  onChange={(e) => setLocalBankAccount(e.target.value)}
+                                  placeholder="Contoh: 8830-192-888"
+                                  style={{ fontFamily: 'monospace', fontWeight: 700 }}
+                                />
+                              </div>
+                            </div>
+
+                            <div className="bo-form-group">
+                              <label className="bo-label">Atas Nama Rekening</label>
+                              <input
+                                type="text"
+                                className="bo-input"
+                                value={localBankHolder}
+                                onChange={(e) => setLocalBankHolder(e.target.value)}
+                                placeholder="Contoh: PT. SWALAYAN RETAIL INDONESIA / NAMA USAHA"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* CARD 2: KOP SURAT & IDENTITAS PERUSAHAAN B2B */}
+                        <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0', padding: '18px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                            <Building2 size={18} color="#2563eb" />
+                            <span style={{ fontSize: '13px', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase' }}>
+                              Kop Surat & Alamat Usaha (Faktur B2B)
+                            </span>
+                          </div>
+                          <p style={{ fontSize: '11.5px', color: '#64748b', margin: '0 0 14px 0' }}>
+                            Tampil di bagian atas (Header Faktur) sebagai identitas resmi perusahaan Anda.
+                          </p>
+
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                            <div className="bo-form-group">
+                              <label className="bo-label">Alamat Lengkap Kantor / Gudang Distribusi</label>
+                              <textarea
+                                className="bo-input"
+                                rows={2}
+                                value={localCompanyAddress}
+                                onChange={(e) => setLocalCompanyAddress(e.target.value)}
+                                placeholder="Contoh: Jl. Raya Pergudangan No. 88, Blok B3-B5, Jakarta"
+                                style={{ resize: 'vertical' }}
+                              />
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                              <div className="bo-form-group">
+                                <label className="bo-label">No. Telepon / WhatsApp</label>
+                                <input
+                                  type="text"
+                                  className="bo-input"
+                                  value={localCompanyPhone}
+                                  onChange={(e) => setLocalCompanyPhone(e.target.value)}
+                                  placeholder="Contoh: 0812-3456-7890"
+                                />
+                              </div>
+
+                              <div className="bo-form-group">
+                                <label className="bo-label">Email Perusahaan</label>
+                                <input
+                                  type="email"
+                                  className="bo-input"
+                                  value={localCompanyEmail}
+                                  onChange={(e) => setLocalCompanyEmail(e.target.value)}
+                                  placeholder="Contoh: info@posmart.id"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="bo-form-group">
+                              <label className="bo-label">Nomor Pokok Wajib Pajak (NPWP)</label>
+                              <input
+                                type="text"
+                                className="bo-input"
+                                value={localCompanyNpwp}
+                                onChange={(e) => setLocalCompanyNpwp(e.target.value)}
+                                placeholder="Contoh: 01.234.567.8-901.000 (Isi '-' jika belum ada)"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* CARD 3: SYARAT & KETENTUAN FAKTUR */}
+                        <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0', padding: '18px' }}>
+                          <div style={{ fontSize: '13px', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', marginBottom: '8px' }}>
+                            Syarat & Ketentuan Faktur Penjualan / Pengiriman
+                          </div>
+                          <textarea
+                            className="bo-input"
+                            rows={3}
+                            value={localDistributorTerms}
+                            onChange={(e) => setLocalDistributorTerms(e.target.value)}
+                            placeholder="Ketik poin syarat & ketentuan faktur..."
+                            style={{ fontSize: '12px', lineHeight: 1.45 }}
+                          />
+                        </div>
+
+                      </div>
+
+                      {/* PRATINJAU MINIATUR FAKTUR DISTRIBUTOR (LIVE PREVIEW) */}
+                      <div>
+                        <div style={{ fontSize: '12px', fontWeight: 700, color: '#6b7280', marginBottom: '6px' }}>
+                          PRATINJAU FAKTUR DISTRIBUTOR (A4)
+                        </div>
+                        <div style={{
+                          background: 'white',
+                          border: '1px solid #cbd5e1',
+                          borderRadius: '8px',
+                          boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
+                          padding: '16px 14px',
+                          fontSize: '9.5px',
+                          lineHeight: 1.35,
+                          color: '#1e293b'
+                        }}>
+                          {/* KOP */}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '2px solid #0f172a', paddingBottom: '8px', marginBottom: '10px' }}>
+                            <div>
+                              <div style={{ fontWeight: 900, fontSize: '12px', color: '#0f172a' }}>{localAppName || 'NAMA USAHA'}</div>
+                              <div style={{ color: '#475569', fontSize: '8.5px', maxWidth: '200px' }}>{localCompanyAddress || 'Alamat Perusahaan'}</div>
+                              <div style={{ color: '#475569', fontSize: '8.5px' }}>Telp/WA: {localCompanyPhone || '-'} | NPWP: {localCompanyNpwp || '-'}</div>
+                            </div>
+                            <div style={{ textAlign: 'right' }}>
+                              <div style={{ fontWeight: 900, fontSize: '12px', color: '#0f172a' }}>FAKTUR PENJUALAN</div>
+                              <div style={{ fontWeight: 700, color: '#2563eb', fontFamily: 'monospace' }}>INV-1792163748919</div>
+                              <span style={{ background: '#ecfdf5', color: '#059669', padding: '1px 6px', borderRadius: '4px', fontWeight: 700, fontSize: '8px' }}>LUNAS</span>
+                            </div>
+                          </div>
+
+                          {/* KOTAK REKENING BANK & TOTAL (PERSIS SEPERTI MODAL DI SCREENSHOT USER) */}
+                          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '8px 10px', marginBottom: '10px' }}>
+                            <div style={{ fontSize: '8.5px', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', marginBottom: '4px' }}>
+                              PEMBAYARAN TRANSFER BANK:
+                            </div>
+                            <div>Bank: <strong>{localBankName || 'BCA (Bank Central Asia)'}</strong></div>
+                            <div>No. Rekening: <strong style={{ color: '#2563eb', fontFamily: 'monospace' }}>{localBankAccount || '8830-192-888'}</strong></div>
+                            <div>Atas Nama: <strong>{localBankHolder || localAppName || 'NAMA USAHA'}</strong></div>
+                          </div>
+
+                          {/* TERBILANG */}
+                          <div style={{ background: '#eff6ff', borderLeft: '3px solid #3b82f6', borderRadius: '4px', padding: '6px 8px', marginBottom: '10px' }}>
+                            <div style={{ fontSize: '8px', fontWeight: 700, color: '#1e40af' }}>TERBILANG:</div>
+                            <div style={{ fontSize: '8.5px', fontStyle: 'italic', color: '#1e3a8a', fontWeight: 700 }}>
+                              "Dua Juta Enam Ratus Tiga Puluh Ribu Tujuh Ratus Rupiah"
+                            </div>
+                          </div>
+
+                          {/* SYARAT KETENTUAN */}
+                          <div style={{ fontSize: '8px', color: '#64748b', background: '#f8fafc', padding: '6px 8px', borderRadius: '4px', border: '1px dashed #cbd5e1', marginBottom: '12px' }}>
+                            <div style={{ fontWeight: 700, color: '#334155', marginBottom: '2px' }}>SYARAT & KETENTUAN FAKTUR:</div>
+                            <div style={{ whiteSpace: 'pre-line' }}>{localDistributorTerms}</div>
+                          </div>
+
+                          {/* TANDA TANGAN */}
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', textAlign: 'center', gap: '4px', fontSize: '7.5px' }}>
+                            <div>
+                              <div style={{ fontWeight: 700, marginBottom: '20px' }}>DIBUAT OLEH</div>
+                              <div style={{ borderTop: '1px solid #94a3b8', paddingTop: '2px' }}>Admin</div>
+                            </div>
+                            <div>
+                              <div style={{ fontWeight: 700, marginBottom: '20px' }}>GUDANG / CHECKER</div>
+                              <div style={{ borderTop: '1px solid #94a3b8', paddingTop: '2px' }}>( ............ )</div>
+                            </div>
+                            <div>
+                              <div style={{ fontWeight: 700, marginBottom: '20px' }}>PENGEMUDI / EKSPEDISI</div>
+                              <div style={{ borderTop: '1px solid #94a3b8', paddingTop: '2px' }}>( ............ )</div>
+                            </div>
+                            <div>
+                              <div style={{ fontWeight: 700, marginBottom: '20px' }}>PENERIMA / DISTRIBUTOR</div>
+                              <div style={{ borderTop: '1px solid #94a3b8', paddingTop: '2px' }}>Retail (Cap & TTD)</div>
+                            </div>
+                          </div>
+
+                        </div>
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    /* SUB-TAB 2: STRUK KASIR THERMAL */
+                    <div style={{ display: 'flex', gap: '28px', flexWrap: 'wrap', alignItems: 'flex-start' }}>
+                      <div style={{ flex: '1 1 340px', display: 'flex', flexDirection: 'column', gap: '16px', minWidth: 0 }}>
+                        <div className="bo-form-group">
+                          <label className="bo-label">Header Struk</label>
+                          <textarea
+                            className="bo-input"
+                            rows={4}
+                            value={localHeader}
+                            onChange={(e) => setLocalHeader(e.target.value)}
+                            placeholder={'Nama toko\nAlamat toko\nTelp / WhatsApp'}
+                            style={{ fontFamily: 'monospace', resize: 'vertical' }}
+                          />
+                          <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                            Satu baris per baris struk, tampil rata tengah di bagian atas. Contoh: nama toko, alamat, nomor telepon.
+                          </p>
+                        </div>
+                        <div className="bo-form-group">
+                          <label className="bo-label">Footer Struk</label>
+                          <textarea
+                            className="bo-input"
+                            rows={4}
+                            value={localFooter}
+                            onChange={(e) => setLocalFooter(e.target.value)}
+                            placeholder={'Terima kasih\nSyarat & ketentuan'}
+                            style={{ fontFamily: 'monospace', resize: 'vertical' }}
+                          />
+                          <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                            Tampil rata tengah di bagian bawah. Maksimal ±40 karakter per baris untuk kertas 80mm.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div style={{ flex: '0 0 300px' }}>
+                        <div style={{ fontSize: '12px', fontWeight: 700, color: '#6b7280', marginBottom: '6px' }}>PRATINJAU</div>
+                        <div style={{ background: 'white', border: '1px solid #e5e7eb', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', padding: '14px 12px', fontFamily: "'Courier New', Consolas, monospace", fontSize: '11px', lineHeight: 1.3, color: '#000' }}>
+                          {previewLines(localHeader).map((l, i) => <div key={'h' + i} style={{ textAlign: 'center' }}>{l}</div>)}
+                          <div style={{ borderTop: '1px dashed #000', margin: '5px 0' }} />
+                          <div style={{ color: '#9ca3af', textAlign: 'center' }}>… isi transaksi …</div>
+                          <div style={{ borderTop: '1px dashed #000', margin: '5px 0' }} />
+                          {previewLines(localFooter).map((l, i) => <div key={'f' + i} style={{ textAlign: 'center' }}>{l}</div>)}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -630,14 +973,17 @@ const Settings: React.FC = () => {
                 </div>
               )}
 
+              {/* Printer Bluetooth Settings */}
+              {activeTab === 'printer' && <PrinterSettings />}
+
               {/* Export & Import Data */}
               {activeTab === 'export_import' && <ExportImportSettings />}
             </div>
           </div>
         </div>
 
-        {/* Save Button — disembunyikan jika di tab export_import tanpa perubahan form */}
-        {(hasChanges || isSaved || (activeTab !== 'export_import' && activeTab !== 'notification')) && (
+        {/* Save Button — disembunyikan jika di tab export_import, notification, printer tanpa perubahan form */}
+        {(hasChanges || isSaved || (activeTab !== 'export_import' && activeTab !== 'notification' && activeTab !== 'printer')) && (
           <div style={{ position: 'sticky', bottom: 0, display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 14px', background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(4px)', border: '1px solid #e5e7eb', borderRadius: '12px' }}>
             <button type="submit" className="bo-btn bo-btn-primary" disabled={!hasChanges && !isSaved} style={{ opacity: !hasChanges && !isSaved ? 0.6 : 1 }}>
               <Save size={18} /> Simpan Semua Pengaturan

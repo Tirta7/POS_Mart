@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import type { StockTransaction, Supplier } from '../../types';
 import BarcodeScannerCamera from '../../components/BarcodeScannerCamera';
+import { printPurchaseInvoiceA4 } from '../../utils/distributorInvoice';
 
 interface CartItem {
   key: string; // productId::variantId|new:nama  (unik per baris belanja)
@@ -2077,10 +2078,32 @@ const Purchases: React.FC = () => {
             <div style={{ padding: '12px 20px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
               <button
                 type="button"
-                onClick={() => window.print()}
-                style={{ background: '#f1f5f9', border: 'none', borderRadius: '8px', padding: '8px 14px', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
+                onClick={() => {
+                  const sName = suppliers.find(s => s.id === selectedHistoryTx.supplierId)?.name || 'Supplier Rekanan';
+                  printPurchaseInvoiceA4({
+                    id: selectedHistoryTx.id,
+                    documentNo: selectedHistoryTx.documentNo,
+                    date: selectedHistoryTx.date,
+                    supplierName: sName,
+                    totalValue: selectedHistoryTx.totalValue,
+                    items: selectedHistoryTx.items || []
+                  });
+                }}
+                style={{
+                  background: '#f8fafc',
+                  border: '1px solid #cbd5e1',
+                  borderRadius: '8px',
+                  padding: '8px 14px',
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  color: '#1e40af'
+                }}
               >
-                <Printer size={14} style={{ display: 'inline', marginRight: '4px' }} /> Cetak
+                <Printer size={15} /> Cetak Faktur A4 / PO
               </button>
               <button
                 type="button"
