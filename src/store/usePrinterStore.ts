@@ -25,6 +25,7 @@ interface PrinterState {
   autoReconnect: boolean;
   lastPrintedAt: string | null;
   error: string | null;
+  disconnectAlert: string | null;
 
   connect: () => Promise<boolean>;
   reconnectSavedDevice: (silent?: boolean) => Promise<boolean>;
@@ -38,6 +39,7 @@ interface PrinterState {
   setAutoPrintOnCheckout: (val: boolean) => void;
   setAutoReconnect: (val: boolean) => void;
   clearError: () => void;
+  clearDisconnectAlert: () => void;
 }
 
 // Global reference untuk Web Bluetooth handle
@@ -120,8 +122,10 @@ export const usePrinterStore = create<PrinterState>((set, get) => {
     autoReconnect: savedAutoReconnect,
     lastPrintedAt: null,
     error: null,
+    disconnectAlert: null,
 
     clearError: () => set({ error: null }),
+    clearDisconnectAlert: () => set({ disconnectAlert: null }),
 
     setPaperWidth: (width) => {
       localStorage.setItem('pos_printer_width', width);
@@ -191,7 +195,11 @@ export const usePrinterStore = create<PrinterState>((set, get) => {
         const onDisconnect = () => {
           activeDevice = null;
           activeCharacteristic = null;
-          set({ isConnected: false });
+          const currentName = get().deviceName || 'Printer Kasir';
+          set({ 
+            isConnected: false,
+            disconnectAlert: `Printer Kasir (${currentName}) terputus dari perangkat. Pastikan printer menyala dan dekat.`
+          });
         };
 
         const { device, characteristic } = await connectDeviceGatt(targetDevice, onDisconnect);
@@ -206,7 +214,8 @@ export const usePrinterStore = create<PrinterState>((set, get) => {
           isConnecting: false,
           deviceName: device.name || savedName || 'Printer Bluetooth',
           deviceId: device.id,
-          error: null
+          error: null,
+          disconnectAlert: null
         });
 
         return true;
@@ -251,7 +260,11 @@ export const usePrinterStore = create<PrinterState>((set, get) => {
         const onDisconnect = () => {
           activeDevice = null;
           activeCharacteristic = null;
-          set({ isConnected: false });
+          const currentName = get().deviceName || 'Printer Kasir';
+          set({ 
+            isConnected: false,
+            disconnectAlert: `Printer Kasir (${currentName}) terputus dari perangkat. Pastikan printer menyala dan dekat.`
+          });
         };
 
         const { characteristic } = await connectDeviceGatt(device, onDisconnect);
@@ -267,7 +280,8 @@ export const usePrinterStore = create<PrinterState>((set, get) => {
           isConnecting: false,
           deviceName: device.name || 'Printer Bluetooth',
           deviceId: device.id,
-          error: null
+          error: null,
+          disconnectAlert: null
         });
 
         return true;
@@ -295,7 +309,7 @@ export const usePrinterStore = create<PrinterState>((set, get) => {
       }
       activeDevice = null;
       activeCharacteristic = null;
-      set({ isConnected: false });
+      set({ isConnected: false, disconnectAlert: null });
     },
 
     forgetDevice: () => {
@@ -306,6 +320,7 @@ export const usePrinterStore = create<PrinterState>((set, get) => {
         deviceName: null,
         deviceId: null,
         isConnected: false,
+        disconnectAlert: null,
         error: null
       });
     },

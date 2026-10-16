@@ -3,7 +3,8 @@ import {
   Search, Printer, ShoppingBag, Truck, Package, ShoppingCart,
   CreditCard, QrCode, Banknote, Ticket, Trash2, PauseCircle,
   LayoutGrid, Plus, Minus, X, LogOut, Camera, ChevronUp, Settings2,
-  Grid, List, Tag, Edit3, Check
+  Grid, List, Tag, Edit3, Check,
+  AlertCircle, RefreshCw, ChevronDown, CheckCircle2
 } from 'lucide-react';
 import './index.css';
 import { useNavigate, Link } from 'react-router-dom';
@@ -14,6 +15,7 @@ import { useCustomerStore } from './store/useCustomerStore';
 import { useHoldStore } from './store/useHoldStore';
 import { useSalesStore } from './store/useSalesStore';
 import { useAuthStore } from './store/useAuthStore';
+import { usePrinterStore } from './store/usePrinterStore';
 import BarcodeScannerCamera from './components/BarcodeScannerCamera';
 import { sendSaleNotification } from './utils/pushNotification';
 import ReceiptModal from './components/ReceiptModal';
@@ -45,6 +47,75 @@ function App() {
     logout();
     navigate('/login');
   };
+
+  // State & kontrol Printer Kasir
+  const {
+    isConnected: isPrinterConnected,
+    isConnecting: isPrinterConnecting,
+    deviceName: printerDeviceName,
+    deviceId: printerDeviceId,
+    paperWidth: printerPaperWidth,
+    reconnectSavedDevice,
+    connect: connectPrinter,
+    disconnect: disconnectPrinter,
+    testPrint: testPrintPrinter,
+    disconnectAlert,
+    clearDisconnectAlert
+  } = usePrinterStore();
+
+  const [printerMenuOpen, setPrinterMenuOpen] = useState(false);
+  const [cashierPrinterNotice, setCashierPrinterNotice] = useState<{
+    type: 'error' | 'warning' | 'success';
+    message: string;
+  } | null>(null);
+  const [isTestPrinting, setIsTestPrinting] = useState(false);
+  const printerMenuRef = useRef<HTMLDivElement>(null);
+  const prevConnectedRef = useRef(isPrinterConnected);
+
+  // Pantau perubahan koneksi printer & berikan notifikasi kasir real-time
+  useEffect(() => {
+    if (prevConnectedRef.current && !isPrinterConnected) {
+      setCashierPrinterNotice({
+        type: 'error',
+        message: `Koneksi printer kasir (${printerDeviceName || 'Thermal'}) terputus! Periksa daya printer atau klik tombol Sambungkan.`
+      });
+    } else if (!prevConnectedRef.current && isPrinterConnected) {
+      setCashierPrinterNotice({
+        type: 'success',
+        message: `Printer kasir (${printerDeviceName || 'Thermal'}) berhasil terhubung!`
+      });
+      const timer = setTimeout(() => {
+        setCashierPrinterNotice(prev => prev?.type === 'success' ? null : prev);
+      }, 3500);
+      return () => clearTimeout(timer);
+    }
+    prevConnectedRef.current = isPrinterConnected;
+  }, [isPrinterConnected, printerDeviceName]);
+
+  // Pantau disconnectAlert dari usePrinterStore
+  useEffect(() => {
+    if (disconnectAlert) {
+      setCashierPrinterNotice({
+        type: 'error',
+        message: disconnectAlert
+      });
+    }
+  }, [disconnectAlert]);
+
+  // Click-outside listener untuk menutup menu popover printer
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (printerMenuRef.current && !printerMenuRef.current.contains(e.target as Node)) {
+        setPrinterMenuOpen(false);
+      }
+    };
+    if (printerMenuOpen) {
+      document.addEventListener('mousedown', handleOutsideClick);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+    };
+  }, [printerMenuOpen]);
 
 
   
@@ -585,8 +656,288 @@ function App() {
           <div className="flex items-center gap-2" style={{background: '#fef3c7', padding: '0.4rem 0.75rem', borderRadius: '6px', color: '#b45309'}}>
             <Ticket size={16} /> Total Transaksi: <strong>{todayTxCount} Nota</strong>
           </div>
-          <div className="flex items-center gap-2" style={{background: '#dcfce7', padding: '0.4rem 0.75rem', borderRadius: '6px', color: '#166534'}}>
-            <span className="pill-dot"></span> Printer Kasir: Terhubung
+
+          {/* NOTE PEMBERITAHUAN PRINTER KASIR (INTERAKTIF & REAL-TIME) */}
+          <div className="relative" ref={printerMenuRef} style={{ position: 'relative' }}>
+            {isPrinterConnected ? (
+              // 1. TERHUBUNG (HIJAU)
+              <div
+                onClick={() => setPrinterMenuOpen(!printerMenuOpen)}
+                className="flex items-center gap-2 cursor-pointer select-none"
+                style={{
+                  background: '#dcfce7',
+                  border: '1px solid #86efac',
+                  padding: '0.35rem 0.75rem',
+                  borderRadius: '6px',
+                  color: '#166534',
+                  boxShadow: '0 1px 2px rgba(22, 101, 52, 0.05)',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease'
+                }}
+                title="Printer kasir terhubung. Klik untuk tes cetak atau menu cepat."
+              >
+                <span className="pill-dot" style={{ backgroundColor: '#22c55e', boxShadow: '0 0 0 2px rgba(34, 197, 94, 0.25)' }}></span>
+                <span>Printer Kasir: <strong>Terhubung</strong></span>
+                {printerDeviceName && (
+                  <span style={{ fontSize: '11px', background: '#bbf7d0', color: '#14532d', padding: '1px 5px', borderRadius: '4px', fontWeight: 700 }}>
+                    {printerDeviceName}
+                  </span>
+                )}
+                <ChevronDown size={13} style={{ opacity: 0.6, transform: printerMenuOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
+              </div>
+            ) : isPrinterConnecting ? (
+              // 2. MENYAMBUNGKAN (BIRU)
+              <div
+                className="flex items-center gap-2 select-none"
+                style={{
+                  background: '#eff6ff',
+                  border: '1px solid #bfdbfe',
+                  padding: '0.35rem 0.75rem',
+                  borderRadius: '6px',
+                  color: '#1d4ed8'
+                }}
+              >
+                <RefreshCw size={13} className="animate-spin text-blue-600" />
+                <span>Printer Kasir: <em>Menyambungkan...</em></span>
+              </div>
+            ) : (printerDeviceName || printerDeviceId) ? (
+              // 3. TERPUTUS DENGAN PERANGKAT TERSIMPAN (MERAH & PEMBERITAHUAN KASIR)
+              <div
+                className="flex items-center gap-2 select-none"
+                style={{
+                  background: '#fee2e2',
+                  border: '1px solid #f87171',
+                  padding: '0.3rem 0.6rem',
+                  borderRadius: '6px',
+                  color: '#991b1b',
+                  boxShadow: '0 1px 3px rgba(239, 68, 68, 0.15)'
+                }}
+              >
+                <AlertCircle size={15} className="text-red-600 animate-pulse" />
+                <span>Printer Kasir: <strong style={{ color: '#b91c1c' }}>Terputus</strong></span>
+                {printerDeviceName && (
+                  <span style={{ fontSize: '10.5px', background: '#fecaca', color: '#7f1d1d', padding: '1px 4px', borderRadius: '3px', fontWeight: 600 }}>
+                    {printerDeviceName}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    reconnectSavedDevice(false);
+                  }}
+                  title="Klik untuk menyambungkan printer kasir sekarang tanpa buka pengaturan"
+                  style={{
+                    background: '#dc2626',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: '4px',
+                    padding: '3px 8px',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    marginLeft: '2px',
+                    boxShadow: '0 1px 2px rgba(220, 38, 38, 0.25)'
+                  }}
+                >
+                  <RefreshCw size={11} /> Sambungkan
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPrinterMenuOpen(!printerMenuOpen)}
+                  style={{ background: 'transparent', border: 'none', color: '#991b1b', cursor: 'pointer', padding: '1px', display: 'flex', alignItems: 'center' }}
+                  title="Opsi printer"
+                >
+                  <ChevronDown size={13} style={{ opacity: 0.7, transform: printerMenuOpen ? 'rotate(180deg)' : 'none' }} />
+                </button>
+              </div>
+            ) : (
+              // 4. BELUM DIATUR (ABU-ABU)
+              <div
+                onClick={() => connectPrinter()}
+                className="flex items-center gap-2 cursor-pointer select-none"
+                style={{
+                  background: '#f1f5f9',
+                  border: '1px solid #cbd5e1',
+                  padding: '0.35rem 0.75rem',
+                  borderRadius: '6px',
+                  color: '#475569',
+                  cursor: 'pointer'
+                }}
+                title="Klik untuk menyambungkan printer kasir Bluetooth"
+              >
+                <Printer size={14} className="text-slate-500" />
+                <span>Printer Kasir: <em>Belum Diatur</em></span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    connectPrinter();
+                  }}
+                  style={{
+                    background: '#0284c7',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: '4px',
+                    padding: '2px 7px',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    cursor: 'pointer'
+                  }}
+                >
+                  Hubungkan
+                </button>
+              </div>
+            )}
+
+            {/* QUICK POPOVER / DROPDOWN MENU KASIR */}
+            {printerMenuOpen && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 'calc(100% + 6px)',
+                  right: 0,
+                  width: '240px',
+                  backgroundColor: '#ffffff',
+                  borderRadius: '8px',
+                  boxShadow: '0 10px 25px -5px rgba(0,0,0,0.15), 0 8px 10px -6px rgba(0,0,0,0.1)',
+                  border: '1px solid #e2e8f0',
+                  padding: '8px',
+                  zIndex: 1000,
+                  fontSize: '12px',
+                  color: '#1e293b'
+                }}
+              >
+                {/* Header status */}
+                <div style={{ padding: '6px 8px', borderBottom: '1px solid #f1f5f9', marginBottom: '6px' }}>
+                  <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>STATUS PRINTER KASIR</div>
+                  <div style={{ fontWeight: 700, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: isPrinterConnected ? '#22c55e' : '#ef4444' }}></span>
+                    {isPrinterConnected ? `${printerDeviceName || 'Thermal Printer'}` : `${printerDeviceName || 'Printer'} (Terputus)`}
+                  </div>
+                  <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                    Kertas Thermal: {printerPaperWidth}
+                  </div>
+                </div>
+
+                {/* Quick actions */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  {isPrinterConnected ? (
+                    <>
+                      <button
+                        type="button"
+                        disabled={isTestPrinting}
+                        onClick={async () => {
+                          setIsTestPrinting(true);
+                          const ok = await testPrintPrinter(appName);
+                          setIsTestPrinting(false);
+                          if (ok) {
+                            setCashierPrinterNotice({ type: 'success', message: 'Tes cetak struk berhasil dikirim ke printer!' });
+                            setTimeout(() => setCashierPrinterNotice(null), 3000);
+                          } else {
+                            setCashierPrinterNotice({ type: 'error', message: 'Tes cetak gagal. Pastikan kertas terpasang dan printer siap.' });
+                          }
+                          setPrinterMenuOpen(false);
+                        }}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          padding: '7px 10px',
+                          borderRadius: '6px',
+                          border: 'none',
+                          background: '#f8fafc',
+                          color: '#0f172a',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          textAlign: 'left'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.background = '#f1f5f9'}
+                        onMouseLeave={(e) => e.currentTarget.style.background = '#f8fafc'}
+                      >
+                        <Printer size={14} className="text-blue-600" />
+                        <span>{isTestPrinting ? 'Mencetak...' : 'Tes Cetak Struk'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          disconnectPrinter();
+                          setPrinterMenuOpen(false);
+                          setCashierPrinterNotice({ type: 'warning', message: 'Printer kasir diputuskan sementara.' });
+                        }}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          padding: '7px 10px',
+                          borderRadius: '6px',
+                          border: 'none',
+                          background: '#f8fafc',
+                          color: '#dc2626',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          textAlign: 'left'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.background = '#fee2e2'}
+                        onMouseLeave={(e) => e.currentTarget.style.background = '#f8fafc'}
+                      >
+                        <X size={14} />
+                        <span>Putuskan Koneksi</span>
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPrinterMenuOpen(false);
+                        reconnectSavedDevice(false);
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '7px 10px',
+                        borderRadius: '6px',
+                        border: 'none',
+                        background: '#dc2626',
+                        color: '#ffffff',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        textAlign: 'left'
+                      }}
+                    >
+                      <RefreshCw size={14} />
+                      <span>Sambungkan Sekarang</span>
+                    </button>
+                  )}
+
+                  <Link
+                    to="/backoffice/printer-settings"
+                    onClick={() => setPrinterMenuOpen(false)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '7px 10px',
+                      borderRadius: '6px',
+                      color: '#475569',
+                      textDecoration: 'none',
+                      fontWeight: 600,
+                      background: '#ffffff'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = '#f1f5f9'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = '#ffffff'}
+                  >
+                    <Settings2 size={14} className="text-slate-600" />
+                    <span>Pengaturan Printer Lengkap</span>
+                  </Link>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -1594,6 +1945,96 @@ function App() {
           }} 
           onClose={() => setCameraScannerOpen(false)} 
         />
+      )}
+
+      {/* FLOATING CASHIER PRINTER NOTIFICATION BANNER */}
+      {cashierPrinterNotice && (
+        <div 
+          style={{
+            position: 'fixed',
+            top: '64px',
+            right: '24px',
+            zIndex: 99999,
+            maxWidth: '420px',
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '12px',
+            padding: '12px 16px',
+            borderRadius: '10px',
+            boxShadow: '0 12px 28px -4px rgba(0,0,0,0.18), 0 6px 12px -4px rgba(0,0,0,0.12)',
+            backgroundColor: cashierPrinterNotice.type === 'error' ? '#fef2f2' : (cashierPrinterNotice.type === 'success' ? '#f0fdf4' : '#fffbeb'),
+            border: `1.5px solid ${cashierPrinterNotice.type === 'error' ? '#fca5a5' : (cashierPrinterNotice.type === 'success' ? '#86efac' : '#fde68a')}`,
+            color: cashierPrinterNotice.type === 'error' ? '#991b1b' : (cashierPrinterNotice.type === 'success' ? '#166534' : '#92400e')
+          }}
+        >
+          {cashierPrinterNotice.type === 'error' ? (
+            <AlertCircle size={22} className="text-red-600 flex-shrink-0 mt-0.5 animate-pulse" />
+          ) : (
+            <CheckCircle2 size={22} className="text-emerald-600 flex-shrink-0 mt-0.5" />
+          )}
+          <div style={{ flex: 1, fontSize: '13px', lineHeight: 1.45 }}>
+            <div style={{ fontWeight: 'bold', fontSize: '13.5px', marginBottom: '2px' }}>
+              {cashierPrinterNotice.type === 'error' ? '⚠️ Pemberitahuan Kasir: Printer Terputus' : '✅ Pemberitahuan Kasir: Printer Terhubung'}
+            </div>
+            <div>{cashierPrinterNotice.message}</div>
+            {cashierPrinterNotice.type === 'error' && (
+              <div style={{ marginTop: '8px', display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    reconnectSavedDevice(false);
+                  }}
+                  style={{
+                    backgroundColor: '#dc2626',
+                    color: 'white',
+                    border: 'none',
+                    padding: '4px 12px',
+                    borderRadius: '5px',
+                    fontSize: '12px',
+                    fontWeight: 'bold',
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}
+                >
+                  <RefreshCw size={12} /> Sambungkan Sekarang
+                </button>
+                <Link
+                  to="/backoffice/printer-settings"
+                  onClick={() => setCashierPrinterNotice(null)}
+                  style={{
+                    fontSize: '12px',
+                    color: '#4b5563',
+                    textDecoration: 'underline',
+                    fontWeight: 600
+                  }}
+                >
+                  Buka Pengaturan
+                </Link>
+              </div>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setCashierPrinterNotice(null);
+              clearDisconnectAlert();
+            }}
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              color: '#6b7280',
+              padding: '2px',
+              display: 'flex',
+              alignItems: 'center'
+            }}
+            aria-label="Tutup notifikasi"
+          >
+            <X size={16} />
+          </button>
+        </div>
       )}
 
     </div>
