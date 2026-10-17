@@ -30,12 +30,12 @@ const buildBarcodeSvg = (code: string, isShelfTag: boolean): string => {
   try {
     JsBarcode(svg, code, {
       format: 'CODE128',
-      width: 2,
-      height: isShelfTag ? 36 : 48,
+      width: isShelfTag ? 1.2 : 1.8,
+      height: isShelfTag ? 26 : 42,
       margin: 0,
       displayValue: true,
-      fontSize: 14,
-      textMargin: 2,
+      fontSize: isShelfTag ? 9 : 13,
+      textMargin: 1,
       font: 'monospace',
     });
     const w = svg.getAttribute('width');
@@ -47,7 +47,7 @@ const buildBarcodeSvg = (code: string, isShelfTag: boolean): string => {
     svg.setAttribute('style', 'width:100%;height:100%;display:block;');
     return svg.outerHTML;
   } catch (e) {
-    return `<div style="text-align:center;font-family:monospace;font-weight:bold;font-size:12px;padding:4px;">${escapeHtml(code)}</div>`;
+    return `<div style="text-align:center;font-family:monospace;font-weight:bold;font-size:10px;padding:2px;">${escapeHtml(code)}</div>`;
   }
 };
 
@@ -63,22 +63,53 @@ const buildLabelHtml = (
 ): string => {
   const code = p.barcode || p.sku || p.id;
   const dateStr = new Date().toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: '2-digit' });
+  const productName = p.name || p.sku || 'PRODUK';
 
   if (isShelfTag) {
-    // Mode Label Rak Toko (Price Tag)
+    // Mode Label Rak Toko (Price Tag Swalayan / Retail Modern)
     return `
-      <div class="lbl" style="width:${wMm}mm;height:${hMm}mm;box-sizing:border-box;padding:2mm;display:flex;flex-direction:column;justify-content:space-between;background:#fff;color:#000;border:1px dashed #d1d5db;border-radius:4px;overflow:hidden;">
-        <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #111;padding-bottom:1mm;">
-          <span style="font:bold 7pt Arial,sans-serif;text-transform:uppercase;letter-spacing:0.5px;">${escapeHtml(storeName || 'POS MART')}</span>
-          <span style="font:6pt Arial,sans-serif;color:#555;">${dateStr}</span>
+      <div class="lbl" style="width:${wMm}mm;height:${hMm}mm;box-sizing:border-box;padding:1.5mm 2mm;display:flex;flex-direction:column;justify-content:space-between;background:#fff;color:#000;border:1px dashed #d1d5db;border-radius:3px;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;">
+        <!-- Header: Nama Toko & Tanggal -->
+        <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #111;padding-bottom:0.8mm;line-height:1;">
+          <span style="font-weight:900;font-size:6.5pt;text-transform:uppercase;letter-spacing:0.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:68%;">${escapeHtml(storeName || 'POS MART')}</span>
+          <span style="font-size:5.5pt;font-weight:700;color:#333;white-space:nowrap;">TGL: ${dateStr}</span>
         </div>
-        ${showName ? `<div style="font:bold 8.5pt Arial,sans-serif;line-height:1.15;max-height:2.3em;overflow:hidden;margin-top:1mm;">${escapeHtml(p.name)}</div>` : ''}
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:4px;margin:1mm 0;">
-          <div style="flex:1;min-height:0;height:12mm;">${buildBarcodeSvg(code, true)}</div>
-        </div>
-        <div style="display:flex;justify-content:space-between;align-items:flex-end;border-top:1px solid #111;padding-top:1mm;">
-          ${showSku && p.sku ? `<span style="font:6pt monospace;color:#333;">SKU:${escapeHtml(p.sku)}</span>` : '<span></span>'}
-          ${showPrice ? `<span style="font:bold 12pt Arial,sans-serif;letter-spacing:-0.5px;">Rp ${p.sellingPrice.toLocaleString('id-ID')}${p.unit ? `<small style="font-size:7pt;font-weight:normal;"> /${p.unit}</small>` : ''}</span>` : ''}
+
+        <!-- Nama Produk (Full Width, Tebal, 1-2 baris, tidak pernah hilang) -->
+        ${
+          showName
+            ? `<div style="font-weight:900;font-size:7.5pt;line-height:1.15;max-height:2.3em;overflow:hidden;text-transform:uppercase;color:#000;margin:0.8mm 0;border-bottom:1px dashed #cbd5e1;padding-bottom:0.6mm;">${escapeHtml(productName)}</div>`
+            : ''
+        }
+
+        <!-- Bagian Bawah: 2 Kolom (Kiri: Barcode & SKU, Kanan: Harga Jual Besar) -->
+        <div style="flex:1;min-height:0;display:flex;align-items:center;justify-content:space-between;gap:1.5mm;">
+          <!-- Kolom Kiri: Barcode & SKU -->
+          <div style="flex:1;min-width:0;height:100%;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;">
+            <div style="width:100%;height:10.5mm;display:flex;align-items:center;">
+              ${buildBarcodeSvg(code, true)}
+            </div>
+            ${
+              showSku && p.sku && p.sku !== code
+                ? `<div style="font-size:5.5pt;font-family:monospace;font-weight:bold;color:#333;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;margin-top:0.2mm;">SKU: ${escapeHtml(p.sku)}</div>`
+                : ''
+            }
+          </div>
+
+          <!-- Kolom Kanan: Tag Harga Pas & Nilai Rupiah Besar -->
+          <div style="flex:1.15;min-width:0;display:flex;flex-direction:column;justify-content:center;align-items:flex-end;text-align:right;">
+            <div style="display:inline-block;background:#000;color:#fff;font-weight:900;font-size:5.5pt;padding:1px 3px;border-radius:2px;letter-spacing:0.3px;margin-bottom:0.5mm;">HARGA PAS</div>
+            ${
+              showPrice
+                ? `
+                <div style="font-weight:900;font-size:11.5pt;line-height:1;letter-spacing:-0.5px;color:#000;white-space:nowrap;">
+                  <span style="font-size:7pt;font-weight:700;margin-right:1px;">Rp</span>${p.sellingPrice.toLocaleString('id-ID')}
+                </div>
+                ${p.unit ? `<div style="font-size:5.5pt;font-weight:800;color:#555;text-transform:uppercase;margin-top:0.5mm;">PER ${escapeHtml(p.unit)}</div>` : ''}
+              `
+                : ''
+            }
+          </div>
         </div>
       </div>
     `;
@@ -86,17 +117,17 @@ const buildLabelHtml = (
 
   // Mode Stiker Barcode Produk Standar
   const nameBlock = showName
-    ? `<div style="font:bold 8pt Arial,sans-serif;line-height:1.15;max-height:2.2em;overflow:hidden;text-align:center;">${escapeHtml(p.name)}</div>`
+    ? `<div style="font-weight:800;font-size:7.5pt;line-height:1.15;max-height:2.2em;overflow:hidden;text-align:center;text-transform:uppercase;">${escapeHtml(productName)}</div>`
     : '';
   const skuBlock = showSku && p.sku
-    ? `<div style="font:6.5pt Arial,sans-serif;line-height:1.1;text-align:center;color:#333;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">SKU: ${escapeHtml(p.sku)}</div>`
+    ? `<div style="font-size:6pt;font-family:monospace;line-height:1.1;text-align:center;color:#444;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:0.3mm;">SKU: ${escapeHtml(p.sku)}</div>`
     : '';
   const priceBlock = showPrice
-    ? `<div style="font:bold 11pt Arial,sans-serif;text-align:center;">Rp ${p.sellingPrice.toLocaleString('id-ID')}</div>`
+    ? `<div style="font-weight:900;font-size:10.5pt;text-align:center;white-space:nowrap;line-height:1;margin-top:0.5mm;">Rp ${p.sellingPrice.toLocaleString('id-ID')}${p.unit ? `<small style="font-size:6.5pt;font-weight:normal;"> /${escapeHtml(p.unit)}</small>` : ''}</div>`
     : '';
 
   return `
-    <div class="lbl" style="width:${wMm}mm;height:${hMm}mm;box-sizing:border-box;padding:1.5mm 2mm;display:flex;flex-direction:column;justify-content:space-between;align-items:stretch;overflow:hidden;background:#fff;color:#000;border:1px dashed #d1d5db;border-radius:4px;">
+    <div class="lbl" style="width:${wMm}mm;height:${hMm}mm;box-sizing:border-box;padding:1.5mm 2mm;display:flex;flex-direction:column;justify-content:space-between;align-items:stretch;overflow:hidden;background:#fff;color:#000;border:1px dashed #d1d5db;border-radius:3px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;">
       <div>${nameBlock}${skuBlock}</div>
       <div style="flex:1;min-height:0;margin:0.5mm 0;display:flex;align-items:center;justify-content:center;">${buildBarcodeSvg(code, false)}</div>
       ${priceBlock}
@@ -699,15 +730,23 @@ const BarcodeLabelModal: React.FC<Props> = ({ product, products, initialCopies =
 
               <div
                 style={{
-                  boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
-                  borderRadius: '4px',
-                  transform: 'scale(1.4)',
-                  transformOrigin: 'center center',
-                  margin: '16px 0',
+                  padding: '12px 0',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
                 }}
-                dangerouslySetInnerHTML={{ __html: previewHtml }}
-              />
-              <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '6px' }}>
+              >
+                <div
+                  style={{
+                    boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+                    borderRadius: '4px',
+                    transform: 'scale(1.4)',
+                    transformOrigin: 'center center',
+                  }}
+                  dangerouslySetInnerHTML={{ __html: previewHtml }}
+                />
+              </div>
+              <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px' }}>
                 Pratinjau visual label thermal ({wMm}×{hMm} mm)
               </div>
             </div>
