@@ -270,16 +270,16 @@ export const ExportImportSettings: React.FC = () => {
               <button
                 type="button"
                 onClick={() => downloadExcelTemplate('MASTER')}
-                style={{ padding: '6px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: 700, background: '#f1f5f9', color: '#334155', border: '1px solid #cbd5e1', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                style={{ padding: '7px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 800, background: '#e0f2fe', color: '#0369a1', border: '1px solid #7dd3fc', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}
               >
-                <Download size={14} /> Template Master (Lengkap)
+                <Download size={14} /> ✨ Template Master (Lengkap 5-in-1 + Panduan)
               </button>
               <button
                 type="button"
                 onClick={() => downloadExcelTemplate('PRODUCT')}
                 style={{ padding: '6px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, background: '#f8fafc', color: '#475569', border: '1px solid #e2e8f0', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
               >
-                <Download size={14} /> Template Produk
+                <Download size={14} /> Template Produk & Varian
               </button>
               <button
                 type="button"
@@ -287,6 +287,20 @@ export const ExportImportSettings: React.FC = () => {
                 style={{ padding: '6px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, background: '#f8fafc', color: '#475569', border: '1px solid #e2e8f0', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
               >
                 <Download size={14} /> Template Pelanggan
+              </button>
+              <button
+                type="button"
+                onClick={() => downloadExcelTemplate('SUPPLIER')}
+                style={{ padding: '6px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, background: '#f8fafc', color: '#475569', border: '1px solid #e2e8f0', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+              >
+                <Download size={14} /> Template Supplier & Hutang
+              </button>
+              <button
+                type="button"
+                onClick={() => downloadExcelTemplate('USER')}
+                style={{ padding: '6px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, background: '#f8fafc', color: '#475569', border: '1px solid #e2e8f0', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+              >
+                <Download size={14} /> Template Karyawan & Kasir
               </button>
             </div>
           </div>
@@ -454,7 +468,7 @@ export const ExportImportSettings: React.FC = () => {
 
           {/* SAMPLE PREVIEW TABLE (TOP 5 CUSTOMERS) */}
           {parsedData.customers.length > 0 && (
-            <div>
+            <div style={{ marginBottom: (parsedData.suppliers.length > 0 || parsedData.users.length > 0) ? '16px' : '0' }}>
               <div style={{ fontSize: '12px', fontWeight: 700, color: '#475569', marginBottom: '8px' }}>
                 Contoh 5 Baris Pertama Pelanggan yang Terbaca:
               </div>
@@ -463,6 +477,7 @@ export const ExportImportSettings: React.FC = () => {
                   <thead style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
                     <tr>
                       <th style={{ padding: '8px 12px' }}>Nama Pelanggan</th>
+                      <th style={{ padding: '8px 12px' }}>Tipe</th>
                       <th style={{ padding: '8px 12px' }}>No. Telepon / WA</th>
                       <th style={{ padding: '8px 12px' }}>Alamat</th>
                     </tr>
@@ -471,8 +486,91 @@ export const ExportImportSettings: React.FC = () => {
                     {parsedData.customers.slice(0, 5).map((c, idx) => (
                       <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
                         <td style={{ padding: '8px 12px', fontWeight: 600 }}>{c.name}</td>
+                        <td style={{ padding: '8px 12px' }}>
+                          <span style={{ fontSize: '11px', background: '#e0f2fe', color: '#0369a1', padding: '2px 6px', borderRadius: '4px', fontWeight: 600 }}>
+                            {c.customerType || 'Retail'}
+                          </span>
+                        </td>
                         <td style={{ padding: '8px 12px' }}>{c.phone || '-'}</td>
                         <td style={{ padding: '8px 12px' }}>{c.address || '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* SAMPLE PREVIEW TABLE (TOP 5 SUPPLIERS) */}
+          {parsedData.suppliers.length > 0 && (
+            <div style={{ marginBottom: parsedData.users.length > 0 ? '16px' : '0' }}>
+              <div style={{ fontSize: '12px', fontWeight: 700, color: '#475569', marginBottom: '8px' }}>
+                Contoh 5 Baris Pertama Supplier yang Terbaca:
+              </div>
+              <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', textAlign: 'left' }}>
+                  <thead style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                    <tr>
+                      <th style={{ padding: '8px 12px' }}>Nama Supplier / Distributor</th>
+                      <th style={{ padding: '8px 12px' }}>Kontak PIC</th>
+                      <th style={{ padding: '8px 12px' }}>No. Telepon / WA</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'center' }}>Termin (Hari)</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'right' }}>Saldo Hutang Awal</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {parsedData.suppliers.slice(0, 5).map((s, idx) => (
+                      <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                        <td style={{ padding: '8px 12px', fontWeight: 600 }}>{s.name}</td>
+                        <td style={{ padding: '8px 12px' }}>{s.contact || '-'}</td>
+                        <td style={{ padding: '8px 12px' }}>{s.phone || '-'}</td>
+                        <td style={{ padding: '8px 12px', textAlign: 'center' }}>{s.payment_term_days || 0} hari</td>
+                        <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: s.payable > 0 ? '#ef4444' : '#64748b' }}>
+                          Rp {Number(s.payable || 0).toLocaleString('id-ID')}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* SAMPLE PREVIEW TABLE (TOP 5 USERS / EMPLOYEES) */}
+          {parsedData.users.length > 0 && (
+            <div>
+              <div style={{ fontSize: '12px', fontWeight: 700, color: '#475569', marginBottom: '8px' }}>
+                Contoh 5 Baris Pertama Karyawan / Staf yang Terbaca:
+              </div>
+              <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', textAlign: 'left' }}>
+                  <thead style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                    <tr>
+                      <th style={{ padding: '8px 12px' }}>Username</th>
+                      <th style={{ padding: '8px 12px' }}>Nama Lengkap</th>
+                      <th style={{ padding: '8px 12px' }}>Role / Jabatan</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'center' }}>Shift</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'center' }}>PIN Kasir</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'center' }}>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {parsedData.users.slice(0, 5).map((u, idx) => (
+                      <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                        <td style={{ padding: '8px 12px', fontFamily: 'monospace', fontWeight: 700 }}>{u.username}</td>
+                        <td style={{ padding: '8px 12px', fontWeight: 600 }}>{u.name}</td>
+                        <td style={{ padding: '8px 12px' }}>
+                          <span style={{ fontSize: '11px', background: '#f1f5f9', color: '#334155', padding: '2px 8px', borderRadius: '4px', fontWeight: 700 }}>
+                            {u.role}
+                          </span>
+                        </td>
+                        <td style={{ padding: '8px 12px', textAlign: 'center' }}>Shift {u.shift || 'A'}</td>
+                        <td style={{ padding: '8px 12px', textAlign: 'center', fontFamily: 'monospace' }}>{u.pin || '••••••'}</td>
+                        <td style={{ padding: '8px 12px', textAlign: 'center' }}>
+                          <span style={{ fontSize: '11px', background: u.is_active ? '#dcfce7' : '#fee2e2', color: u.is_active ? '#15803d' : '#b91c1c', padding: '2px 6px', borderRadius: '4px', fontWeight: 700 }}>
+                            {u.is_active ? 'Aktif' : 'Non-Aktif'}
+                          </span>
+                        </td>
                       </tr>
                     ))}
                   </tbody>

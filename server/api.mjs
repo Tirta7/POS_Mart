@@ -1950,10 +1950,17 @@ app.post('/api/saas/import/master', async (req, res) => {
           });
         }
 
+        const shift = u.shift ? String(u.shift).toUpperCase() : 'A';
+        const isActive = u.is_active !== undefined ? Boolean(u.is_active) : true;
+
         if (existing) {
+          const updateData = { name, role, pin };
+          if (u.shift) updateData.shift = shift;
+          if (u.is_active !== undefined) updateData.is_active = isActive;
+          if (u.password) updateData.password_hash = u.password;
           await prisma.user.update({
             where: { id: existing.id },
-            data: { name, role, pin }
+            data: updateData
           });
           stats.updatedUsers = (stats.updatedUsers || 0) + 1;
         } else {
@@ -1963,10 +1970,11 @@ app.post('/api/saas/import/master', async (req, res) => {
               tenant_id: tenantId,
               username,
               name,
-              password_hash: u.password || 'admin',
+              password_hash: u.password || 'admin123',
               pin,
               role,
-              is_active: true
+              shift: shift,
+              is_active: isActive
             }
           });
           stats.users++;

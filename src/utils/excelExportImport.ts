@@ -436,6 +436,18 @@ export const parseExcelFile = async (file: File): Promise<ParsedImportData> => {
 
           const sName = sheetName.toLowerCase().trim();
 
+          // Lewati sheet panduan / petunjuk agar tidak diproses sebagai baris data
+          if (
+            sName.includes('panduan') ||
+            sName.includes('petunjuk') ||
+            sName.includes('instruksi') ||
+            sName.includes('guide') ||
+            sName.includes('readme') ||
+            sName.includes('baca')
+          ) {
+            return;
+          }
+
           // 1. Sheet Manajemen Stok / Produk (Katalog Produk)
           // PENTING: Jangan masukkan sheet 'Mutasi Stok', 'Laporan', 'Transaksi' karena itu adalah riwayat/log pergerakan, bukan katalog
           const isProductSheet = (
@@ -453,7 +465,9 @@ export const parseExcelFile = async (file: File): Promise<ParsedImportData> => {
               !sName.includes('riwayat') &&
               !sName.includes('log') &&
               !sName.includes('order') &&
-              !sName.includes('pembelian'))
+              !sName.includes('pembelian') &&
+              !sName.includes('varian') &&
+              !sName.includes('variant'))
           );
 
           if (isProductSheet) {
@@ -463,7 +477,7 @@ export const parseExcelFile = async (file: File): Promise<ParsedImportData> => {
               if (!name) return;
 
               const buyPrice = parseNumber(
-                n.harga_beli_modal ?? n.harga_beli ?? n.modal ?? n.harga_modal ?? n.beli ?? n.purchase_price ?? n.hargabelimodal ?? n.hargabeli,
+                n.harga_beli_modal ?? n.harga_beli ?? n.modal ?? n.harga_modal ?? n.beli ?? n.purchase_price ?? n.hpp ?? n.hargabelimodal ?? n.hargabeli,
                 0
               );
               const sellPrice = parseNumber(
@@ -471,26 +485,29 @@ export const parseExcelFile = async (file: File): Promise<ParsedImportData> => {
                 0
               );
               const wholesalePrice = parseNumber(
-                n.harga_grosir ?? n.wholesale_price ?? n.grosir ?? n.hargagrosir,
+                n.harga_grosir_partai ?? n.harga_grosir ?? n.wholesale_price ?? n.grosir ?? n.partai ?? n.hargagrosirpartai ?? n.hargagrosir,
                 sellPrice
               );
               const stock = parseNumber(
-                n.stok_saat_ini ?? n.stok ?? n.stock ?? n.qty ?? n.stoksaatini,
+                n.stok_awal ?? n.stok_saat_ini ?? n.stok ?? n.stock ?? n.qty ?? n.jumlah_stok ?? n.stokawal ?? n.stoksaatini,
                 0
               );
               const minStock = parseNumber(
-                n.min_stok ?? n.minimum_stok ?? n.min_stock ?? n.stok_minimum ?? n.minstok,
+                n.min_stok_alert_tipis ?? n.min_stok ?? n.minimum_stok ?? n.min_stock ?? n.stok_minimum ?? n.min_stok_peringatan_tipis ?? n.minstokalerttipis ?? n.minstok,
                 0
               );
 
-              const barcodeRaw = String(n.barcode || n.barcode_sku || n.kode_barang || n.kode || '').trim();
-              const barcode = barcodeRaw === '-' ? '' : barcodeRaw;
+              const barcodeRaw = String(n.barcode_scan_angka ?? n.barcode ?? n.kode_barcode ?? n.barcode_sku ?? n.kode_barang ?? n.kode ?? '').trim();
+              const barcode = (barcodeRaw === '-' || barcodeRaw === '0') ? '' : barcodeRaw;
 
-              const skuRaw = String(n.sku || (n.barcode_sku && !n.barcode ? n.barcode_sku : '') || '').trim();
+              const skuRaw = String(n.sku_kode_unik_rak ?? n.sku ?? (n.barcode_sku && !n.barcode ? n.barcode_sku : '') ?? '').trim();
               const sku = skuRaw === '-' ? '' : skuRaw;
 
-              const idRaw = String(n.id_produk || n.id || '').trim();
+              const idRaw = String(n.id_produk_opsional ?? n.id_produk ?? n.id ?? '').trim();
               const id = idRaw === '-' ? '' : idRaw;
+
+              const statusRaw = String(n.status ?? n.status_produk ?? n.status_aktif_non_aktif ?? n.aktif ?? n.is_active ?? 'Aktif').toLowerCase().trim();
+              const isActive = !(statusRaw.includes('non') || statusRaw.includes('tidak') || statusRaw === 'false' || statusRaw === '0');
 
               const existingIdx = products.findIndex(p => 
                 (barcode && p.barcode === barcode) || 
@@ -499,7 +516,7 @@ export const parseExcelFile = async (file: File): Promise<ParsedImportData> => {
               );
 
               // Deteksi varian inline di baris produk jika ada (misal "S: 138, M: 232, H: 130")
-              const rawVariantStr = String(n.daftar_varian || n.varian || n.variant || n.variants || n.opsi || '').trim();
+              const rawVariantStr = String(n.daftar_varian_ringkas_opsional ?? n.daftar_varian_ringkas ?? n.daftar_varian ?? n.varian ?? n.variant ?? n.variants ?? n.opsi ?? '').trim();
               let parsedVariants: any[] = [];
               if (rawVariantStr && rawVariantStr !== '-') {
                 const parts = rawVariantStr.split(/[,;\n]/).map(s => s.trim()).filter(Boolean);
@@ -540,7 +557,7 @@ export const parseExcelFile = async (file: File): Promise<ParsedImportData> => {
                 name: String(name).trim(),
                 barcode: barcode,
                 sku: sku,
-                category: String(n.kategori || n.category || '').trim(),
+                category: String(n.kategori || n.category || 'Umum').trim(),
                 unit: String(n.satuan || n.unit || 'Pcs').trim(),
                 purchase_price: buyPrice,
                 selling_price: sellPrice,
@@ -551,6 +568,7 @@ export const parseExcelFile = async (file: File): Promise<ParsedImportData> => {
                 stock: parsedVariants.length > 0 ? parsedVariants.reduce((sum, v) => sum + v.stock, 0) : stock,
                 min_stock: minStock,
                 minStock: minStock,
+                isActive: isActive,
                 variants: parsedVariants.length > 0 ? parsedVariants : undefined
               };
 
@@ -591,14 +609,14 @@ export const parseExcelFile = async (file: File): Promise<ParsedImportData> => {
               const prodName = String(n.nama_produk_induk || n.nama_produk || n.produk || n.nama || '').trim();
               const barcode = String(n.barcode_induk || n.barcode || '').trim();
               const sku = String(n.sku_induk || n.sku || '').trim();
-              const id = String(n.id_produk_induk || n.id_produk || n.id || '').trim();
+              const id = String(n.id_produk_induk_opsional || n.id_produk_induk || n.id_produk || n.id || '').trim();
               const vName = String(n.nama_varian || n.varian || n.variant || n.opsi || '').trim();
               if (!vName) return;
 
               const vStock = parseNumber(n.stok_varian ?? n.stok ?? n.stock ?? n.qty, 0);
-              const vBuy = parseNumber(n.harga_beli_varian ?? n.harga_beli_modal ?? n.harga_beli ?? n.modal, 0);
-              const vSell = parseNumber(n.harga_jual_varian ?? n.harga_jual_eceran ?? n.harga_jual ?? n.harga, 0);
-              const vWholesale = parseNumber(n.harga_grosir_varian ?? n.harga_grosir ?? n.grosir, 0);
+              const vBuy = parseNumber(n.harga_beli_varian_opsional ?? n.harga_beli_varian ?? n.harga_beli_modal ?? n.harga_beli ?? n.modal, 0);
+              const vSell = parseNumber(n.harga_jual_varian_opsional ?? n.harga_jual_varian ?? n.harga_jual_eceran ?? n.harga_jual ?? n.harga, 0);
+              const vWholesale = parseNumber(n.harga_grosir_varian_opsional ?? n.harga_grosir_varian ?? n.harga_grosir_partai ?? n.harga_grosir ?? n.grosir, 0);
 
               let targetProd = products.find(p =>
                 (id && p.id === id) ||
@@ -612,7 +630,7 @@ export const parseExcelFile = async (file: File): Promise<ParsedImportData> => {
                   name: prodName,
                   barcode: barcode || '',
                   sku: sku || '',
-                  category: 'Uncategorized',
+                  category: 'Umum',
                   unit: 'Pcs',
                   purchase_price: vBuy,
                   selling_price: vSell,
@@ -664,13 +682,19 @@ export const parseExcelFile = async (file: File): Promise<ParsedImportData> => {
           if (isCustomerSheet) {
             rawRows.forEach(r => {
               const n = normalizeRow(r);
-              const name = n.nama_pelanggan || n.nama || n.name || n.customer;
+              const name = n.nama_pelanggan || n.nama || n.name || n.customer || n.namapelanggan;
               if (!name) return;
 
+              const phone = String(n.no_telepon_wa || n.no_telepon || n.telepon || n.phone || n.no_hp || n.kontak || n.noteleponwa || '0').trim();
+              const address = String(n.alamat_domisili || n.alamat || n.address || '').trim();
+              const customerType = String(n.tipe_pelanggan_retail_grosir || n.tipe_pelanggan || n.tipe || n.type || '').trim();
+
               customers.push({
+                id: String(n.id_pelanggan_opsional || n.id_pelanggan || n.id || '').trim() || undefined,
                 name: String(name).trim(),
-                phone: String(n.no_telepon_wa || n.no_telepon || n.telepon || n.phone || n.no_hp || n.kontak || '0').trim(),
-                address: String(n.alamat || n.address || '').trim()
+                phone: (phone === '-' || phone === '') ? '0' : phone,
+                address: address === '-' ? '' : address,
+                customerType: customerType || undefined
               });
             });
           }
@@ -692,15 +716,21 @@ export const parseExcelFile = async (file: File): Promise<ParsedImportData> => {
           if (isSupplierSheet) {
             rawRows.forEach(r => {
               const n = normalizeRow(r);
-              const name = n.nama_supplier || n.nama || n.name || n.supplier;
+              const name = n.nama_supplier_pt_distributor || n.nama_supplier_distributor || n.nama_supplier || n.nama || n.name || n.supplier || n.namasupplierptdistributor || n.namasupplier;
               if (!name) return;
 
+              const contact = String(n.kontak_person_pic || n.kontak_person || n.kontak || n.contact || n.pic || '').trim();
+              const phone = String(n.no_telepon_wa || n.no_telepon || n.telepon || n.phone || n.no_hp || n.noteleponwa || '').trim();
+              const term = parseNumber(n.termin_pembayaran_hari ?? n.termin_pembayaran ?? n.termin ?? n.payment_term ?? n.payment_term_days ?? n.terminpembayaranhari, 0);
+              const payable = parseNumber(n.saldo_hutang_awal_rp ?? n.total_hutang_dagang_rp ?? n.hutang ?? n.payable ?? n.saldo_hutang ?? n.saldohutangawalrp, 0);
+
               suppliers.push({
+                id: String(n.id_supplier_opsional || n.id_supplier || n.id || '').trim() || undefined,
                 name: String(name).trim(),
-                contact: String(n.kontak_person || n.kontak || n.contact || '').trim(),
-                phone: String(n.no_telepon_wa || n.no_telepon || n.telepon || n.phone || '').trim(),
-                payment_term_days: Number(n.termin_pembayaran_hari || n.termin || n.payment_term || 0),
-                payable: Number(n.total_hutang_dagang_rp || n.hutang || n.payable || 0)
+                contact: contact === '-' ? '' : contact,
+                phone: phone === '-' ? '' : phone,
+                payment_term_days: term,
+                payable: payable
               });
             });
           }
@@ -722,14 +752,27 @@ export const parseExcelFile = async (file: File): Promise<ParsedImportData> => {
           if (isUserSheet) {
             rawRows.forEach(r => {
               const n = normalizeRow(r);
-              const username = n.username || n.id_karyawan;
+              const username = n.username_untuk_login || n.username_login || n.username || n.id_karyawan || n.user || n.usernameuntuklogin || n.usernamelogin;
               if (!username) return;
 
+              const name = String(n.nama_lengkap || n.nama || username).trim();
+              const role = String(n.role_jabatan_admin_supervisor_cashier || n.role_jabatan || n.role || n.jabatan || 'Cashier').trim();
+              const pin = String(n.pin_kasir_6_digit || n.pin_kasir || n.pin || '123456').trim();
+              const password = String(n.password_login || n.password || n.pass || 'admin123').trim();
+              const shiftRaw = String(n.shift_kerja_a_pagi_b_siang_c_malam_auto || n.shift_kerja || n.shift || 'A').toUpperCase().trim();
+              const shift = ['A', 'B', 'C', 'AUTO'].includes(shiftRaw) ? shiftRaw : (shiftRaw.includes('PAGI') ? 'A' : shiftRaw.includes('SIANG') ? 'B' : shiftRaw.includes('MALAM') ? 'C' : 'A');
+              const statusRaw = String(n.status_aktif_non_aktif || n.status || n.aktif || 'Aktif').toLowerCase();
+              const isActive = !(statusRaw.includes('non') || statusRaw.includes('tidak') || statusRaw === 'false' || statusRaw === '0');
+
               users.push({
+                id: String(n.id_karyawan_opsional || n.id_karyawan || n.id || '').trim() || undefined,
                 username: String(username).trim().toLowerCase(),
-                name: String(n.nama_lengkap || n.nama || username).trim(),
-                role: String(n.role_jabatan || n.role || n.jabatan || 'Cashier').trim(),
-                pin: String(n.pin || '123456')
+                name: name,
+                role: role,
+                pin: pin,
+                password: password,
+                shift: shift,
+                is_active: isActive
               });
             });
           }
@@ -755,23 +798,23 @@ export const parseExcelFile = async (file: File): Promise<ParsedImportData> => {
                   0
                 );
                 const wholesalePrice = parseNumber(
-                  n.harga_grosir ?? n.wholesale_price ?? n.grosir ?? n.hargagrosir,
+                  n.harga_grosir_partai ?? n.harga_grosir ?? n.wholesale_price ?? n.grosir ?? n.hargagrosir,
                   sellPrice
                 );
                 const stock = parseNumber(
-                  n.stok_saat_ini ?? n.stok ?? n.stock ?? n.qty ?? n.stoksaatini,
+                  n.stok_awal ?? n.stok_saat_ini ?? n.stok ?? n.stock ?? n.qty ?? n.stoksaatini,
                   0
                 );
                 const minStock = parseNumber(
-                  n.min_stok ?? n.minimum_stok ?? n.min_stock ?? n.stok_minimum ?? n.minstok,
+                  n.min_stok_alert_tipis ?? n.min_stok ?? n.minimum_stok ?? n.min_stock ?? n.stok_minimum ?? n.minstok,
                   0
                 );
 
-                const barcodeRaw = String(n.barcode || n.barcode_sku || n.kode_barang || n.kode || '').trim();
+                const barcodeRaw = String(n.barcode_scan_angka || n.barcode || n.barcode_sku || n.kode_barang || n.kode || '').trim();
                 const barcode = barcodeRaw === '-' ? '' : barcodeRaw;
-                const skuRaw = String(n.sku || '').trim();
+                const skuRaw = String(n.sku_kode_unik_rak || n.sku || '').trim();
                 const sku = skuRaw === '-' ? '' : skuRaw;
-                const idRaw = String(n.id_produk || n.id || '').trim();
+                const idRaw = String(n.id_produk_opsional || n.id_produk || n.id || '').trim();
                 const id = idRaw === '-' ? '' : idRaw;
 
                 products.push({
@@ -779,7 +822,7 @@ export const parseExcelFile = async (file: File): Promise<ParsedImportData> => {
                   name: String(name).trim(),
                   barcode: barcode,
                   sku: sku,
-                  category: String(n.kategori || n.category || '').trim(),
+                  category: String(n.kategori || n.category || 'Umum').trim(),
                   unit: String(n.satuan || n.unit || 'Pcs').trim(),
                   purchase_price: buyPrice,
                   selling_price: sellPrice,
@@ -833,160 +876,350 @@ export const parseExcelFile = async (file: File): Promise<ParsedImportData> => {
 
 /**
  * DOWNLOAD TEMPLATE EXCEL
- * Menghasilkan file Excel contoh / template standar agar pengguna mudah mengisi data
+ * Menghasilkan file Excel contoh / template standar super lengkap dengan petunjuk pengisian
  */
-export const downloadExcelTemplate = (type: 'MASTER' | 'PRODUCT' | 'CUSTOMER' | 'SUPPLIER') => {
+export const downloadExcelTemplate = (type: 'MASTER' | 'PRODUCT' | 'CUSTOMER' | 'SUPPLIER' | 'USER') => {
   const wb = XLSX.utils.book_new();
 
+  // 1. SHEET PETUNJUK & PANDUAN PENGISIAN
+  const guideRows = [
+    {
+      'BAGIAN / MODUL': '📌 PETUNJUK UMUM',
+      'PANDUAN & ATURAN PENGISIAN': 'Template Excel ini disiapkan secara presisi untuk sistem POS Mart. Anda dapat mengisi data baru atau mengupdate data yang sudah ada secara massal.'
+    },
+    {
+      'BAGIAN / MODUL': '1. FORMAT ANGKA & HARGA',
+      'PANDUAN & ATURAN PENGISIAN': 'Ketik harga dan stok HANYA dengan angka murni tanpa simbol Rp, tanpa titik, dan tanpa koma (Contoh yang benar: 25000. JANGAN ketik Rp 25.000 atau 25,000).'
+    },
+    {
+      'BAGIAN / MODUL': '2. KOLOM ID (BARU vs UPDATE)',
+      'PANDUAN & ATURAN PENGISIAN': 'KOSONGKAN kolom ID jika Anda ingin menambahkan data baru. Isi kolom ID HANYA jika Anda ingin memperbarui (update) produk/pelanggan/supplier yang sudah ada di database.'
+    },
+    {
+      'BAGIAN / MODUL': '3. BARCODE & SKU',
+      'PANDUAN & ATURAN PENGISIAN': 'Barcode dapat diisi dari hasil tembak barcode scanner fisik atau diketik manual (Code128 / EAN13). Kolom SKU adalah kode penataan rak toko (opsional).'
+    },
+    {
+      'BAGIAN / MODUL': '4. PRODUK BERVARIAN',
+      'PANDUAN & ATURAN PENGISIAN': 'Ada 2 cara: (A) Tulis ringkas di kolom "Daftar Varian Ringkas" (contoh: Kemasan 5Kg: 20, Kemasan 10Kg: 15), ATAU (B) Isi sheet "Varian Produk" untuk mengatur harga & stok per varian secara terpisah.'
+    },
+    {
+      'BAGIAN / MODUL': '5. DATA PELANGGAN',
+      'PANDUAN & ATURAN PENGISIAN': 'Nama pelanggan wajib diisi. Tipe pelanggan didukung: "Retail (Eceran)" atau "Pelanggan Grosir". Nomor HP diawali 08xxx untuk kemudahan WhatsApp.'
+    },
+    {
+      'BAGIAN / MODUL': '6. DATA SUPPLIER & HUTANG',
+      'PANDUAN & ATURAN PENGISIAN': 'Termin Pembayaran dalam satuan Hari (contoh: 0 = Tunai/Lunas, 14 = Tempo 2 minggu, 30 = Tempo 1 bulan). Saldo Hutang Awal diisi jika ada hutang berjalan yang belum lunas.'
+    },
+    {
+      'BAGIAN / MODUL': '7. DATA KARYAWAN & KASIR',
+      'PANDUAN & ATURAN PENGISIAN': 'Role didukung: Admin, Supervisor, Cashier. PIN Kasir (6 digit) digunakan kasir untuk login instan di layar POS. Shift didukung: A (Pagi), B (Siang), C (Malam), AUTO.'
+    }
+  ];
+  const wsGuide = XLSX.utils.json_to_sheet(guideRows);
+  setSheetCols(wsGuide, [30, 95]);
+  XLSX.utils.book_append_sheet(wb, wsGuide, 'Panduan Pengisian');
+
+  // 2. SHEET MANAJEMEN STOK (KATALOG PRODUK)
   if (type === 'MASTER' || type === 'PRODUCT') {
     const sampleProducts = [
       {
-        'ID Produk': '',
-        'Barcode': '8999909013278',
-        'SKU': 'SKU-RK-0001',
-        'Nama Produk': 'SAMPOERNA MILD',
-        'Kategori': 'Rokok',
-        'Satuan': 'Pcs',
-        'Harga Beli (Modal)': 25000,
-        'Harga Jual (Eceran)': 27500,
-        'Harga Grosir': 26500,
-        'Stok Saat Ini': 25,
-        'Min. Stok': 5,
-        'Daftar Varian': '-'
+        'ID Produk (Opsional)': '',
+        'Barcode': '8992772000155',
+        'SKU': 'SKU-SM-001',
+        'Nama Produk': 'Minyak Goreng Bimoli Spesial 2 Liter',
+        'Kategori': 'Sembako',
+        'Satuan': 'Pouch',
+        'Harga Beli (Modal)': 33500,
+        'Harga Jual (Eceran)': 37500,
+        'Harga Grosir (Partai)': 36000,
+        'Stok Awal': 48,
+        'Min. Stok (Alert Tipis)': 10,
+        'Status': 'Aktif',
+        'Daftar Varian Ringkas': '-',
+        'Lokasi Rak': 'Rak A1 - Sembako'
       },
       {
-        'ID Produk': '',
-        'Barcode': 'SK000004',
-        'SKU': 'SKU-BR-0001',
-        'Nama Produk': 'Beras Premium',
+        'ID Produk (Opsional)': '',
+        'Barcode': '8991002105432',
+        'SKU': 'SKU-BR-001',
+        'Nama Produk': 'Beras Premium Ramos Wangi',
         'Kategori': 'Beras',
         'Satuan': 'Kg',
-        'Harga Beli (Modal)': 10000,
-        'Harga Jual (Eceran)': 13000,
-        'Harga Grosir': 12590,
-        'Stok Saat Ini': 146,
-        'Min. Stok': 10,
-        'Daftar Varian': 'PinPin: 31, Lele: 115'
+        'Harga Beli (Modal)': 12000,
+        'Harga Jual (Eceran)': 14500,
+        'Harga Grosir (Partai)': 13800,
+        'Stok Awal': 250,
+        'Min. Stok (Alert Tipis)': 25,
+        'Status': 'Aktif',
+        'Daftar Varian Ringkas': '5Kg: 20, 10Kg: 15',
+        'Lokasi Rak': 'Palet Sembako B'
       },
       {
-        'ID Produk': '',
-        'Barcode': 'SK000018',
-        'SKU': 'Col-01',
-        'Nama Produk': 'Cue tip colins brown JP',
-        'Kategori': 'Bola & Aksesoris',
+        'ID Produk (Opsional)': '',
+        'Barcode': '8999999001234',
+        'SKU': 'SKU-MN-001',
+        'Nama Produk': 'Teh Botol Sosro Kotak 250ml',
+        'Kategori': 'Minuman',
+        'Satuan': 'Kotak',
+        'Harga Beli (Modal)': 3200,
+        'Harga Jual (Eceran)': 4000,
+        'Harga Grosir (Partai)': 3600,
+        'Stok Awal': 120,
+        'Min. Stok (Alert Tipis)': 24,
+        'Status': 'Aktif',
+        'Daftar Varian Ringkas': '-',
+        'Lokasi Rak': 'Chiller 1'
+      },
+      {
+        'ID Produk (Opsional)': '',
+        'Barcode': '8992753112004',
+        'SKU': 'SKU-SN-001',
+        'Nama Produk': 'Oreo Sandwich Vanilla 119g',
+        'Kategori': 'Biskuit & Snack',
+        'Satuan': 'Bks',
+        'Harga Beli (Modal)': 8500,
+        'Harga Jual (Eceran)': 10500,
+        'Harga Grosir (Partai)': 9800,
+        'Stok Awal': 60,
+        'Min. Stok (Alert Tipis)': 12,
+        'Status': 'Aktif',
+        'Daftar Varian Ringkas': '-',
+        'Lokasi Rak': 'Rak C2'
+      },
+      {
+        'ID Produk (Opsional)': '',
+        'Barcode': '8999909013278',
+        'SKU': 'SKU-RK-001',
+        'Nama Produk': 'Sampoerna A Mild 16 Batang',
+        'Kategori': 'Rokok',
+        'Satuan': 'Bks',
+        'Harga Beli (Modal)': 31500,
+        'Harga Jual (Eceran)': 34500,
+        'Harga Grosir (Partai)': 33800,
+        'Stok Awal': 100,
+        'Min. Stok (Alert Tipis)': 20,
+        'Status': 'Aktif',
+        'Daftar Varian Ringkas': '-',
+        'Lokasi Rak': 'Etalase Kasir'
+      },
+      {
+        'ID Produk (Opsional)': '',
+        'Barcode': '8997001005541',
+        'SKU': 'SKU-KP-001',
+        'Nama Produk': 'Kaos Polos Cotton Combed 30s',
+        'Kategori': 'Pakaian',
         'Satuan': 'Pcs',
-        'Harga Beli (Modal)': 48400,
-        'Harga Jual (Eceran)': 300000,
-        'Harga Grosir': 185000,
-        'Stok Saat Ini': 500,
-        'Min. Stok': 10,
-        'Daftar Varian': 'S: 138, M: 232, H: 130'
+        'Harga Beli (Modal)': 28000,
+        'Harga Jual (Eceran)': 45000,
+        'Harga Grosir (Partai)': 38000,
+        'Stok Awal': 75,
+        'Min. Stok (Alert Tipis)': 10,
+        'Status': 'Aktif',
+        'Daftar Varian Ringkas': 'Hitam M: 25, Hitam L: 30, Putih L: 20',
+        'Lokasi Rak': 'Gantungan Display'
       }
     ];
     const wsProd = XLSX.utils.json_to_sheet(sampleProducts);
-    setSheetCols(wsProd, [15, 20, 18, 32, 18, 10, 18, 18, 18, 14, 12, 25]);
+    setSheetCols(wsProd, [18, 18, 16, 36, 16, 10, 18, 18, 18, 14, 20, 12, 32, 22]);
     XLSX.utils.book_append_sheet(wb, wsProd, 'Manajemen Stok');
 
+    // 2b. SHEET VARIAN PRODUK (DETAIL VARIAN)
     const sampleVariants = [
       {
         'No': 1,
-        'ID Produk Induk': '',
-        'Barcode Induk': 'SK000004',
-        'SKU Induk': 'SKU-BR-0001',
-        'Nama Produk Induk': 'Beras Premium',
-        'Nama Varian': 'PinPin',
-        'Stok Varian': 31,
-        'Harga Beli Varian': '',
-        'Harga Jual Varian': '',
-        'Harga Grosir Varian': ''
+        'ID Produk Induk (Opsional)': '',
+        'Barcode Induk': '8991002105432',
+        'SKU Induk': 'SKU-BR-001',
+        'Nama Produk Induk': 'Beras Premium Ramos Wangi',
+        'Nama Varian': 'Kemasan 5Kg',
+        'Stok Varian': 20,
+        'Harga Beli Varian (Opsional)': 60000,
+        'Harga Jual Varian (Opsional)': 72500,
+        'Harga Grosir Varian (Opsional)': 69000
       },
       {
         'No': 2,
-        'ID Produk Induk': '',
-        'Barcode Induk': 'SK000004',
-        'SKU Induk': 'SKU-BR-0001',
-        'Nama Produk Induk': 'Beras Premium',
-        'Nama Varian': 'Lele',
-        'Stok Varian': 115,
-        'Harga Beli Varian': '',
-        'Harga Jual Varian': '',
-        'Harga Grosir Varian': ''
+        'ID Produk Induk (Opsional)': '',
+        'Barcode Induk': '8991002105432',
+        'SKU Induk': 'SKU-BR-001',
+        'Nama Produk Induk': 'Beras Premium Ramos Wangi',
+        'Nama Varian': 'Kemasan 10Kg',
+        'Stok Varian': 15,
+        'Harga Beli Varian (Opsional)': 118000,
+        'Harga Jual Varian (Opsional)': 142000,
+        'Harga Grosir Varian (Opsional)': 135000
       },
       {
         'No': 3,
-        'ID Produk Induk': '',
-        'Barcode Induk': 'SK000018',
-        'SKU Induk': 'Col-01',
-        'Nama Produk Induk': 'Cue tip colins brown JP',
-        'Nama Varian': 'S',
-        'Stok Varian': 138,
-        'Harga Beli Varian': '',
-        'Harga Jual Varian': '',
-        'Harga Grosir Varian': ''
+        'ID Produk Induk (Opsional)': '',
+        'Barcode Induk': '8997001005541',
+        'SKU Induk': 'SKU-KP-001',
+        'Nama Produk Induk': 'Kaos Polos Cotton Combed 30s',
+        'Nama Varian': 'Hitam M',
+        'Stok Varian': 25,
+        'Harga Beli Varian (Opsional)': 28000,
+        'Harga Jual Varian (Opsional)': 45000,
+        'Harga Grosir Varian (Opsional)': 38000
       },
       {
         'No': 4,
-        'ID Produk Induk': '',
-        'Barcode Induk': 'SK000018',
-        'SKU Induk': 'Col-01',
-        'Nama Produk Induk': 'Cue tip colins brown JP',
-        'Nama Varian': 'M',
-        'Stok Varian': 232,
-        'Harga Beli Varian': '',
-        'Harga Jual Varian': '',
-        'Harga Grosir Varian': ''
+        'ID Produk Induk (Opsional)': '',
+        'Barcode Induk': '8997001005541',
+        'SKU Induk': 'SKU-KP-001',
+        'Nama Produk Induk': 'Kaos Polos Cotton Combed 30s',
+        'Nama Varian': 'Hitam L',
+        'Stok Varian': 30,
+        'Harga Beli Varian (Opsional)': 28000,
+        'Harga Jual Varian (Opsional)': 45000,
+        'Harga Grosir Varian (Opsional)': 38000
       },
       {
         'No': 5,
-        'ID Produk Induk': '',
-        'Barcode Induk': 'SK000018',
-        'SKU Induk': 'Col-01',
-        'Nama Produk Induk': 'Cue tip colins brown JP',
-        'Nama Varian': 'H',
-        'Stok Varian': 130,
-        'Harga Beli Varian': '',
-        'Harga Jual Varian': '',
-        'Harga Grosir Varian': ''
+        'ID Produk Induk (Opsional)': '',
+        'Barcode Induk': '8997001005541',
+        'SKU Induk': 'SKU-KP-001',
+        'Nama Produk Induk': 'Kaos Polos Cotton Combed 30s',
+        'Nama Varian': 'Putih L',
+        'Stok Varian': 20,
+        'Harga Beli Varian (Opsional)': 28000,
+        'Harga Jual Varian (Opsional)': 45000,
+        'Harga Grosir Varian (Opsional)': 38000
       }
     ];
     const wsVar = XLSX.utils.json_to_sheet(sampleVariants);
-    setSheetCols(wsVar, [6, 20, 18, 18, 30, 18, 14, 18, 18, 18]);
+    setSheetCols(wsVar, [6, 22, 18, 18, 32, 18, 14, 24, 24, 24]);
     XLSX.utils.book_append_sheet(wb, wsVar, 'Varian Produk');
   }
 
+  // 3. SHEET DATA PELANGGAN
   if (type === 'MASTER' || type === 'CUSTOMER') {
     const sampleCustomers = [
       {
-        'Nama Pelanggan': 'Kasianto cue',
-        'No. Telepon / WA': '081335533884',
-        'Alamat': 'Jl. Basuki Rahmat No. 12, Surabaya'
+        'No': 1,
+        'ID Pelanggan (Opsional)': '',
+        'Nama Pelanggan': 'Toko Berkah Mandiri (Bpk. Subagio)',
+        'Tipe Pelanggan (Retail / Grosir)': 'Pelanggan Grosir',
+        'No. Telepon / WA': '081234567890',
+        'Alamat': 'Jl. Ahmad Yani No. 45, Surabaya',
+        'Catatan / Plafon Hutang': 'Langganan grosir sembako mingguan'
       },
       {
-        'Nama Pelanggan': 'Gembos sfix pro',
-        'No. Telepon / WA': '081230378899',
-        'Alamat': 'Kec. Porong, Kab. Sidoarjo'
+        'No': 2,
+        'ID Pelanggan (Opsional)': '',
+        'Nama Pelanggan': 'Ibu Hj. Siti Aminah',
+        'Tipe Pelanggan (Retail / Grosir)': 'Retail (Eceran)',
+        'No. Telepon / WA': '085711223344',
+        'Alamat': 'Perumahan Asri Blok B3 No. 12',
+        'Catatan / Plafon Hutang': 'Pesan antar belanja via WA'
+      },
+      {
+        'No': 3,
+        'ID Pelanggan (Opsional)': '',
+        'Nama Pelanggan': 'Warung Bu Sri',
+        'Tipe Pelanggan (Retail / Grosir)': 'Pelanggan Grosir',
+        'No. Telepon / WA': '081398765432',
+        'Alamat': 'Jl. Raya Darmo Permai II No. 8',
+        'Catatan / Plafon Hutang': 'Belanja partai rokok & mie instan'
       }
     ];
     const wsCust = XLSX.utils.json_to_sheet(sampleCustomers);
-    setSheetCols(wsCust, [28, 20, 40]);
+    setSheetCols(wsCust, [6, 22, 34, 24, 20, 36, 32]);
     XLSX.utils.book_append_sheet(wb, wsCust, 'Data Pelanggan');
   }
 
+  // 4. SHEET DATA SUPPLIER
   if (type === 'MASTER' || type === 'SUPPLIER') {
     const sampleSuppliers = [
       {
-        'Nama Supplier': 'PT Cuesports Indonesia',
-        'Kontak Person': 'Bpk Hendra',
-        'No. Telepon / WA': '081122334455',
+        'No': 1,
+        'ID Supplier (Opsional)': '',
+        'Nama Supplier': 'PT Indomarco Adi Prima (Indofood Group)',
+        'Kontak Person (PIC)': 'Bpk. Ridwan Fauzi',
+        'No. Telepon / WA': '08113456789',
+        'Alamat / Domisili': 'Kawasan Industri Rungkut Industri III No. 10',
         'Termin Pembayaran (Hari)': 30,
-        'Total Hutang Dagang (Rp)': 0
+        'Saldo Hutang Awal (Rp)': 0
+      },
+      {
+        'No': 2,
+        'ID Supplier (Opsional)': '',
+        'Nama Supplier': 'PT Wings Surya Distributor',
+        'Kontak Person (PIC)': 'Ibu Maya',
+        'No. Telepon / WA': '08129876123',
+        'Alamat / Domisili': 'Jl. Kalisosok Kidul No. 2, Surabaya',
+        'Termin Pembayaran (Hari)': 14,
+        'Saldo Hutang Awal (Rp)': 0
+      },
+      {
+        'No': 3,
+        'ID Supplier (Opsional)': '',
+        'Nama Supplier': 'CV Beras Makmur Sejahtera',
+        'Kontak Person (PIC)': 'H. Mahmud',
+        'No. Telepon / WA': '085233445566',
+        'Alamat / Domisili': 'Kec. Krian, Kab. Sidoarjo',
+        'Termin Pembayaran (Hari)': 0,
+        'Saldo Hutang Awal (Rp)': 0
       }
     ];
     const wsSup = XLSX.utils.json_to_sheet(sampleSuppliers);
-    setSheetCols(wsSup, [30, 20, 20, 25, 24]);
+    setSheetCols(wsSup, [6, 22, 38, 22, 20, 36, 24, 22]);
     XLSX.utils.book_append_sheet(wb, wsSup, 'Data Supplier');
   }
 
-  const filename = type === 'MASTER' ? 'Template_Master_POS_Mart.xlsx' : `Template_Import_${type}.xlsx`;
+  // 5. SHEET DATA KARYAWAN
+  if (type === 'MASTER' || type === 'USER') {
+    const sampleUsers = [
+      {
+        'No': 1,
+        'ID Karyawan (Opsional)': '',
+        'Username': 'admin',
+        'Nama Lengkap': 'Administrator Toko',
+        'Role / Jabatan': 'Admin',
+        'PIN Kasir (6 Digit)': '123456',
+        'Password Login': 'admin123',
+        'Shift Kerja': 'AUTO',
+        'Status': 'Aktif'
+      },
+      {
+        'No': 2,
+        'ID Karyawan (Opsional)': '',
+        'Username': 'spv.budi',
+        'Nama Lengkap': 'Budi Santoso (Supervisor)',
+        'Role / Jabatan': 'Supervisor',
+        'PIN Kasir (6 Digit)': '112233',
+        'Password Login': 'budi123',
+        'Shift Kerja': 'A',
+        'Status': 'Aktif'
+      },
+      {
+        'No': 3,
+        'ID Karyawan (Opsional)': '',
+        'Username': 'kasir.siti',
+        'Nama Lengkap': 'Siti Rahmawati',
+        'Role / Jabatan': 'Cashier',
+        'PIN Kasir (6 Digit)': '223344',
+        'Password Login': 'siti123',
+        'Shift Kerja': 'A',
+        'Status': 'Aktif'
+      },
+      {
+        'No': 4,
+        'ID Karyawan (Opsional)': '',
+        'Username': 'kasir.doni',
+        'Nama Lengkap': 'Doni Pratama',
+        'Role / Jabatan': 'Cashier',
+        'PIN Kasir (6 Digit)': '334455',
+        'Password Login': 'doni123',
+        'Shift Kerja': 'B',
+        'Status': 'Aktif'
+      }
+    ];
+    const wsUsers = XLSX.utils.json_to_sheet(sampleUsers);
+    setSheetCols(wsUsers, [6, 22, 18, 28, 18, 18, 18, 14, 12]);
+    XLSX.utils.book_append_sheet(wb, wsUsers, 'Data Karyawan');
+  }
+
+  const filename = type === 'MASTER' ? 'Template_Master_Lengkap_POS_Mart.xlsx' : `Template_Import_${type}.xlsx`;
   XLSX.writeFile(wb, filename);
 };
