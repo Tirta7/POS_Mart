@@ -2,12 +2,16 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useInventoryStore } from '../../store/useInventoryStore';
 import { useSupplierStore } from '../../store/useSupplierStore';
 import { useAuthStore } from '../../store/useAuthStore';
+import { useSettingsStore } from '../../store/useSettingsStore';
 import { 
   ShoppingCart, Plus, Trash2, Check, Search, Camera, X, 
-  CreditCard, RefreshCw, MessageSquare, Printer, CheckCircle2, Clock, Pencil
+  CreditCard, RefreshCw, MessageSquare, Printer, CheckCircle2, Clock, Pencil,
+  AlertTriangle
 } from 'lucide-react';
-import type { StockTransaction, Supplier } from '../../types';
+import type { StockTransaction, Supplier, VariantDraft } from '../../types';
 import BarcodeScannerCamera from '../../components/BarcodeScannerCamera';
+import VariantEditor, { makeVariantId, sumVariantQty } from '../../components/VariantEditor';
+import { generateInternalBarcode } from '../../utils/barcode';
 import { printPurchaseInvoiceA4 } from '../../utils/distributorInvoice';
 import { getProductImage } from '../../utils/defaultProductImage';
 
@@ -96,18 +100,25 @@ const Purchases: React.FC = () => {
   const [debtNote, setDebtNote] = useState<string>('');
   const [isPayingDebt, setIsPayingDebt] = useState(false);
 
-  // Quick Add Product modal
+  // Settings
+  const { appName } = useSettingsStore();
+
+  // Drawer Tambah Produk Baru (Persis seperti Manajemen Stok)
+  const [drawerClosing, setDrawerClosing] = useState(false);
   const [isNewProductModalOpen, setIsNewProductModalOpen] = useState(false);
   const [newProdBarcode, setNewProdBarcode] = useState('');
   const [newProdSku, setNewProdSku] = useState('');
   const [newProdName, setNewProdName] = useState('');
   const [newProdCategory, setNewProdCategory] = useState('');
   const [newProdUnit, setNewProdUnit] = useState('Pcs');
-  const [newProdSellingPrice, setNewProdSellingPrice] = useState('');
-  const [newProdPurchasePrice, setNewProdPurchasePrice] = useState('');
-  const [newProdWholesalePrice, setNewProdWholesalePrice] = useState('');
-  const [newProdMinStock, setNewProdMinStock] = useState('');
+  const [newProdQty, setNewProdQty] = useState<number | ''>(1);
+  const [newProdSellingPrice, setNewProdSellingPrice] = useState<number | ''>('');
+  const [newProdPurchasePrice, setNewProdPurchasePrice] = useState<number | ''>('');
+  const [newProdWholesalePrice, setNewProdWholesalePrice] = useState<number | ''>('');
+  const [newProdMinStock, setNewProdMinStock] = useState<number | ''>(5);
   const [newProdImage, setNewProdImage] = useState('');
+  const [newProdVariants, setNewProdVariants] = useState<VariantDraft[]>([]);
+  const [newProdScannerOpen, setNewProdScannerOpen] = useState(false);
 
   // Quick Add Supplier modal
   const [isNewSupplierModalOpen, setIsNewSupplierModalOpen] = useState(false);
@@ -665,46 +676,163 @@ const Purchases: React.FC = () => {
     }
   };
 
-  // Quick Add Product Form
-  const handleCreateProduct = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newProdBarcode || !newProdName || !newProdSellingPrice) return;
-    
-    if (products.some(p => p.id === newProdBarcode || p.barcode === newProdBarcode)) {
-      alert("Barcode / ID sudah terdaftar!");
-      return;
-    }
+  const openNewProductDrawer = (initialSearch = '') => {
+    const defaultCat = categories[0] || 'Umum';
+    const trimmed = initialSearch.trim();
+    const isCode = trimmed.length >= 3 && /^[0-9A-Za-z_-]+$/.test(trimmed);
 
-    const newProduct = {
-      id: newProdBarcode,
-      sku: newProdSku || newProdBarcode,
-      barcode: newProdBarcode,
-      name: newProdName,
-      category: newProdCategory || (categories[0] || 'Sembako'),
-      location: 'Gudang Utama',
-      unit: newProdUnit,
-      stock: 0,
-      baseUnitMultiplier: 1,
-      purchasePrice: Number(newProdPurchasePrice) || 0,
-      sellingPrice: Number(newProdSellingPrice),
-      wholesalePrice: Number(newProdWholesalePrice) || 0,
-      minStock: Number(newProdMinStock) || 0,
-      image: newProdImage ? getProductImage(newProdImage) : ''
-    };
-
-    const createdProd = await addProduct(newProduct);
-    handleAddItem(createdProd);
-    
-    setIsNewProductModalOpen(false);
-    setNewProdBarcode('');
-    setNewProdSku('');
-    setNewProdName('');
+    setNewProdBarcode(isCode ? trimmed : '');
+    setNewProdSku(isCode ? trimmed : '');
+    setNewProdName(!isCode ? trimmed : '');
+    setNewProdCategory(defaultCat);
+    setNewProdUnit('Pcs');
+    setNewProdQty(1);
     setNewProdSellingPrice('');
     setNewProdPurchasePrice('');
     setNewProdWholesalePrice('');
-    setNewProdMinStock('');
+    setNewProdMinStock(5);
     setNewProdImage('');
-    setSearchTerm('');
+    setNewProdVariants([]);
+    setDrawerClosing(false);
+    setIsNewProductModalOpen(true);
+  };
+
+  const closeNewProductDrawer = () => {
+    setDrawerClosing(true);
+    setTimeout(() => {
+      setIsNewProductModalOpen(false);
+      setDrawerClosing(false);
+    }, 250);
+  };
+
+  // Form Tambah Produk Baru ke Katalog + Masuk ke PO
+  const handleCreateProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newProdName.trim() || !newProdSellingPrice) {
+      alert("Nama produk dan harga jual kasir wajib diisi!");
+      return;
+    }
+
+    let finalId = newProdBarcode.trim();
+    if (!finalId) {
+      finalId = generateInternalBarcode(products);
+    }
+
+    if (products.some(p => p.id === finalId || p.barcode === finalId)) {
+      alert(`Barcode / ID "${finalId}" sudah terdaftar pada produk lain! Gunakan barcode berbeda.`);
+      return;
+    }
+
+    const finalSku = newProdSku.trim() || finalId;
+    const finalCategory = newProdCategory || categories[0] || 'Umum';
+    const buyPrice = Number(newProdPurchasePrice) || 0;
+    const sellPrice = Number(newProdSellingPrice) || 0;
+    const grossPrice = Number(newProdWholesalePrice) || 0;
+    const minStk = Number(newProdMinStock) || 0;
+
+    // Filter varian yang valid jika diisi
+    const cleanVariants = newProdVariants
+      .filter(v => v.name.trim())
+      .map(v => ({
+        id: v.id || makeVariantId(),
+        name: v.name.trim(),
+        stock: 0,
+        purchasePrice: buyPrice,
+        sellingPrice: Number(v.sellingPrice) > 0 ? Number(v.sellingPrice) : sellPrice,
+        wholesalePrice: Number(v.wholesalePrice) > 0 ? Number(v.wholesalePrice) : grossPrice,
+        qty: Number(v.qty) || 0,
+      }));
+
+    const newProduct: any = {
+      id: finalId,
+      sku: finalSku,
+      barcode: finalId,
+      name: newProdName.trim(),
+      category: finalCategory,
+      location: 'Gudang Utama',
+      unit: newProdUnit || 'Pcs',
+      stock: 0,
+      baseUnitMultiplier: 1,
+      purchasePrice: buyPrice,
+      sellingPrice: sellPrice,
+      wholesalePrice: grossPrice,
+      minStock: minStk,
+      image: newProdImage ? getProductImage(newProdImage) : '',
+      variants: cleanVariants.map(v => ({
+        id: v.id,
+        name: v.name,
+        stock: 0,
+        purchasePrice: v.purchasePrice,
+        sellingPrice: v.sellingPrice,
+        wholesalePrice: v.wholesalePrice,
+      }))
+    };
+
+    try {
+      const createdProd = await addProduct(newProduct);
+
+      // Masukkan langsung ke keranjang faktur PO!
+      if (cleanVariants.length > 0) {
+        cleanVariants.forEach(v => {
+          const varQty = Number(v.qty) > 0 ? Number(v.qty) : (Number(newProdQty) || 1);
+          const varBuyPrice = Number(v.purchasePrice) > 0 ? Number(v.purchasePrice) : buyPrice;
+          const key = makeKey(createdProd.id, v.id);
+          setItems(prev => {
+            const existing = prev.find(i => i.key === key);
+            if (existing) {
+              return prev.map(i => i.key === key ? { ...i, qty: i.qty + varQty } : i);
+            }
+            return [...prev, {
+              key,
+              productId: createdProd.id,
+              name: createdProd.name,
+              variantId: v.id,
+              variantName: v.name,
+              isNewVariant: false,
+              currentStock: 0,
+              qty: varQty,
+              batchNo: '',
+              expiryDate: '',
+              purchasePrice: varBuyPrice,
+              originalPrice: varBuyPrice,
+              sellingPrice: Number(v.sellingPrice) || sellPrice,
+              unit: createdProd.unit || 'Pcs',
+              subtotal: varBuyPrice * varQty,
+              showBatchExp: false
+            }];
+          });
+        });
+      } else {
+        const orderQty = Math.max(1, Number(newProdQty) || 1);
+        const key = makeKey(createdProd.id);
+        setItems(prev => {
+          const existing = prev.find(i => i.key === key);
+          if (existing) {
+            return prev.map(i => i.key === key ? { ...i, qty: i.qty + orderQty } : i);
+          }
+          return [...prev, {
+            key,
+            productId: createdProd.id,
+            name: createdProd.name,
+            currentStock: 0,
+            qty: orderQty,
+            batchNo: '',
+            expiryDate: '',
+            purchasePrice: buyPrice,
+            originalPrice: buyPrice,
+            sellingPrice: sellPrice,
+            unit: createdProd.unit || 'Pcs',
+            subtotal: buyPrice * orderQty,
+            showBatchExp: false
+          }];
+        });
+      }
+
+      closeNewProductDrawer();
+      setSearchTerm('');
+    } catch (err: any) {
+      alert("Gagal menambahkan produk baru: " + (err?.message || "Terjadi kesalahan"));
+    }
   };
 
   return (
@@ -992,17 +1120,7 @@ const Purchases: React.FC = () => {
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setNewProdBarcode('');
-                  setNewProdSku('');
-                  setNewProdName(searchTerm.trim());
-                  setNewProdSellingPrice('');
-                  setNewProdPurchasePrice('');
-                  setNewProdWholesalePrice('');
-                  setNewProdMinStock('');
-                  setNewProdImage('');
-                  setIsNewProductModalOpen(true);
-                }}
+                onClick={() => openNewProductDrawer(searchTerm)}
                 className="bo-btn bo-btn-primary"
                 style={{
                   display: 'flex',
@@ -1031,7 +1149,7 @@ const Purchases: React.FC = () => {
                     <div style={{ padding: '16px', textAlign: 'center' }}>
                       <div style={{ color: '#64748b', fontSize: '13px', marginBottom: '8px' }}>Produk tidak ditemukan</div>
                       <button type="button" className="bo-btn bo-btn-primary"
-                        onClick={() => { setNewProdBarcode(searchTerm); setNewProdName(''); setIsNewProductModalOpen(true); }}>
+                        onClick={() => openNewProductDrawer(searchTerm)}>
                         + Buat Produk Baru
                       </button>
                     </div>
@@ -1070,17 +1188,7 @@ const Purchases: React.FC = () => {
                 <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', flexWrap: 'wrap' }}>
                   <button
                     type="button"
-                    onClick={() => {
-                      setNewProdBarcode('');
-                      setNewProdSku('');
-                      setNewProdName('');
-                      setNewProdSellingPrice('');
-                      setNewProdPurchasePrice('');
-                      setNewProdWholesalePrice('');
-                      setNewProdMinStock('');
-                      setNewProdImage('');
-                      setIsNewProductModalOpen(true);
-                    }}
+                    onClick={() => openNewProductDrawer()}
                     className="bo-btn bo-btn-primary"
                     style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
                   >
@@ -2328,8 +2436,7 @@ const Purchases: React.FC = () => {
             setIsScannerOpen(false);
             
             if (window.confirm('Produk belum terdaftar. Tambahkan sekarang sebagai produk baru?')) {
-              setNewProdBarcode(decodedText);
-              setIsNewProductModalOpen(true);
+              openNewProductDrawer(decodedText);
             }
             return null;
           }} 
@@ -2338,136 +2445,475 @@ const Purchases: React.FC = () => {
       )}
 
       {/* =====================================================================
-          MODAL: TAMBAH PRODUK BARU CEPAT
+          DRAWER: FORMULIR TAMBAH PRODUK BARU (IDENTIK DENGAN MANAJEMEN STOK)
           ===================================================================== */}
       {isNewProductModalOpen && (
-        <div style={{
-          position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)',
-          backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-          zIndex: 9998, padding: '16px'
+        <div className="ios-modal-overlay" style={{
+          position: 'fixed', inset: 0,
+          backgroundColor: 'rgba(0,0,0,0.4)',
+          display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+          zIndex: 9998,
+          animation: `${drawerClosing ? 'fadeOut' : 'fadeIn'} 0.25s ease forwards`
         }}>
-          <div style={{
-            background: 'white', borderRadius: '16px', width: '100%', maxWidth: '750px',
-            maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column',
-            boxShadow: '0 20px 50px rgba(0,0,0,0.2)'
-          }}>
-            <div style={{
-              background: '#dc2626', color: 'white', padding: '16px 20px',
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-            }}>
-              <div style={{ fontWeight: 800, fontSize: '15px' }}>Tambah Produk Baru ke Katalog</div>
-              <button
-                type="button"
-                onClick={() => setIsNewProductModalOpen(false)}
-                style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}
-              >
+          <div className={`ios-sheet${drawerClosing ? ' is-closing' : ''}`}>
+            {/* Grabber */}
+            <div style={{ display: 'flex', justifyContent: 'center', padding: '8px 0 4px' }}>
+              <div style={{ width: '40px', height: '5px', backgroundColor: '#d1d5db', borderRadius: '999px' }} />
+            </div>
+            
+            {/* Header */}
+            <div className="ios-sheet-header">
+              <div>
+                <div style={{ fontSize: '11px', fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  <span style={{ color: 'var(--primary, #dc2626)' }}>{appName || 'NAMA USAHA'}</span> &bull; INVENTARIS
+                </div>
+                <div style={{ fontSize: '20px', fontWeight: 800, color: '#111827', marginTop: '2px', letterSpacing: '-0.5px' }}>
+                  Formulir Tambah Stok &amp; PO
+                </div>
+              </div>
+              <button className="ios-close-btn" type="button" onClick={closeNewProductDrawer}>
                 <X size={18} />
               </button>
             </div>
 
-            <form onSubmit={handleCreateProduct} style={{ padding: '20px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px' }}>
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <label style={{ fontSize: '11px', fontWeight: 700, color: '#64748b' }}>Barcode / ID *</label>
+            <form onSubmit={handleCreateProduct} className="ios-sheet-body">
+              {/* SECTION: INFORMASI PRODUK */}
+              <div className="ios-section-header">
+                <span>INFORMASI PRODUK</span>
+                <span className="ios-req">* Wajib diisi</span>
+              </div>
+              <div className="ios-group">
+                <div className="ios-row-vert">
+                  <div className="ios-label-row">
+                    <label>ID Produk / Barcode</label>
+                    <span className="ios-hint">Ketik atau Pindai</span>
+                  </div>
+                  <div className="ios-input-wrap">
+                    <input
+                      type="text"
+                      value={newProdBarcode}
+                      onChange={(e) => {
+                        setNewProdBarcode(e.target.value);
+                        if (!newProdSku) setNewProdSku(e.target.value);
+                      }}
+                      className="ios-input-gray"
+                      placeholder="899..."
+                      autoFocus
+                    />
+                    {newProdBarcode && (
+                      <button type="button" className="ios-inside-btn" onClick={() => setNewProdBarcode('')}>
+                        <X size={14} color="#9ca3af" />
+                      </button>
+                    )}
+                    <button type="button" className="ios-btn-pindai" onClick={() => setNewProdScannerOpen(true)}>
+                      <Camera size={14} /> Pindai
+                    </button>
                     <button
                       type="button"
+                      className="ios-btn-zap"
+                      title="Acak Barcode Otomatis"
                       onClick={() => {
-                        const randomCode = 'BRG-' + Math.floor(100000 + Math.random() * 900000);
-                        setNewProdBarcode(randomCode);
-                        if (!newProdSku) setNewProdSku(randomCode);
+                        const code = generateInternalBarcode(products);
+                        setNewProdBarcode(code);
+                        if (!newProdSku) setNewProdSku(code);
                       }}
-                      style={{ border: 'none', background: 'none', color: '#2563eb', fontSize: '11px', fontWeight: 700, cursor: 'pointer', padding: 0 }}
                     >
-                      ⚡ Acak Otomatis
+                      ⚡
                     </button>
                   </div>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Contoh: 899123456789 atau BRG-102"
-                    value={newProdBarcode}
-                    onChange={e => setNewProdBarcode(e.target.value)}
-                    style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: '8px', height: '38px', padding: '0 10px', fontSize: '13px' }}
-                  />
                 </div>
-                <div>
-                  <label style={{ fontSize: '11px', fontWeight: 700, color: '#64748b' }}>Nama Produk *</label>
+
+                <div className="ios-row-vert">
+                  <div className="ios-label-row"><label>Nama Produk &amp; Varian *</label></div>
                   <input
                     type="text"
-                    required
                     value={newProdName}
-                    onChange={e => setNewProdName(e.target.value)}
-                    style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: '8px', height: '38px', padding: '0 10px', fontSize: '13px' }}
-                  />
-                </div>
-                <div>
-                  <label style={{ fontSize: '11px', fontWeight: 700, color: '#64748b' }}>Harga Beli (HPP)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={newProdPurchasePrice}
-                    onChange={e => setNewProdPurchasePrice(e.target.value)}
-                    style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: '8px', height: '38px', padding: '0 10px', fontSize: '13px' }}
-                  />
-                </div>
-                <div>
-                  <label style={{ fontSize: '11px', fontWeight: 700, color: '#64748b' }}>Harga Jual *</label>
-                  <input
-                    type="number"
-                    min="0"
+                    onChange={(e) => setNewProdName(e.target.value)}
+                    className="ios-input-gray"
+                    placeholder="Contoh: Cue polishing pad"
                     required
-                    value={newProdSellingPrice}
-                    onChange={e => setNewProdSellingPrice(e.target.value)}
-                    style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: '8px', height: '38px', padding: '0 10px', fontSize: '13px' }}
                   />
                 </div>
-                <div>
-                  <label style={{ fontSize: '11px', fontWeight: 700, color: '#64748b' }}>Kategori</label>
-                  <select
-                    value={newProdCategory}
-                    onChange={e => setNewProdCategory(e.target.value)}
-                    style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: '8px', height: '38px', padding: '0 10px', fontSize: '13px' }}
-                  >
-                    <option value="">Pilih Kategori</option>
-                    {categories.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label style={{ fontSize: '11px', fontWeight: 700, color: '#64748b' }}>Satuan</label>
-                  <select
-                    value={newProdUnit}
-                    onChange={e => setNewProdUnit(e.target.value)}
-                    style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: '8px', height: '38px', padding: '0 10px', fontSize: '13px' }}
-                  >
-                    <option value="Pcs">Pcs</option>
-                    <option value="Kg">Kg</option>
-                    <option value="Dus">Dus</option>
-                    <option value="Pack">Pack</option>
-                    <option value="Botol">Botol</option>
-                  </select>
+
+                <div className="ios-row-split">
+                  <div className="ios-col">
+                    <div className="ios-label-row"><label>SKU Internal Toko</label></div>
+                    <input
+                      type="text"
+                      value={newProdSku}
+                      onChange={(e) => setNewProdSku(e.target.value)}
+                      className="ios-input-gray"
+                      placeholder="SKU-..."
+                    />
+                  </div>
+                  <div className="ios-col">
+                    <div className="ios-label-row">
+                      <label>Kategori</label>
+                      <button
+                        type="button"
+                        className="ios-link-red"
+                        onClick={() => {
+                          const catName = window.prompt('Masukkan nama kategori baru:');
+                          if (catName && catName.trim()) {
+                            setNewProdCategory(catName.trim());
+                          }
+                        }}
+                      >
+                        + Baru
+                      </button>
+                    </div>
+                    <select
+                      value={newProdCategory}
+                      onChange={(e) => setNewProdCategory(e.target.value)}
+                      className="ios-input-gray"
+                      required
+                    >
+                      {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                      {newProdCategory && !categories.includes(newProdCategory) && (
+                        <option value={newProdCategory}>{newProdCategory}</option>
+                      )}
+                    </select>
+                  </div>
                 </div>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '10px' }}>
-                <button
-                  type="button"
-                  onClick={() => setIsNewProductModalOpen(false)}
-                  style={{ background: '#f1f5f9', border: 'none', borderRadius: '8px', padding: '8px 14px', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
-                >
+              {/* SECTION: VARIAN PRODUK (OPSIONAL) */}
+              <div className="ios-section-header" style={{ marginTop: '20px' }}>
+                <span>VARIAN (OPSIONAL)</span>
+                <span className="ios-hint-gray">Warna / rasa / ukuran</span>
+              </div>
+              <VariantEditor
+                variants={newProdVariants}
+                onChange={setNewProdVariants}
+                qtyLabel="Qty PO"
+                hint="Satu produk, banyak varian dengan harga sama? Cukup ketik nama varian dipisah koma lalu isi qty tiap varian. Harga varian dikosongkan = ikut harga produk di bawah."
+              />
+
+              {/* SECTION: MANAJEMEN STOK & SATUAN */}
+              <div className="ios-section-header" style={{ marginTop: '20px' }}>
+                <span>MANAJEMEN STOK &amp; SATUAN</span>
+                <span className="ios-hint-gray">Gudang Utama (POS 01)</span>
+              </div>
+              <div className="ios-group">
+                {newProdVariants.some(v => v.name.trim()) ? (
+                  <div className="ios-row-horiz">
+                    <div>
+                      <label>Total Qty Beli (Otomatis)</label>
+                      <div className="ios-sublabel">Jumlah dari seluruh varian di atas</div>
+                    </div>
+                    <div style={{ fontSize: '20px', fontWeight: 800, color: '#065f46' }}>
+                      {sumVariantQty(newProdVariants)}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="ios-row-horiz">
+                    <div>
+                      <label>Jumlah Beli (Qty PO)</label>
+                      <div className="ios-sublabel">Kuantitas fisik yang dipesan ke supplier</div>
+                    </div>
+                    <div className="ios-stepper">
+                      <button type="button" onClick={() => setNewProdQty(Math.max(1, Number(newProdQty) - 1))}>-</button>
+                      <input
+                        type="number"
+                        step="any"
+                        inputMode="decimal"
+                        value={newProdQty}
+                        onChange={(e) => setNewProdQty(e.target.value === '' ? '' : Number(e.target.value))}
+                        required
+                      />
+                      <button type="button" onClick={() => setNewProdQty(Number(newProdQty) + 1)}>+</button>
+                    </div>
+                  </div>
+                )}
+                
+                <div className="ios-row-vert" style={{ padding: '12px 16px' }}>
+                  <label style={{ marginBottom: '8px', display: 'block', fontSize: '13px', fontWeight: 600 }}>Satuan Unit</label>
+                  <div className="ios-segmented">
+                    {['Pcs', 'Box', 'Kg', 'Liter'].map(u => (
+                      <button
+                        type="button"
+                        key={u}
+                        className={newProdUnit === u ? 'active' : ''}
+                        onClick={() => setNewProdUnit(u)}
+                      >
+                        {u}
+                      </button>
+                    ))}
+                  </div>
+                  <select
+                    value={['Pcs', 'Box', 'Kg', 'Liter'].indexOf(newProdUnit) === -1 ? newProdUnit : ''}
+                    onChange={(e) => { if (e.target.value) setNewProdUnit(e.target.value); }}
+                    className="ios-input-gray"
+                    style={{ marginTop: '8px' }}
+                  >
+                    <option value="">Satuan lain...</option>
+                    <option value="Gram">Gram</option>
+                    <option value="Pack">Pack</option>
+                    <option value="Lusin">Lusin</option>
+                    <option value="Dus">Dus</option>
+                    <option value="Set">Set</option>
+                    <option value="Meter">Meter</option>
+                    <option value="Rol">Rol</option>
+                  </select>
+                </div>
+
+                <div className="ios-row-horiz">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        Peringatan Stok Tipis (Min) <AlertTriangle size={14} color="#f59e0b" />
+                      </label>
+                      <div className="ios-sublabel">Peringatan saat stok di bawah nilai ini</div>
+                    </div>
+                  </div>
+                  <input
+                    type="number"
+                    step="any"
+                    inputMode="decimal"
+                    value={newProdMinStock}
+                    onChange={(e) => setNewProdMinStock(e.target.value === '' ? '' : Number(e.target.value))}
+                    className="ios-input-gray ios-input-small"
+                    style={{ width: '60px', textAlign: 'center' }}
+                  />
+                </div>
+              </div>
+
+              {/* SECTION: STRUKTUR HARGA */}
+              <div className="ios-section-header" style={{ marginTop: '20px' }}>
+                <span>STRUKTUR HARGA (IDR)</span>
+                {(() => {
+                  const m = (Number(newProdSellingPrice) - Number(newProdPurchasePrice));
+                  const pct = Number(newProdSellingPrice) > 0 ? (m / Number(newProdSellingPrice)) * 100 : 0;
+                  const color = pct >= 0 ? '#10b981' : '#ef4444';
+                  const bg = pct >= 0 ? '#dcfce7' : '#fee2e2';
+                  return (
+                    <span style={{ backgroundColor: bg, color, padding: '2px 8px', borderRadius: '999px', fontSize: '11px', fontWeight: 700 }}>
+                      Margin: {pct > 0 ? '+' : ''}{pct.toFixed(1)}%
+                    </span>
+                  );
+                })()}
+              </div>
+              <div className="ios-group">
+                <div className="ios-row-horiz">
+                  <div>
+                    <label>Harga Modal (Beli / HPP)</label>
+                    <div className="ios-sublabel">Biaya pokok per item dari supplier</div>
+                  </div>
+                  <div className="ios-input-prefix">
+                    <span>Rp</span>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      value={newProdPurchasePrice}
+                      onChange={(e) => setNewProdPurchasePrice(e.target.value === '' ? '' : Number(e.target.value))}
+                      className="ios-input-gray"
+                      style={{ textAlign: 'right', width: '110px', fontWeight: 700 }}
+                      placeholder="0"
+                    />
+                  </div>
+                </div>
+                
+                <div className="ios-row-horiz">
+                  <div>
+                    <label style={{ color: 'var(--primary, #dc2626)' }}>Harga Jual (Kasir) *</label>
+                    <div className="ios-sublabel">Harga eceran reguler pelanggan</div>
+                  </div>
+                  <div className="ios-input-prefix is-red">
+                    <span>Rp</span>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      value={newProdSellingPrice}
+                      onChange={(e) => setNewProdSellingPrice(e.target.value === '' ? '' : Number(e.target.value))}
+                      className="ios-input-gray"
+                      style={{ textAlign: 'right', width: '110px', color: 'var(--primary, #dc2626)', fontWeight: 700 }}
+                      placeholder="0"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="ios-row-horiz">
+                  <div>
+                    <label>Harga Grosir / Partai</label>
+                    <div className="ios-sublabel">Harga khusus pelanggan grosir</div>
+                  </div>
+                  <div className="ios-input-prefix">
+                    <span>Rp</span>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      value={newProdWholesalePrice}
+                      onChange={(e) => setNewProdWholesalePrice(e.target.value === '' ? '' : Number(e.target.value))}
+                      className="ios-input-gray"
+                      style={{ textAlign: 'right', width: '110px' }}
+                      placeholder="0"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* SECTION: FOTO PRODUK (OPSIONAL) */}
+              <div className="ios-section-header" style={{ marginTop: '20px' }}>
+                <span>FOTO PRODUK (OPSIONAL)</span>
+                <span className="ios-hint-gray">Format Gambar / URL</span>
+              </div>
+              <div className="ios-group">
+                <div className="ios-row-vert">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onload = (re) => setNewProdImage(re.target?.result as string);
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                    style={{ fontSize: '13px' }}
+                  />
+                  {newProdImage && (
+                    <div style={{ marginTop: '10px' }}>
+                      <img src={newProdImage} alt="Preview" style={{ width: '80px', height: '80px', objectFit: 'cover', borderRadius: '8px' }} />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Spacer */}
+              <div style={{ height: '40px' }} />
+
+              {/* FOOTER ACTIONS */}
+              <div className="ios-sheet-footer">
+                <button type="button" className="ios-btn-batal" onClick={closeNewProductDrawer}>
                   Batal
                 </button>
-                <button
-                  type="submit"
-                  style={{ background: '#dc2626', color: 'white', border: 'none', borderRadius: '8px', padding: '8px 16px', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}
-                >
-                  Simpan & Tambah ke PO
+                <button type="submit" className="ios-btn-simpan">
+                  <Plus size={18} /> Tambahkan ke Faktur PO
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
+
+      {/* MODAL SCANNER KHUSUS DRAWER TAMBAH PRODUK BARU */}
+      {newProdScannerOpen && (
+        <BarcodeScannerCamera
+          onScan={(decodedText) => {
+            setNewProdBarcode(decodedText);
+            if (!newProdSku) setNewProdSku(decodedText);
+            setNewProdScannerOpen(false);
+            return decodedText;
+          }}
+          onClose={() => setNewProdScannerOpen(false)}
+        />
+      )}
+
+      <style>{`
+        /* iOS Bottom Sheet Styles */
+        .ios-modal-overlay { padding: max(20px, calc(env(safe-area-inset-top) + 15px)) 0 0 0; }
+        .ios-sheet {
+          background-color: #f2f2f7; width: 100%; max-width: 480px; height: 100%;
+          border-radius: 20px 20px 0 0; display: flex; flex-direction: column;
+          box-shadow: 0 -10px 40px rgba(0,0,0,0.15); overflow: hidden; position: relative;
+          animation: slideUp 0.35s cubic-bezier(0.32,0.72,0,1) forwards;
+        }
+        .ios-sheet.is-closing { animation: slideDown 0.25s ease-in forwards; }
+        
+        .ios-sheet-header {
+          display: flex; justify-content: space-between; align-items: flex-start;
+          padding: 8px 20px 16px; flex-shrink: 0;
+        }
+        .ios-close-btn {
+          width: 32px; height: 32px; border-radius: 50%; background: #e5e7eb;
+          border: none; color: #4b5563; display: flex; align-items: center; justify-content: center; cursor: pointer;
+        }
+        .ios-sheet-body { flex: 1; overflow-y: auto; padding: 0 16px; padding-bottom: 90px; }
+        
+        .ios-section-header {
+          display: flex; justify-content: space-between; align-items: flex-end;
+          padding: 0 4px 6px; font-size: 11.5px; font-weight: 700; color: #6b7280; letter-spacing: 0.2px;
+        }
+        .ios-req { color: var(--primary, #dc2626); }
+        .ios-hint-gray { font-weight: 500; }
+        
+        .ios-group {
+          background: #ffffff; border-radius: 12px; overflow: hidden;
+          box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+        .ios-row-vert { padding: 12px 16px; position: relative; border-bottom: 0.5px solid #e5e7eb; }
+        .ios-row-vert:last-child { border-bottom: none; }
+        .ios-label-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 13px; font-weight: 600; color: #374151; }
+        .ios-hint { color: #9ca3af; font-weight: 400; font-size: 12px; }
+        .ios-input-gray {
+          width: 100%; background: #f3f4f6; border: 1px solid transparent; border-radius: 8px;
+          padding: 10px 12px; font-size: 15px; color: #111827; outline: none; transition: border 0.2s;
+        }
+        .ios-input-gray:focus { border-color: #d1d5db; background: #fff; }
+        .ios-input-small { padding: 8px; }
+        
+        .ios-input-wrap { display: flex; gap: 8px; align-items: center; }
+        .ios-inside-btn { display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; }
+        .ios-btn-pindai {
+          display: flex; align-items: center; gap: 6px; background: white; border: 1px solid #d1d5db;
+          padding: 0 12px; height: 38px; border-radius: 8px; font-weight: 600; font-size: 13px; color: #374151; cursor: pointer;
+        }
+        .ios-btn-zap {
+          display: flex; align-items: center; justify-content: center; background: #fee2e2; border: none;
+          width: 38px; height: 38px; border-radius: 8px; color: var(--primary, #dc2626); font-size: 16px; cursor: pointer;
+        }
+
+        .ios-row-split { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px 16px; }
+        .ios-col { display: flex; flex-direction: column; }
+        .ios-link-red { background: none; border: none; color: var(--primary, #dc2626); font-weight: 700; font-size: 12px; cursor: pointer; padding: 0; }
+
+        .ios-row-horiz {
+          display: flex; justify-content: space-between; align-items: center;
+          padding: 14px 16px; border-bottom: 0.5px solid #e5e7eb;
+        }
+        .ios-row-horiz:last-child { border-bottom: none; }
+        .ios-row-horiz label { font-size: 14px; font-weight: 600; color: #111827; }
+        .ios-sublabel { font-size: 12px; color: #9ca3af; margin-top: 2px; }
+        
+        .ios-stepper { display: flex; align-items: center; background: #f3f4f6; border-radius: 8px; padding: 2px; border: 1px solid #e5e7eb; }
+        .ios-stepper button { width: 32px; height: 32px; border: none; background: transparent; font-size: 18px; font-weight: 600; color: #4b5563; cursor: pointer; }
+        .ios-stepper input { width: 44px; text-align: center; border: none; background: transparent; font-size: 16px; font-weight: 800; }
+        
+        .ios-segmented { display: flex; background: #f3f4f6; border-radius: 8px; padding: 2px; gap: 2px; }
+        .ios-segmented button { flex: 1; padding: 8px 0; border: none; background: transparent; border-radius: 6px; font-size: 13px; font-weight: 600; color: #6b7280; transition: all 0.2s; cursor: pointer; }
+        .ios-segmented button.active { background: white; color: #111827; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        
+        .ios-input-prefix { display: flex; align-items: center; gap: 8px; background: #f3f4f6; padding: 0 12px; border-radius: 8px; }
+        .ios-input-prefix span { font-size: 13px; font-weight: 700; color: #9ca3af; }
+        .ios-input-prefix .ios-input-gray { background: transparent; padding: 10px 0; border: none; }
+        .ios-input-prefix.is-red { background: #fff1f2; }
+        .ios-input-prefix.is-red span { color: var(--primary, #dc2626); }
+        
+        .ios-sheet-footer {
+          position: absolute; bottom: 0; left: 0; right: 0;
+          background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); border-top: 1px solid #e5e7eb;
+          padding: 12px 16px 16px; display: flex; gap: 12px;
+        }
+        .ios-btn-batal { flex: 0 0 100px; padding: 14px; border-radius: 12px; border: none; background: #f3f4f6; font-size: 15px; font-weight: 700; color: #374151; cursor: pointer; }
+        .ios-btn-simpan { flex: 1; padding: 14px; border-radius: 12px; border: none; background: var(--primary, #dc2626); font-size: 15px; font-weight: 700; color: white; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; }
+
+        @media (min-width: 641px) {
+          .ios-modal-overlay { justify-content: flex-end !important; padding: 0 !important; }
+          .ios-sheet { border-radius: 0; max-width: 440px; animation: slideInRight 0.3s cubic-bezier(0.22,1,0.36,1) forwards; }
+          .ios-sheet.is-closing { animation: slideOutRight 0.3s forwards; }
+          .ios-sheet-footer { padding: 16px 20px; }
+        }
+
+        @keyframes fadeIn { from { opacity:0 } to { opacity:1 } }
+        @keyframes fadeOut { from { opacity:1 } to { opacity:0 } }
+        @keyframes slideInRight { from { transform: translateX(100%); } to { transform: translateX(0); } }
+        @keyframes slideOutRight { from { transform: translateX(0); } to { transform: translateX(100%); } }
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+        @keyframes slideDown { from { transform: translateY(0); } to { transform: translateY(100%); } }
+        @keyframes scaleIn { from { opacity:0; transform: scale(0.5); } to { opacity:1; transform: scale(1); } }
+      `}</style>
 
     </div>
   );
