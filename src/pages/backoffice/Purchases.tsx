@@ -990,6 +990,36 @@ const Purchases: React.FC = () => {
                 style={{ width: '38px', height: '38px', borderRadius: '8px', background: '#059669', border: 'none', color: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
                 <Camera size={17} />
               </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setNewProdBarcode('');
+                  setNewProdSku('');
+                  setNewProdName(searchTerm.trim());
+                  setNewProdSellingPrice('');
+                  setNewProdPurchasePrice('');
+                  setNewProdWholesalePrice('');
+                  setNewProdMinStock('');
+                  setNewProdImage('');
+                  setIsNewProductModalOpen(true);
+                }}
+                className="bo-btn bo-btn-primary"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  height: '38px',
+                  padding: '0 14px',
+                  fontWeight: 700,
+                  fontSize: '13px',
+                  whiteSpace: 'nowrap',
+                  borderRadius: '8px',
+                  flexShrink: 0
+                }}
+                title="Daftarkan barang baru yang belum ada di katalog produk"
+              >
+                <Plus size={16} /> + Barang Baru
+              </button>
 
               {searchTerm && (
                 <div style={{
@@ -1037,10 +1067,30 @@ const Purchases: React.FC = () => {
                 <div style={{ fontSize: '12.5px', color: '#64748b', lineHeight: 1.5, maxWidth: '320px', margin: '6px auto 14px' }}>
                   Gunakan kolom pencarian atau scan kamera untuk menambahkan produk yang akan dipesan ke supplier.
                 </div>
-                <button type="button" onClick={handleAddSampleProduct} className="bo-btn bo-btn-secondary"
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                  <Plus size={14} /> Tambah Contoh Produk Cepat
-                </button>
+                <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewProdBarcode('');
+                      setNewProdSku('');
+                      setNewProdName('');
+                      setNewProdSellingPrice('');
+                      setNewProdPurchasePrice('');
+                      setNewProdWholesalePrice('');
+                      setNewProdMinStock('');
+                      setNewProdImage('');
+                      setIsNewProductModalOpen(true);
+                    }}
+                    className="bo-btn bo-btn-primary"
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                  >
+                    <Plus size={14} /> + Daftarkan Barang Baru
+                  </button>
+                  <button type="button" onClick={handleAddSampleProduct} className="bo-btn bo-btn-secondary"
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                    Tambah Contoh Produk Cepat
+                  </button>
+                </div>
               </div>
             ) : !isMobileScreen ? (
               <div className="bo-table-container" style={{ overflowX: 'auto' }}>
@@ -2318,10 +2368,24 @@ const Purchases: React.FC = () => {
             <form onSubmit={handleCreateProduct} style={{ padding: '20px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px' }}>
                 <div>
-                  <label style={{ fontSize: '11px', fontWeight: 700, color: '#64748b' }}>Barcode / ID *</label>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <label style={{ fontSize: '11px', fontWeight: 700, color: '#64748b' }}>Barcode / ID *</label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const randomCode = 'BRG-' + Math.floor(100000 + Math.random() * 900000);
+                        setNewProdBarcode(randomCode);
+                        if (!newProdSku) setNewProdSku(randomCode);
+                      }}
+                      style={{ border: 'none', background: 'none', color: '#2563eb', fontSize: '11px', fontWeight: 700, cursor: 'pointer', padding: 0 }}
+                    >
+                      ⚡ Acak Otomatis
+                    </button>
+                  </div>
                   <input
                     type="text"
                     required
+                    placeholder="Contoh: 899123456789 atau BRG-102"
                     value={newProdBarcode}
                     onChange={e => setNewProdBarcode(e.target.value)}
                     style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: '8px', height: '38px', padding: '0 10px', fontSize: '13px' }}
