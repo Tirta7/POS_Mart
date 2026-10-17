@@ -23,6 +23,8 @@ import type { SalesTransaction } from './types';
 import ShiftLabel from './components/ShiftLabel';
 import type { ReceiptOptions } from './utils/receipt';
 import { getProductImage, handleProductImageError } from './utils/defaultProductImage';
+import { sound } from './utils/audioFeedback';
+import BarcodeLabelModal from './components/BarcodeLabelModal';
 
 /** Tanggal & jam real-time (mengikuti jam perangkat), diperbarui tiap detik. */
 function LiveClock() {
@@ -38,7 +40,7 @@ function LiveClock() {
 
 function App() {
   const { appName, appLogo, taxEnabled, taxRate, roundingUnit } = useSettingsStore();
-  const { products: storeProducts, categories, reserveStock, releaseReservedStock } = useInventoryStore();
+  const { products: storeProducts, categories, reserveStock, releaseReservedStock, addProduct } = useInventoryStore();
   const { addSale, sales } = useSalesStore();
   const todayTxCount = sales.filter(s => new Date(s.date).toDateString() === new Date().toDateString()).length;
   const { currentUser, logout } = useAuthStore();
@@ -236,6 +238,37 @@ function App() {
     if (cart.length === 0) setCartSheetOpen(false);
   }, [cart.length]);
 
+  // Varian multiplier saat discan dengan perkalian (misal 5*kode)
+  const [pendingVariantQty, setPendingVariantQty] = useState<number>(1);
+
+  // Floating Toast notification
+  const [toastNotice, setToastNotice] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
+
+  // Point 7: Modal Pendaftaran Kilat Produk Baru saat Barcode tak ditemukan
+  const [quickRegModalOpen, setQuickRegModalOpen] = useState(false);
+  const [quickRegBarcode, setQuickRegBarcode] = useState('');
+  const [quickRegQty, setQuickRegQty] = useState<number>(1);
+  const [quickRegName, setQuickRegName] = useState('');
+  const [quickRegCategory, setQuickRegCategory] = useState('Umum');
+  const [quickRegUnit, setQuickRegUnit] = useState('Pcs');
+  const [quickRegSellPrice, setQuickRegSellPrice] = useState<number | ''>('');
+  const [quickRegBuyPrice, setQuickRegBuyPrice] = useState<number | ''>('');
+  const [quickRegStock, setQuickRegStock] = useState<number | ''>(10);
+  const [quickRegSaving, setQuickRegSaving] = useState(false);
+
+  // Point 8: Modal Cetak Label Stiker Bluetooth / Browser
+  const [labelModalProduct, setLabelModalProduct] = useState<any | null>(null);
+  const [labelPickerOpen, setLabelPickerOpen] = useState(false);
+  const [labelPickerSearch, setLabelPickerSearch] = useState('');
+
+  // Auto-dismiss toast notice
+  useEffect(() => {
+    if (toastNotice) {
+      const timer = setTimeout(() => setToastNotice(null), 3200);
+      return () => clearTimeout(timer);
+    }
+  }, [toastNotice]);
+
   const CATEGORIES = [
     { id: 'all', name: cart.length > 0 ? 'PESANAN' : 'SEMUA (ALL)', icon: <LayoutGrid size={16} /> },
     ...categories.map(cat => ({
@@ -362,36 +395,6 @@ function App() {
     setCart(prev => prev.filter(item => item.cartId !== cartId));
   };
 
-  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      const q = searchQuery.trim().toLowerCase();
-      if (!q) return;
-
-      // Cari exact match untuk barcode, SKU, atau ID
-      const exactMatch = PRODUCTS.find(p => 
-        p.barcode?.toLowerCase() === q || 
-        p.sku.toLowerCase() === q || 
-        p.id.toLowerCase() === q
-      );
-
-      if (!exactMatch) {
-        const variantMatch = PRODUCTS.find(p => (p.variants || []).some((v: any) => String(v.name || '').toLowerCase() === q));
-        if (variantMatch) {
-          handleProductClick(variantMatch);
-          setSearchQuery('');
-          return;
-        }
-      }
-
-      if (exactMatch) {
-        // Jika cocok persis (scanner barcode), langsung tambahkan ke keranjang
-        handleProductClick(exactMatch);
-        setSearchQuery(''); // Kosongkan search bar
-      }
-    }
-  };
-
   const sameLine = (a: any, b: any) => a.id === b.id && (a.variantId || null) === (b.variantId || null);
 
   const addToCart = (product: any, customQty?: number) => {
@@ -401,6 +404,7 @@ function App() {
       const exists = prev.find(i => sameLine(i, product));
       if (exists) {
         if (exists.qty + qtyToAdd > product.availableStock) {
+          sound.playScanError();
           alert(`Stok tidak mencukupi! Hanya tersedia ${product.availableStock} ${product.unit}`);
           return prev;
         }
@@ -408,6 +412,7 @@ function App() {
       }
       
       if (qtyToAdd > product.availableStock) {
+        sound.playScanError();
         alert(`Stok tidak mencukupi! Hanya tersedia ${product.availableStock} ${product.unit}`);
         return prev;
       }
@@ -425,42 +430,326 @@ function App() {
     });
   };
 
-  // Tambah ke keranjang (cek satuan berat -> popup jumlah, selain itu langsung +1)
-  const proceedAdd = (product: any) => {
+  // Tambah ke keranjang (cek satuan berat -> popup jumlah, selain itu langsung +qty)
+  const proceedAdd = (product: any, customQty: number = 1) => {
     const u = (product.unit || '').toLowerCase();
     if (u === 'kg' || u === 'gram' || u === 'liter') {
       setWeightProduct(product);
-      setWeightInput('');
+      setWeightInput(customQty !== 1 ? String(customQty) : '');
       setWeightPopupOpen(true);
     } else {
-      addToCart(product);
+      addToCart(product, customQty);
     }
   };
 
-  const handleProductClick = (product: any) => {
+  const handleProductClick = (product: any, customQty: number = 1) => {
     // Produk bervarian: tampilkan popup pilih varian dulu
     if (product.variants && product.variants.length > 0) {
+      setPendingVariantQty(customQty);
       setVariantProduct(product);
       return;
     }
-    proceedAdd(product);
+    proceedAdd(product, customQty);
+    sound.playScanSuccess();
   };
 
   const handlePickVariant = (variant: any) => {
     if (!variantProduct) return;
     if (variant.availableStock <= 0) {
+      sound.playScanError();
       alert(`Stok varian "${variant.name}" habis!`);
       return;
     }
     const { variants: _omit, ...base } = variantProduct;
+    const qty = pendingVariantQty || 1;
     proceedAdd({
       ...base,
       variantId: variant.id,
       variantName: variant.name,
       price: variant.price,
       availableStock: variant.availableStock,
-    });
+      unit: variantProduct.unit || 'Pcs',
+    }, qty);
+    setPendingVariantQty(1);
     setVariantProduct(null);
+    sound.playScanSuccess();
+    setToastNotice({
+      type: 'success',
+      message: `${qty > 1 ? `${qty}x ` : ''}${variantProduct.name} (${variant.name}) masuk keranjang`
+    });
+  };
+
+  /**
+   * PROSES BARCODE SCANNER UTAMA (Point 1, 2, 3, 7)
+   * Mendukung perkalian kuantitas prefix: "5*899990812345" atau "10xROKOK"
+   */
+  const handleBarcodeProcess = (rawInput: string) => {
+    const trimmed = rawInput.trim();
+    if (!trimmed) return;
+
+    // Point 3: Multi-Qty Prefix Scan ("5*899990812345" atau "10xROKOK" atau "2.5*BERAS")
+    let multiplier = 1;
+    let code = trimmed;
+    const match = trimmed.match(/^(\d+(?:\.\d+)?)\s*[*xX]\s*(.+)$/);
+    if (match) {
+      multiplier = Math.max(0.001, parseFloat(match[1]) || 1);
+      code = match[2].trim();
+    }
+
+    const q = code.toLowerCase();
+
+    // 1. Cari exact match produk utama (barcode, SKU, ID)
+    let matchedProduct: any = PRODUCTS.find(p =>
+      (p.barcode && p.barcode.toLowerCase() === q) ||
+      (p.sku && p.sku.toLowerCase() === q) ||
+      p.id.toLowerCase() === q
+    );
+
+    // 2. Jika tidak ada di produk utama, cari di varian produk
+    let matchedVariant: any = null;
+    if (!matchedProduct) {
+      for (const p of PRODUCTS) {
+        if (p.variants && p.variants.length > 0) {
+          const v = p.variants.find((vx: any) =>
+            vx.id.toLowerCase() === q ||
+            vx.name.toLowerCase() === q ||
+            (vx.sku && vx.sku.toLowerCase() === q) ||
+            (vx.barcode && vx.barcode.toLowerCase() === q)
+          );
+          if (v) {
+            matchedProduct = p;
+            matchedVariant = v;
+            break;
+          }
+        }
+      }
+    }
+
+    if (matchedProduct) {
+      if (matchedVariant) {
+        // Varian spesifik langsung cocok
+        if (matchedVariant.availableStock <= 0) {
+          sound.playScanError();
+          alert(`Stok varian "${matchedVariant.name}" habis!`);
+          return;
+        }
+        const { variants: _omit, ...base } = matchedProduct;
+        proceedAdd({
+          ...base,
+          variantId: matchedVariant.id,
+          variantName: matchedVariant.name,
+          price: matchedVariant.price,
+          availableStock: matchedVariant.availableStock,
+          unit: matchedProduct.unit || 'Pcs',
+        }, multiplier);
+        sound.playScanSuccess();
+        setToastNotice({
+          type: 'success',
+          message: `${multiplier > 1 ? `${multiplier}x ` : ''}${matchedProduct.name} (${matchedVariant.name}) masuk keranjang`
+        });
+      } else if (matchedProduct.variants && matchedProduct.variants.length > 0) {
+        // Produk punya beberapa varian tapi scan barcode induk -> munculkan dialog pilihan varian
+        setPendingVariantQty(multiplier);
+        setVariantProduct(matchedProduct);
+        sound.playScanSuccess();
+      } else {
+        // Produk tunggal
+        if (matchedProduct.availableStock <= 0) {
+          sound.playScanError();
+          alert(`Stok produk "${matchedProduct.name}" habis!`);
+          return;
+        }
+        proceedAdd(matchedProduct, multiplier);
+        sound.playScanSuccess();
+        setToastNotice({
+          type: 'success',
+          message: `${multiplier > 1 ? `${multiplier}x ` : ''}${matchedProduct.name} masuk keranjang`
+        });
+      }
+    } else {
+      // 3. BARCODE TIDAK DITEMUKAN -> Dialog Pendaftaran Kilat (Point 7)
+      sound.playScanError();
+      setQuickRegBarcode(code);
+      setQuickRegQty(multiplier);
+      setQuickRegName('');
+      setQuickRegCategory(categories[0] || 'Umum');
+      setQuickRegUnit('Pcs');
+      setQuickRegSellPrice('');
+      setQuickRegBuyPrice('');
+      setQuickRegStock(10);
+      setQuickRegModalOpen(true);
+    }
+  };
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const q = searchQuery.trim();
+      if (!q) return;
+      handleBarcodeProcess(q);
+      setSearchQuery('');
+    }
+  };
+
+  // Buffer global scanner hardware (Point 1)
+  const barcodeBufferRef = useRef<string>('');
+  const lastKeyTimeRef = useRef<number>(0);
+
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      // 1. Shortcut F2: Selalu fokus ke search bar
+      if (e.key === 'F2') {
+        e.preventDefault();
+        searchRef.current?.focus();
+        searchRef.current?.select();
+        return;
+      }
+
+      // Jangan intercept jika ada modal penting yang sedang terbuka
+      if (
+        paymentPopupOpen ||
+        receipt ||
+        quickRegModalOpen ||
+        customPriceModalOpen ||
+        customerSelectPopupOpen ||
+        holdListOpen ||
+        weightPopupOpen ||
+        variantProduct ||
+        cameraScannerOpen ||
+        labelModalProduct ||
+        labelPickerOpen
+      ) {
+        return;
+      }
+
+      const activeEl = document.activeElement;
+      const isInputActive = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA');
+
+      const now = Date.now();
+      const diff = now - lastKeyTimeRef.current;
+      lastKeyTimeRef.current = now;
+
+      // Reset buffer jika jeda antar tombol > 75ms (karena ketukan manual manusia jauh lebih lambat)
+      if (diff > 75) {
+        barcodeBufferRef.current = '';
+      }
+
+      // Jika tombol Enter ditekan
+      if (e.key === 'Enter') {
+        const buffered = barcodeBufferRef.current.trim();
+        barcodeBufferRef.current = '';
+
+        // Jika kasir sedang fokus di search input, biarkan handleSearchKeyDown yang mengeksekusi
+        if (activeEl === searchRef.current) {
+          return;
+        }
+
+        // Jika terdeteksi input dari buffer scanner (kecepatan tinggi)
+        if (buffered.length >= 2) {
+          e.preventDefault();
+          handleBarcodeProcess(buffered);
+        }
+        return;
+      }
+
+      // Kumpulkan karakter yang printable (panjang 1, bukan tombol sistem)
+      if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        // Jika sedang fokus di input lain, jangan rekam kecuali kecepatannya seperti scanner (< 50ms)
+        if (isInputActive && activeEl !== searchRef.current) {
+          if (diff > 50) return;
+        }
+        barcodeBufferRef.current += e.key;
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleGlobalKeyDown);
+    };
+  }, [
+    paymentPopupOpen,
+    receipt,
+    quickRegModalOpen,
+    customPriceModalOpen,
+    customerSelectPopupOpen,
+    holdListOpen,
+    weightPopupOpen,
+    variantProduct,
+    cameraScannerOpen,
+    labelModalProduct,
+    labelPickerOpen,
+    PRODUCTS,
+    cart,
+    orderType,
+  ]);
+
+  // Simpan Pendaftaran Kilat Produk Baru (Point 7)
+  const handleSaveQuickRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!quickRegName.trim() || !quickRegSellPrice) {
+      sound.playScanError();
+      alert('Nama produk dan harga jual kasir wajib diisi!');
+      return;
+    }
+
+    setQuickRegSaving(true);
+    try {
+      const finalId = quickRegBarcode.trim() || `PRD-${Date.now()}`;
+      const sellPrice = Number(quickRegSellPrice) || 0;
+      const buyPrice = Number(quickRegBuyPrice) || 0;
+      const initStock = Math.max(Number(quickRegQty), Number(quickRegStock) || 10);
+
+      const newProd: any = {
+        id: finalId,
+        barcode: finalId,
+        sku: finalId,
+        name: quickRegName.trim(),
+        category: quickRegCategory || 'Umum',
+        location: 'Toko Utama',
+        unit: quickRegUnit || 'Pcs',
+        stock: initStock,
+        baseUnitMultiplier: 1,
+        purchasePrice: buyPrice,
+        sellingPrice: sellPrice,
+        wholesalePrice: 0,
+        minStock: 5,
+        image: '',
+        variants: []
+      };
+
+      const created = await addProduct(newProd);
+
+      // Langsung masukkan ke keranjang kasir
+      proceedAdd({
+        id: created.id,
+        sku: created.sku || created.id,
+        barcode: created.barcode || created.id,
+        name: created.name,
+        price: resolvePrice(created, null, orderType),
+        type: created.category,
+        unit: created.unit || 'Pcs',
+        badge: 'NEW',
+        img: getProductImage(''),
+        tag: '',
+        tagColor: '',
+        availableStock: created.stock,
+        rawStock: created.stock,
+        variants: []
+      }, quickRegQty);
+
+      sound.playSuccessChime();
+      setToastNotice({
+        type: 'success',
+        message: `⚡ "${created.name}" (x${quickRegQty}) berhasil didaftarkan dan masuk ke keranjang!`
+      });
+
+      setQuickRegModalOpen(false);
+    } catch (err: any) {
+      sound.playScanError();
+      alert(`Gagal mendaftarkan produk: ${err.message || 'Terjadi kesalahan sistem'}`);
+    } finally {
+      setQuickRegSaving(false);
+    }
   };
 
   const handleHold = () => {
@@ -620,36 +909,50 @@ function App() {
               placeholder="Cari menu, SKU atau scan barcode... [F2]"
               ref={searchRef}
               value={searchQuery}
-            onChange={(e) => {
-              const val = e.target.value;
-              setSearchQuery(val);
-              const q = val.trim().toLowerCase();
-              if (q) {
-                const exactMatch = PRODUCTS.find(p => 
-                  p.barcode?.toLowerCase() === q || 
-                  p.sku.toLowerCase() === q || 
-                  p.id.toLowerCase() === q
-                );
-                if (exactMatch) {
-                  handleProductClick(exactMatch);
-                  setTimeout(() => setSearchQuery(''), 0); // Clear immediately
+              onChange={(e) => {
+                const val = e.target.value;
+                setSearchQuery(val);
+                const trimmed = val.trim();
+                // Jika kasir menembakkan barcode langsung tanpa Enter dan bukan format perkalian
+                if (trimmed && !trimmed.includes('*') && !trimmed.includes('x') && !trimmed.includes('X')) {
+                  const q = trimmed.toLowerCase();
+                  const exactMatch = PRODUCTS.find(p => 
+                    (p.barcode && p.barcode.toLowerCase() === q) || 
+                    (p.sku && p.sku.toLowerCase() === q) || 
+                    p.id.toLowerCase() === q
+                  );
+                  if (exactMatch) {
+                    handleBarcodeProcess(trimmed);
+                    setTimeout(() => setSearchQuery(''), 0);
+                  }
                 }
-              }
-            }}
-            onKeyDown={handleSearchKeyDown}
-            autoFocus={!isTouchDevice}
-            style={{ width: '100%', padding: '12px 16px 12px 40px', borderRadius: '8px', border: '1px solid #e5e7eb', outline: 'none', transition: 'all 0.2s' }}
-          />
-          <span className="search-shortcut" style={{ position: 'absolute', right: '12px', background: '#f3f4f6', padding: '2px 6px', borderRadius: '4px', fontSize: '11px', color: '#6b7280', fontWeight: 'bold' }}>F2</span>
+              }}
+              onKeyDown={handleSearchKeyDown}
+              autoFocus={!isTouchDevice}
+              style={{ width: '100%', padding: '12px 16px 12px 40px', borderRadius: '8px', border: '1px solid #e5e7eb', outline: 'none', transition: 'all 0.2s' }}
+            />
+            <span className="search-shortcut" style={{ position: 'absolute', right: '12px', background: '#f3f4f6', padding: '2px 6px', borderRadius: '4px', fontSize: '11px', color: '#6b7280', fontWeight: 'bold' }}>F2</span>
           </div>
           
           <button 
+            type="button"
             className="camera-scan-btn"
             onClick={() => setCameraScannerOpen(true)}
             aria-label="Kamera Scan"
             style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '0 16px', backgroundColor: '#f0fdf4', color: '#166534', border: '1px solid #bbf7d0', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px', whiteSpace: 'nowrap' }}
           >
             <Camera size={16} /> <span className="hide-mobile">Kamera Scan</span>
+          </button>
+
+          <button 
+            type="button"
+            className="label-print-quick-btn"
+            onClick={() => setLabelPickerOpen(true)}
+            aria-label="Cetak Label Barcode"
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '0 14px', backgroundColor: '#eff6ff', color: '#1e40af', border: '1px solid #bfdbfe', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px', whiteSpace: 'nowrap' }}
+            title="Cetak label barcode / stiker harga rak via Bluetooth atau Browser"
+          >
+            <Tag size={16} /> <span className="hide-mobile">Cetak Label</span>
           </button>
         </div>
 
@@ -1052,6 +1355,34 @@ function App() {
                         {formatIDR(product.price)}
                         <div style={{ fontSize: '10px', color: '#94a3b8', fontWeight: 'normal' }}>/{product.unit}</div>
                       </div>
+                      <button
+                        type="button"
+                        className="product-list-label-btn"
+                        title="Cetak Stiker Label Barcode / Rak"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setLabelModalProduct({
+                            id: product.id,
+                            name: product.name,
+                            barcode: product.barcode,
+                            sku: product.sku,
+                            sellingPrice: product.price,
+                            unit: product.unit,
+                          });
+                        }}
+                        style={{
+                          padding: '6px 8px',
+                          borderRadius: '6px',
+                          background: '#eff6ff',
+                          border: '1px solid #bfdbfe',
+                          color: '#1d4ed8',
+                          display: 'flex',
+                          alignItems: 'center',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <Tag size={14} />
+                      </button>
                       <button className="product-list-add-btn" title="Tambah ke keranjang">
                         <Plus size={16} />
                       </button>
@@ -1075,6 +1406,41 @@ function App() {
                       {product.tag}
                     </div>
                   )}
+                  <button
+                    type="button"
+                    className="product-card-label-btn"
+                    title="Cetak Stiker Label Barcode"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setLabelModalProduct({
+                        id: product.id,
+                        name: product.name,
+                        barcode: product.barcode,
+                        sku: product.sku,
+                        sellingPrice: product.price,
+                        unit: product.unit,
+                      });
+                    }}
+                    style={{
+                      position: 'absolute',
+                      top: '8px',
+                      right: '8px',
+                      width: '26px',
+                      height: '26px',
+                      borderRadius: '6px',
+                      background: 'rgba(255,255,255,0.92)',
+                      border: '1px solid rgba(0,0,0,0.1)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#4b5563',
+                      cursor: 'pointer',
+                      zIndex: 3,
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                    }}
+                  >
+                    <Tag size={13} />
+                  </button>
                   <div className="product-info">
                     <div className="product-title" title={product.name}>{product.name}</div>
                     <div className="product-tags">
@@ -1925,18 +2291,52 @@ function App() {
       {cameraScannerOpen && (
         <BarcodeScannerCamera 
           onScan={(decodedText) => {
-            // Logika pencarian produk
+            const raw = decodedText.trim();
+            if (!raw) return null;
+
+            let multiplier = 1;
+            let code = raw;
+            const match = raw.match(/^(\d+(?:\.\d+)?)\s*[*xX]\s*(.+)$/);
+            if (match) {
+              multiplier = Math.max(0.001, parseFloat(match[1]) || 1);
+              code = match[2].trim();
+            }
+
+            const q = code.toLowerCase();
             const exactMatch = PRODUCTS.find(p => 
-              p.barcode?.toLowerCase() === decodedText.toLowerCase() || 
-              p.sku.toLowerCase() === decodedText.toLowerCase() || 
-              p.id.toLowerCase() === decodedText.toLowerCase()
+              (p.barcode && p.barcode.toLowerCase() === q) || 
+              (p.sku && p.sku.toLowerCase() === q) || 
+              p.id.toLowerCase() === q
             );
+
             if (exactMatch) {
-              // Tambah ke keranjang, tapi JANGAN tutup kamera agar bisa scan berikutnya
-              handleProductClick(exactMatch);
-              return exactMatch.name; // Kembalikan nama produk untuk ditampilkan sebagai feedback
+              if (exactMatch.variants && exactMatch.variants.length > 0) {
+                setPendingVariantQty(multiplier);
+                setVariantProduct(exactMatch);
+                sound.playScanSuccess();
+                return `${exactMatch.name} (Pilih varian)`;
+              }
+              if (exactMatch.availableStock <= 0) {
+                sound.playScanError();
+                return null;
+              }
+              proceedAdd(exactMatch, multiplier);
+              sound.playScanSuccess();
+              return `${multiplier > 1 ? `${multiplier}x ` : ''}${exactMatch.name}`;
             } else {
-              // Produk tidak ditemukan — kembalikan null agar scanner tampilkan pesan "tidak ditemukan"
+              sound.playScanError();
+              setTimeout(() => {
+                setCameraScannerOpen(false);
+                setQuickRegBarcode(code);
+                setQuickRegQty(multiplier);
+                setQuickRegName('');
+                setQuickRegCategory(categories[0] || 'Umum');
+                setQuickRegUnit('Pcs');
+                setQuickRegSellPrice('');
+                setQuickRegBuyPrice('');
+                setQuickRegStock(10);
+                setQuickRegModalOpen(true);
+              }, 400);
               return null;
             }
           }} 
@@ -2031,6 +2431,363 @@ function App() {
           >
             <X size={16} />
           </button>
+        </div>
+      )}
+
+      {/* MODAL PENDAFTARAN KILAT PRODUK BARU SAAT SCAN TIDAK DITEMUKAN (POINT 7) */}
+      {quickRegModalOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0,0,0,0.6)',
+            backdropFilter: 'blur(3px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10000,
+            padding: '16px',
+            animation: 'fadeIn 0.2s ease-out',
+          }}
+          onClick={() => !quickRegSaving && setQuickRegModalOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              backgroundColor: 'white',
+              borderRadius: '20px',
+              padding: '24px',
+              width: '100%',
+              maxWidth: '480px',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              boxShadow: '0 20px 50px rgba(0,0,0,0.3)',
+              animation: 'scaleIn 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '14px' }}>
+              <div>
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#fee2e2', color: '#dc2626', padding: '3px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }}>
+                  ⚡ Pendaftaran Kilat Produk Baru
+                </div>
+                <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 800, color: '#111827' }}>
+                  Barcode Belum Terdaftar
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => !quickRegSaving && setQuickRegModalOpen(false)}
+                style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#f3f4f6', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              >
+                <X size={18} color="#6b7280" />
+              </button>
+            </div>
+
+            <p style={{ margin: '0 0 16px', fontSize: '13px', color: '#4b5563', lineHeight: 1.4 }}>
+              Barcode <strong style={{ fontFamily: 'monospace', background: '#f3f4f6', padding: '2px 6px', borderRadius: '4px', color: '#111' }}>{quickRegBarcode}</strong> belum ada di katalog. Lengkapi formulir cepat ini agar langsung masuk ke nota:
+            </p>
+
+            <form onSubmit={handleSaveQuickRegister}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#374151', marginBottom: '4px' }}>
+                    Nama Produk <span style={{ color: '#dc2626' }}>*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    autoFocus
+                    placeholder="Contoh: Biskuit Roma Kelapa 300g"
+                    value={quickRegName}
+                    onChange={(e) => setQuickRegName(e.target.value)}
+                    style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '14px', outline: 'none' }}
+                  />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '10px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#374151', marginBottom: '4px' }}>
+                      Kategori
+                    </label>
+                    <select
+                      value={quickRegCategory}
+                      onChange={(e) => setQuickRegCategory(e.target.value)}
+                      style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '13.5px', background: 'white' }}
+                    >
+                      {categories.map((c) => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#374151', marginBottom: '4px' }}>
+                      Satuan
+                    </label>
+                    <select
+                      value={quickRegUnit}
+                      onChange={(e) => setQuickRegUnit(e.target.value)}
+                      style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '13.5px', background: 'white' }}
+                    >
+                      {['Pcs', 'Btl', 'Bks', 'Kg', 'Pack', 'Box', 'Kaleng', 'Lusin'].map((u) => (
+                        <option key={u} value={u}>{u}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#dc2626', marginBottom: '4px' }}>
+                      Harga Jual Kasir (Rp) <span style={{ color: '#dc2626' }}>*</span>
+                    </label>
+                    <input
+                      type="number"
+                      required
+                      min={0}
+                      placeholder="0"
+                      value={quickRegSellPrice}
+                      onChange={(e) => setQuickRegSellPrice(e.target.value === '' ? '' : Math.max(0, Number(e.target.value)))}
+                      style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '2px solid #fecaca', background: '#fff1f2', fontSize: '15px', fontWeight: 800, color: '#991b1b', outline: 'none' }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#6b7280', marginBottom: '4px' }}>
+                      Harga Beli / HPP (Rp)
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      placeholder="0"
+                      value={quickRegBuyPrice}
+                      onChange={(e) => setQuickRegBuyPrice(e.target.value === '' ? '' : Math.max(0, Number(e.target.value)))}
+                      style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '14px', outline: 'none' }}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', background: '#f8fafc', padding: '10px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 700, color: '#475569', marginBottom: '4px' }}>
+                      Qty Masuk Nota:
+                    </label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <button
+                        type="button"
+                        onClick={() => setQuickRegQty((q) => Math.max(1, q - 1))}
+                        style={{ width: '28px', height: '28px', borderRadius: '6px', border: '1px solid #cbd5e1', background: 'white', fontWeight: 700 }}
+                      >
+                        -
+                      </button>
+                      <input
+                        type="number"
+                        min={1}
+                        value={quickRegQty}
+                        onChange={(e) => setQuickRegQty(Math.max(1, Number(e.target.value) || 1))}
+                        style={{ width: '46px', textAlign: 'center', padding: '4px', borderRadius: '6px', border: '1px solid #cbd5e1', fontWeight: 800 }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setQuickRegQty((q) => q + 1)}
+                        style={{ width: '28px', height: '28px', borderRadius: '6px', border: '1px solid #cbd5e1', background: 'white', fontWeight: 700 }}
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 700, color: '#475569', marginBottom: '4px' }}>
+                      Stok Fisik Awal:
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={quickRegStock}
+                      onChange={(e) => setQuickRegStock(e.target.value === '' ? '' : Math.max(1, Number(e.target.value)))}
+                      style={{ width: '100%', padding: '6px 8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontWeight: 700, fontSize: '13px' }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', marginTop: '18px' }}>
+                <button
+                  type="button"
+                  disabled={quickRegSaving}
+                  onClick={() => setQuickRegModalOpen(false)}
+                  style={{ flex: 1, padding: '12px', borderRadius: '10px', background: '#f3f4f6', border: 'none', color: '#4b5563', fontWeight: 700, cursor: 'pointer' }}
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={quickRegSaving}
+                  style={{ flex: 1.6, padding: '12px', borderRadius: '10px', background: 'var(--primary, #dc2626)', border: 'none', color: 'white', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', cursor: 'pointer', boxShadow: '0 4px 12px rgba(220,38,38,0.25)' }}
+                >
+                  {quickRegSaving ? <RefreshCw size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
+                  Simpan & Masuk Nota
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL PICKER CETAK LABEL BARCODE (POINT 8) */}
+      {labelPickerOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10000,
+            padding: '16px',
+            animation: 'fadeIn 0.2s ease-out',
+          }}
+          onClick={() => setLabelPickerOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              backgroundColor: 'white',
+              borderRadius: '20px',
+              padding: '24px',
+              width: '100%',
+              maxWidth: '520px',
+              maxHeight: '85vh',
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: '0 20px 50px rgba(0,0,0,0.3)',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#111827', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Tag size={20} color="var(--primary, #dc2626)" /> Pilih Produk untuk Cetak Label
+              </h3>
+              <button
+                type="button"
+                onClick={() => setLabelPickerOpen(false)}
+                style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#f3f4f6', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              >
+                <X size={18} color="#6b7280" />
+              </button>
+            </div>
+
+            <div style={{ position: 'relative', marginBottom: '12px' }}>
+              <Search size={16} style={{ position: 'absolute', left: '12px', top: '12px', color: '#9ca3af' }} />
+              <input
+                type="text"
+                autoFocus
+                placeholder="Ketik nama produk, barcode, atau SKU..."
+                value={labelPickerSearch}
+                onChange={(e) => setLabelPickerSearch(e.target.value)}
+                style={{ width: '100%', padding: '10px 12px 10px 36px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '13.5px', outline: 'none' }}
+              />
+            </div>
+
+            <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px', paddingRight: '4px' }}>
+              {PRODUCTS.filter((p) => {
+                if (!labelPickerSearch.trim()) return true;
+                const q = labelPickerSearch.toLowerCase();
+                return p.name.toLowerCase().includes(q) || (p.barcode && p.barcode.toLowerCase().includes(q)) || p.sku.toLowerCase().includes(q);
+              }).slice(0, 50).map((p) => (
+                <div
+                  key={p.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '10px 12px',
+                    borderRadius: '10px',
+                    border: '1px solid #e5e7eb',
+                    background: '#fcfcfd',
+                  }}
+                >
+                  <div style={{ flex: 1, minWidth: 0, paddingRight: '10px' }}>
+                    <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {p.name}
+                    </div>
+                    <div style={{ fontSize: '11.5px', color: '#6b7280', marginTop: '2px', display: 'flex', gap: '8px' }}>
+                      <span>Barcode: <code style={{ fontFamily: 'monospace' }}>{p.barcode || p.sku || p.id}</code></span>
+                      <span>•</span>
+                      <span style={{ fontWeight: 700, color: '#059669' }}>Rp {p.price.toLocaleString('id-ID')}</span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLabelPickerOpen(false);
+                      setLabelModalProduct({
+                        id: p.id,
+                        name: p.name,
+                        barcode: p.barcode,
+                        sku: p.sku,
+                        sellingPrice: p.price,
+                        unit: p.unit,
+                      });
+                    }}
+                    style={{
+                      padding: '6px 12px',
+                      borderRadius: '8px',
+                      background: '#eff6ff',
+                      color: '#1e40af',
+                      border: '1px solid #bfdbfe',
+                      fontWeight: 700,
+                      fontSize: '12px',
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                    }}
+                  >
+                    <Tag size={13} /> Cetak Stiker
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL CETAK LABEL STIKER BLUETOOTH / BROWSER (POINT 8) */}
+      {labelModalProduct && (
+        <BarcodeLabelModal
+          product={labelModalProduct}
+          onClose={() => setLabelModalProduct(null)}
+        />
+      )}
+
+      {/* FLOATING TOAST NOTIFICATION KASIR (POINT 2, 7) */}
+      {toastNotice && (
+        <div 
+          style={{
+            position: 'fixed',
+            top: '20px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 99999,
+            backgroundColor: toastNotice.type === 'success' ? '#065f46' : '#991b1b',
+            color: '#ffffff',
+            padding: '10px 22px',
+            borderRadius: '999px',
+            boxShadow: '0 10px 25px rgba(0,0,0,0.25)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            fontWeight: 700,
+            fontSize: '13.5px',
+            pointerEvents: 'none',
+            animation: 'fadeIn 0.2s ease-out'
+          }}
+        >
+          {toastNotice.type === 'success' ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+          <span>{toastNotice.message}</span>
         </div>
       )}
 
