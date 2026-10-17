@@ -271,3 +271,61 @@ export async function printLabelBluetooth(
     };
   }
 }
+
+/**
+ * Print Batch / All Barcode Stickers via Connected Bluetooth Printer
+ */
+export async function printBatchLabelsBluetooth(
+  items: Array<{ data: LabelData; copies: number }>,
+  opts: LabelPrintOptions = {},
+  onProgress?: (current: number, total: number) => void
+): Promise<{ success: boolean; message?: string }> {
+  const printerStore = usePrinterStore.getState();
+
+  // Cek apakah printer bluetooth terhubung
+  if (!printerStore.isConnected) {
+    const connected = await printerStore.reconnectSavedDevice(true);
+    if (!connected) {
+      const manualConnect = await printerStore.connect();
+      if (!manualConnect) {
+        return {
+          success: false,
+          message: 'Printer Bluetooth belum terhubung. Silakan sambungkan printer terlebih dahulu.',
+        };
+      }
+    }
+  }
+
+  try {
+    const totalLabels = items.reduce((s, it) => s + Math.max(1, it.copies), 0);
+    let printed = 0;
+
+    for (let idx = 0; idx < items.length; idx++) {
+      const item = items[idx];
+      const canvas = await renderLabelToCanvas(item.data, opts);
+      const bytes = canvasToEscPosRaster(canvas);
+      const copies = Math.max(1, item.copies);
+
+      for (let c = 0; c < copies; c++) {
+        const sent = await printerStore.sendBytes(bytes);
+        if (!sent) {
+          throw new Error(`Gagal mengirim label ke-${printed + 1} (${item.data.name})`);
+        }
+        printed++;
+        if (onProgress) {
+          onProgress(printed, totalLabels);
+        }
+        // Jeda kecil 220ms antar label agar buffer printer tidak overflow
+        await new Promise((res) => setTimeout(res, 220));
+      }
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    return {
+      success: false,
+      message: err.message || 'Terjadi kesalahan saat mencetak masal ke printer Bluetooth.',
+    };
+  }
+}
+

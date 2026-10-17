@@ -1,21 +1,23 @@
 import React, { useMemo, useState } from 'react';
 import JsBarcode from 'jsbarcode';
-import { Printer, X, Bluetooth, CheckCircle2, AlertCircle, RefreshCw, Tag } from 'lucide-react';
+import { Printer, X, Bluetooth, CheckCircle2, AlertCircle, RefreshCw, Tag, ChevronLeft, ChevronRight, Layers, FileText } from 'lucide-react';
 import { usePrinterStore } from '../store/usePrinterStore';
 import { useSettingsStore } from '../store/useSettingsStore';
-import { printLabelBluetooth } from '../utils/labelPrinter';
+import { printLabelBluetooth, printBatchLabelsBluetooth } from '../utils/labelPrinter';
 
-interface LabelProduct {
+export interface LabelProduct {
   id: string;
   barcode?: string;
   sku?: string;
   name: string;
   sellingPrice: number;
   unit?: string;
+  stock?: number;
 }
 
 interface Props {
-  product: LabelProduct;
+  product?: LabelProduct | null;
+  products?: LabelProduct[];
   initialCopies?: number;
   onClose: () => void;
 }
@@ -102,14 +104,35 @@ const buildLabelHtml = (
   `;
 };
 
-const BarcodeLabelModal: React.FC<Props> = ({ product, initialCopies = 1, onClose }) => {
+const BarcodeLabelModal: React.FC<Props> = ({ product, products, initialCopies = 1, onClose }) => {
+  // Tentukan daftar target produk (bisa satuan atau masal/keseluruhan)
+  const targetProducts: LabelProduct[] = useMemo(() => {
+    if (products && products.length > 0) return products;
+    if (product) return [product];
+    return [];
+  }, [product, products]);
+
+  const isBulk = targetProducts.length > 1;
+
+  // Aturan kuantitas salinan per produk untuk bulk mode
+  const [copiesRule, setCopiesRule] = useState<'fixed' | 'stock'>('fixed');
   const [copies, setCopies] = useState<number>(Math.max(1, Math.floor(initialCopies)));
+  
+  // Format layout cetak browser: roll (1 per halaman) atau a4_grid (kisi grid di lembar A4)
+  const [layoutMode, setLayoutMode] = useState<'roll' | 'a4_grid'>('roll');
+
   const [isShelfTag, setIsShelfTag] = useState(false);
   const [labelSize, setLabelSize] = useState<'40x30' | '50x30' | '33x15'>('40x30');
   const [showName, setShowName] = useState(true);
   const [showSku, setShowSku] = useState(true);
   const [showPrice, setShowPrice] = useState(true);
+  
+  // Preview carousel state (untuk navigasi antar produk yang dicetak masal)
+  const [previewIndex, setPreviewIndex] = useState(0);
+
+  // Status proses cetak bluetooth & progress bar
   const [isPrintingBt, setIsPrintingBt] = useState(false);
+  const [printProgress, setPrintProgress] = useState<{ current: number; total: number } | null>(null);
   const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const { appName } = useSettingsStore();
@@ -121,61 +144,156 @@ const BarcodeLabelModal: React.FC<Props> = ({ product, initialCopies = 1, onClos
     return [40, 30];
   }, [labelSize]);
 
-  const code = product.barcode || product.sku || product.id;
+  // Hitung total stiker yang akan dicetak
+  const totalLabelsCount = useMemo(() => {
+    if (!isBulk) return copies;
+    if (copiesRule === 'stock') {
+      return targetProducts.reduce((sum, p) => sum + Math.max(1, Number(p.stock) || 1), 0);
+    }
+    return targetProducts.length * copies;
+  }, [isBulk, copiesRule, targetProducts, copies]);
 
-  const previewHtml = useMemo(
-    () => buildLabelHtml(product, appName || 'POS MART', isShelfTag, showName, showSku, showPrice, wMm, hMm),
-    [product, appName, isShelfTag, showName, showSku, showPrice, wMm, hMm]
-  );
+  // Produk aktif untuk visual preview
+  const currentPreviewProd = targetProducts[previewIndex] || targetProducts[0];
 
-  // Cetak via Bluetooth (Thermal Label ESC/POS / Bitmap)
+  const previewHtml = useMemo(() => {
+    if (!currentPreviewProd) return '';
+    return buildLabelHtml(currentPreviewProd, appName || 'POS MART', isShelfTag, showName, showSku, showPrice, wMm, hMm);
+  }, [currentPreviewProd, appName, isShelfTag, showName, showSku, showPrice, wMm, hMm]);
+
+  // Cetak via Bluetooth (Thermal Label ESC/POS / Bitmap Raster)
   const handlePrintBluetooth = async () => {
     setStatusMsg(null);
     setIsPrintingBt(true);
-    try {
-      const res = await printLabelBluetooth(
-        {
-          name: product.name,
-          code,
-          sku: product.sku,
-          price: product.sellingPrice,
-          unit: product.unit,
-          storeName: appName || 'POS MART',
-        },
-        {
-          copies,
-          labelWidthMm: wMm,
-          labelHeightMm: hMm,
-          showName,
-          showSku,
-          showPrice,
-          isShelfTag,
-        }
-      );
+    setPrintProgress(null);
 
-      if (res.success) {
-        setStatusMsg({ type: 'success', text: `Berhasil mencetak ${copies} label ke ${deviceName || 'Printer Bluetooth'}!` });
+    try {
+      if (!isBulk) {
+        // Cetak Satuan
+        const p = targetProducts[0];
+        const res = await printLabelBluetooth(
+          {
+            name: p.name,
+            code: p.barcode || p.sku || p.id,
+            sku: p.sku,
+            price: p.sellingPrice,
+            unit: p.unit,
+            storeName: appName || 'POS MART',
+          },
+          {
+            copies,
+            labelWidthMm: wMm,
+            labelHeightMm: hMm,
+            showName,
+            showSku,
+            showPrice,
+            isShelfTag,
+          }
+        );
+
+        if (res.success) {
+          setStatusMsg({ type: 'success', text: `Berhasil mencetak ${copies} label ke ${deviceName || 'Printer Bluetooth'}!` });
+        } else {
+          setStatusMsg({ type: 'error', text: res.message || 'Gagal mencetak ke printer bluetooth.' });
+        }
       } else {
-        setStatusMsg({ type: 'error', text: res.message || 'Gagal mencetak ke printer bluetooth.' });
+        // Cetak Masal / Keseluruhan
+        const itemsToPrint = targetProducts.map((p) => ({
+          data: {
+            name: p.name,
+            code: p.barcode || p.sku || p.id,
+            sku: p.sku,
+            price: p.sellingPrice,
+            unit: p.unit,
+            storeName: appName || 'POS MART',
+          },
+          copies: copiesRule === 'stock' ? Math.max(1, Number(p.stock) || 1) : copies,
+        }));
+
+        const res = await printBatchLabelsBluetooth(
+          itemsToPrint,
+          {
+            labelWidthMm: wMm,
+            labelHeightMm: hMm,
+            showName,
+            showSku,
+            showPrice,
+            isShelfTag,
+          },
+          (current, total) => {
+            setPrintProgress({ current, total });
+          }
+        );
+
+        if (res.success) {
+          setStatusMsg({
+            type: 'success',
+            text: `Berhasil mencetak ${totalLabelsCount} stiker (${targetProducts.length} produk) ke ${deviceName || 'Printer Bluetooth'}!`,
+          });
+        } else {
+          setStatusMsg({ type: 'error', text: res.message || 'Gagal mencetak masal ke printer bluetooth.' });
+        }
       }
     } catch (err: any) {
       setStatusMsg({ type: 'error', text: err.message || 'Terjadi kesalahan sistem print bluetooth.' });
     } finally {
       setIsPrintingBt(false);
+      setPrintProgress(null);
     }
   };
 
-  // Cetak via Browser (Iframe / USB Thermal / Kertas Stiker)
+  // Cetak via Browser (Iframe / USB Thermal / Kertas Stiker A4 Grid)
   const handlePrintBrowser = () => {
-    const one = buildLabelHtml(product, appName || 'POS MART', isShelfTag, showName, showSku, showPrice, wMm, hMm);
-    const labels = Array.from({ length: Math.max(1, copies) }, () => one).join('');
-    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Label ${escapeHtml(code)}</title>
-      <style>
-        @page { size: ${wMm}mm ${hMm}mm; margin: 0; }
-        html, body { margin: 0; padding: 0; }
-        .lbl { page-break-after: always; break-after: page; border: none !important; }
-        .lbl:last-child { page-break-after: auto; break-after: auto; }
-      </style></head><body>${labels}</body></html>`;
+    let html = '';
+
+    if (isBulk && layoutMode === 'a4_grid') {
+      // MODE LEMBARAN KERTAS STIKER A4 (KISI GRID)
+      let labelCards = '';
+      for (const p of targetProducts) {
+        const itemCopies = copiesRule === 'stock' ? Math.max(1, Number(p.stock) || 1) : copies;
+        const one = buildLabelHtml(p, appName || 'POS MART', isShelfTag, showName, showSku, showPrice, wMm, hMm);
+        for (let c = 0; c < itemCopies; c++) {
+          labelCards += `<div class="a4-lbl-box">${one}</div>`;
+        }
+      }
+
+      html = `<!doctype html><html><head><meta charset="utf-8"><title>Cetak Lembaran Stiker A4 - ${appName || 'POS MART'}</title>
+        <style>
+          @page { size: A4 portrait; margin: 8mm 6mm; }
+          html, body { margin: 0; padding: 0; background: #fff; }
+          .a4-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(${wMm}mm, 1fr));
+            gap: 2.5mm;
+            justify-items: center;
+          }
+          .a4-lbl-box {
+            page-break-inside: avoid;
+            break-inside: avoid;
+          }
+          .lbl { border: 0.5px dashed #ccc !important; }
+        </style></head><body>
+        <div class="a4-grid">${labelCards}</div>
+        </body></html>`;
+    } else {
+      // MODE THERMAL ROLL CONTINUOUS (1 label per halaman beruntun)
+      let labels = '';
+      for (const p of targetProducts) {
+        const itemCopies = !isBulk ? copies : (copiesRule === 'stock' ? Math.max(1, Number(p.stock) || 1) : copies);
+        const one = buildLabelHtml(p, appName || 'POS MART', isShelfTag, showName, showSku, showPrice, wMm, hMm);
+        for (let c = 0; c < itemCopies; c++) {
+          labels += one;
+        }
+      }
+
+      html = `<!doctype html><html><head><meta charset="utf-8"><title>Cetak Label Stiker - ${appName || 'POS MART'}</title>
+        <style>
+          @page { size: ${wMm}mm ${hMm}mm; margin: 0; }
+          html, body { margin: 0; padding: 0; }
+          .lbl { page-break-after: always; break-after: page; border: none !important; }
+          .lbl:last-child { page-break-after: auto; break-after: auto; }
+        </style></head><body>${labels}</body></html>`;
+    }
 
     const iframe = document.createElement('iframe');
     iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
@@ -188,8 +306,10 @@ const BarcodeLabelModal: React.FC<Props> = ({ product, initialCopies = 1, onClos
       iframe.contentWindow!.focus();
       iframe.contentWindow!.print();
       setTimeout(() => document.body.removeChild(iframe), 1500);
-    }, 300);
+    }, 350);
   };
+
+  if (targetProducts.length === 0) return null;
 
   return (
     <>
@@ -224,8 +344,8 @@ const BarcodeLabelModal: React.FC<Props> = ({ product, initialCopies = 1, onClos
             borderRadius: '20px',
             padding: '24px',
             width: '100%',
-            maxWidth: '520px',
-            maxHeight: '92vh',
+            maxWidth: '560px',
+            maxHeight: '94vh',
             display: 'flex',
             flexDirection: 'column',
             boxShadow: '0 20px 50px rgba(0,0,0,0.25)',
@@ -234,10 +354,21 @@ const BarcodeLabelModal: React.FC<Props> = ({ product, initialCopies = 1, onClos
           }}
         >
           {/* Header */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-            <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#111827', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Tag size={20} color="var(--primary, #dc2626)" /> Cetak Label & Barcode
-            </h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '14px' }}>
+            <div>
+              {isBulk ? (
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#eff6ff', color: '#1d4ed8', padding: '3px 8px', borderRadius: '6px', fontSize: '11.5px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }}>
+                  <Layers size={13} /> Cetak Masal / Keseluruhan
+                </div>
+              ) : (
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#fef2f2', color: '#dc2626', padding: '3px 8px', borderRadius: '6px', fontSize: '11.5px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }}>
+                  <Tag size={13} /> Cetak Label Satuan
+                </div>
+              )}
+              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#111827' }}>
+                {isBulk ? `Cetak Barcode (${targetProducts.length} Produk)` : 'Cetak Label & Barcode Produk'}
+              </h3>
+            </div>
             <button
               onClick={onClose}
               style={{
@@ -277,7 +408,7 @@ const BarcodeLabelModal: React.FC<Props> = ({ product, initialCopies = 1, onClos
                     {isConnected ? `Printer Bluetooth: ${deviceName || 'Terhubung'}` : 'Printer Bluetooth Belum Terhubung'}
                   </div>
                   <div style={{ fontSize: '11px', color: '#64748b' }}>
-                    {isConnected ? 'Siap mencetak stiker langsung' : 'Klik tombol sambungkan untuk print wireless'}
+                    {isConnected ? 'Siap mencetak stiker secara langsung' : 'Klik tombol sambungkan untuk cetak wireless'}
                   </div>
                 </div>
               </div>
@@ -305,8 +436,38 @@ const BarcodeLabelModal: React.FC<Props> = ({ product, initialCopies = 1, onClos
               )}
             </div>
 
-            {/* Notification alert */}
-            {statusMsg && (
+            {/* Notification alert / Progress Bar */}
+            {printProgress && (
+              <div
+                style={{
+                  padding: '12px 14px',
+                  borderRadius: '10px',
+                  fontSize: '12.5px',
+                  fontWeight: 600,
+                  marginBottom: '12px',
+                  background: '#eff6ff',
+                  border: '1px solid #bfdbfe',
+                  color: '#1e40af',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                  <span>Sedang mengirim ke printer...</span>
+                  <strong>{printProgress.current} / {printProgress.total} Stiker</strong>
+                </div>
+                <div style={{ width: '100%', height: '6px', background: '#dbeafe', borderRadius: '4px', overflow: 'hidden' }}>
+                  <div
+                    style={{
+                      height: '100%',
+                      background: '#2563eb',
+                      width: `${Math.round((printProgress.current / printProgress.total) * 100)}%`,
+                      transition: 'width 0.2s',
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {statusMsg && !printProgress && (
               <div
                 style={{
                   padding: '10px 14px',
@@ -324,6 +485,75 @@ const BarcodeLabelModal: React.FC<Props> = ({ product, initialCopies = 1, onClos
               >
                 {statusMsg.type === 'success' ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
                 <span>{statusMsg.text}</span>
+              </div>
+            )}
+
+            {/* Opsi Mode Cetak Masal (Aturan Jumlah Salinan) */}
+            {isBulk && (
+              <div
+                style={{
+                  background: '#f8fafc',
+                  border: '1.5px solid #e2e8f0',
+                  borderRadius: '12px',
+                  padding: '12px 14px',
+                  marginBottom: '14px',
+                }}
+              >
+                <div style={{ fontSize: '12.5px', fontWeight: 700, color: '#334155', marginBottom: '8px' }}>
+                  Aturan Jumlah Stiker Masal:
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '10px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setCopiesRule('fixed')}
+                    style={{
+                      padding: '8px 10px',
+                      borderRadius: '8px',
+                      border: copiesRule === 'fixed' ? '2px solid #2563eb' : '1px solid #cbd5e1',
+                      background: copiesRule === 'fixed' ? '#eff6ff' : '#ffffff',
+                      color: copiesRule === 'fixed' ? '#1e40af' : '#475569',
+                      fontWeight: 700,
+                      fontSize: '12px',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                    }}
+                  >
+                    🏷️ 1 Label per Produk
+                    <div style={{ fontSize: '11px', fontWeight: 500, color: '#64748b', marginTop: '2px' }}>
+                      Untuk Price Tag rak toko
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setCopiesRule('stock')}
+                    style={{
+                      padding: '8px 10px',
+                      borderRadius: '8px',
+                      border: copiesRule === 'stock' ? '2px solid #2563eb' : '1px solid #cbd5e1',
+                      background: copiesRule === 'stock' ? '#eff6ff' : '#ffffff',
+                      color: copiesRule === 'stock' ? '#1e40af' : '#475569',
+                      fontWeight: 700,
+                      fontSize: '12px',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                    }}
+                  >
+                    📦 Sesuai Stok Produk
+                    <div style={{ fontSize: '11px', fontWeight: 500, color: '#64748b', marginTop: '2px' }}>
+                      Untuk ditempel ke fisik barang
+                    </div>
+                  </button>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', color: '#475569' }}>
+                  <span>
+                    Total: <strong style={{ color: '#0f172a' }}>{targetProducts.length} Produk</strong>
+                  </span>
+                  <span style={{ background: '#dbeafe', color: '#1e40af', padding: '3px 8px', borderRadius: '6px', fontWeight: 800 }}>
+                    {totalLabelsCount} Lembar Stiker
+                  </span>
+                </div>
               </div>
             )}
 
@@ -369,7 +599,7 @@ const BarcodeLabelModal: React.FC<Props> = ({ product, initialCopies = 1, onClos
             </div>
 
             {/* Pilihan Ukuran Kertas */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '14px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '14px', flexWrap: 'wrap' }}>
               <span style={{ fontSize: '12px', fontWeight: 700, color: '#4b5563', marginRight: '4px' }}>Ukuran:</span>
               {(['40x30', '50x30', '33x15'] as const).map((sz) => (
                 <button
@@ -392,31 +622,92 @@ const BarcodeLabelModal: React.FC<Props> = ({ product, initialCopies = 1, onClos
               ))}
             </div>
 
-            {/* Pratinjau Label Realtime */}
+            {/* Pilihan Format Cetak Browser untuk Bulk Mode */}
+            {isBulk && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px', background: '#f1f5f9', padding: '8px 12px', borderRadius: '8px' }}>
+                <span style={{ fontSize: '12px', fontWeight: 700, color: '#334155' }}>Format Browser:</span>
+                <button
+                  type="button"
+                  onClick={() => setLayoutMode('roll')}
+                  style={{
+                    padding: '4px 10px',
+                    borderRadius: '6px',
+                    fontSize: '11.5px',
+                    fontWeight: layoutMode === 'roll' ? 700 : 500,
+                    background: layoutMode === 'roll' ? '#2563eb' : 'transparent',
+                    color: layoutMode === 'roll' ? '#ffffff' : '#475569',
+                    border: 'none',
+                    cursor: 'pointer',
+                  }}
+                >
+                  📜 Thermal Roll
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLayoutMode('a4_grid')}
+                  style={{
+                    padding: '4px 10px',
+                    borderRadius: '6px',
+                    fontSize: '11.5px',
+                    fontWeight: layoutMode === 'a4_grid' ? 700 : 500,
+                    background: layoutMode === 'a4_grid' ? '#2563eb' : 'transparent',
+                    color: layoutMode === 'a4_grid' ? '#ffffff' : '#475569',
+                    border: 'none',
+                    cursor: 'pointer',
+                  }}
+                >
+                  📑 Lembaran A4 (Grid Stiker)
+                </button>
+              </div>
+            )}
+
+            {/* Pratinjau Visual Label Realtime */}
             <div
               style={{
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
                 justifyContent: 'center',
-                padding: '20px 12px',
+                padding: '18px 12px',
                 background: '#f8fafc',
                 borderRadius: '12px',
                 border: '1px solid #e2e8f0',
                 marginBottom: '16px',
               }}
             >
+              {isBulk && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setPreviewIndex((prev) => (prev > 0 ? prev - 1 : targetProducts.length - 1))}
+                    style={{ width: '28px', height: '28px', borderRadius: '50%', border: '1px solid #cbd5e1', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                  >
+                    <ChevronLeft size={16} />
+                  </button>
+                  <span style={{ fontSize: '12px', fontWeight: 700, color: '#475569' }}>
+                    Pratinjau Produk: <strong>{previewIndex + 1}</strong> dari <strong>{targetProducts.length}</strong>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setPreviewIndex((prev) => (prev < targetProducts.length - 1 ? prev + 1 : 0))}
+                    style={{ width: '28px', height: '28px', borderRadius: '50%', border: '1px solid #cbd5e1', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                  >
+                    <ChevronRight size={16} />
+                  </button>
+                </div>
+              )}
+
               <div
                 style={{
                   boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
                   borderRadius: '4px',
-                  transform: 'scale(1.5)',
+                  transform: 'scale(1.4)',
                   transformOrigin: 'center center',
-                  margin: '18px 0',
+                  margin: '16px 0',
                 }}
                 dangerouslySetInnerHTML={{ __html: previewHtml }}
               />
-              <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '8px' }}>
+              <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '6px' }}>
                 Pratinjau visual label thermal ({wMm}×{hMm} mm)
               </div>
             </div>
@@ -431,59 +722,61 @@ const BarcodeLabelModal: React.FC<Props> = ({ product, initialCopies = 1, onClos
                 border: '1px solid #f3f4f6',
               }}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                <span style={{ fontSize: '13px', fontWeight: 700, color: '#374151' }}>Jumlah Cetak (Salinan):</span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <button
-                    type="button"
-                    onClick={() => setCopies((prev) => Math.max(1, prev - 1))}
-                    style={{
-                      width: '28px',
-                      height: '28px',
-                      borderRadius: '6px',
-                      border: '1px solid #d1d5db',
-                      background: 'white',
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    -
-                  </button>
-                  <input
-                    type="number"
-                    min={1}
-                    max={500}
-                    value={copies}
-                    onChange={(e) => setCopies(Math.min(500, Math.max(1, Number(e.target.value) || 1)))}
-                    style={{
-                      width: '56px',
-                      textAlign: 'center',
-                      padding: '4px 6px',
-                      borderRadius: '6px',
-                      border: '1px solid #d1d5db',
-                      fontWeight: 800,
-                      fontSize: '14px',
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setCopies((prev) => Math.min(500, prev + 1))}
-                    style={{
-                      width: '28px',
-                      height: '28px',
-                      borderRadius: '6px',
-                      border: '1px solid #d1d5db',
-                      background: 'white',
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    +
-                  </button>
+              {!isBulk && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                  <span style={{ fontSize: '13px', fontWeight: 700, color: '#374151' }}>Jumlah Cetak (Salinan):</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <button
+                      type="button"
+                      onClick={() => setCopies((prev) => Math.max(1, prev - 1))}
+                      style={{
+                        width: '28px',
+                        height: '28px',
+                        borderRadius: '6px',
+                        border: '1px solid #d1d5db',
+                        background: 'white',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      -
+                    </button>
+                    <input
+                      type="number"
+                      min={1}
+                      max={500}
+                      value={copies}
+                      onChange={(e) => setCopies(Math.min(500, Math.max(1, Number(e.target.value) || 1)))}
+                      style={{
+                        width: '56px',
+                        textAlign: 'center',
+                        padding: '4px 6px',
+                        borderRadius: '6px',
+                        border: '1px solid #d1d5db',
+                        fontWeight: 800,
+                        fontSize: '14px',
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setCopies((prev) => Math.min(500, prev + 1))}
+                      style={{
+                        width: '28px',
+                        height: '28px',
+                        borderRadius: '6px',
+                        border: '1px solid #d1d5db',
+                        background: 'white',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      +
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )}
 
-              <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap', paddingTop: '6px', borderTop: '1px dashed #e5e7eb' }}>
+              <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap', paddingTop: !isBulk ? '6px' : '0', borderTop: !isBulk ? '1px dashed #e5e7eb' : 'none' }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12.5px', color: '#4b5563', cursor: 'pointer' }}>
                   <input type="checkbox" checked={showName} onChange={(e) => setShowName(e.target.checked)} />
                   Nama Produk
@@ -531,7 +824,8 @@ const BarcodeLabelModal: React.FC<Props> = ({ product, initialCopies = 1, onClos
                 cursor: 'pointer',
               }}
             >
-              <Printer size={16} /> Browser / USB
+              {isBulk && layoutMode === 'a4_grid' ? <FileText size={16} /> : <Printer size={16} />}
+              {isBulk ? (layoutMode === 'a4_grid' ? 'Cetak Lembaran A4' : 'Cetak Roll USB') : 'Browser / USB'}
             </button>
 
             <button
@@ -540,7 +834,7 @@ const BarcodeLabelModal: React.FC<Props> = ({ product, initialCopies = 1, onClos
               className="bo-btn"
               onClick={handlePrintBluetooth}
               style={{
-                flex: 1.3,
+                flex: 1.4,
                 padding: '12px 14px',
                 borderRadius: '10px',
                 background: isConnected ? '#059669' : 'var(--primary, #dc2626)',
@@ -558,11 +852,13 @@ const BarcodeLabelModal: React.FC<Props> = ({ product, initialCopies = 1, onClos
             >
               {isPrintingBt ? (
                 <>
-                  <RefreshCw size={16} className="animate-spin" /> Mencetak...
+                  <RefreshCw size={16} className="animate-spin" />
+                  {printProgress ? `Mencetak ${printProgress.current}/${printProgress.total}...` : 'Mengirim data...'}
                 </>
               ) : (
                 <>
-                  <Bluetooth size={16} /> Cetak Stiker Bluetooth
+                  <Bluetooth size={16} />
+                  {isBulk ? `Cetak ${totalLabelsCount} Stiker Bluetooth` : `Cetak Stiker Bluetooth`}
                 </>
               )}
             </button>

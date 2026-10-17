@@ -4,7 +4,7 @@ import {
   CreditCard, QrCode, Banknote, Ticket, Trash2, PauseCircle,
   LayoutGrid, Plus, Minus, X, LogOut, Camera, ChevronUp, Settings2,
   Grid, List, Tag, Edit3, Check,
-  AlertCircle, RefreshCw, ChevronDown, CheckCircle2
+  AlertCircle, RefreshCw, ChevronDown, CheckCircle2, Layers
 } from 'lucide-react';
 import './index.css';
 import { useNavigate, Link } from 'react-router-dom';
@@ -256,10 +256,13 @@ function App() {
   const [quickRegStock, setQuickRegStock] = useState<number | ''>(10);
   const [quickRegSaving, setQuickRegSaving] = useState(false);
 
-  // Point 8: Modal Cetak Label Stiker Bluetooth / Browser
+  // Point 8: Modal Cetak Label Stiker Bluetooth / Browser (Single & Bulk)
   const [labelModalProduct, setLabelModalProduct] = useState<any | null>(null);
+  const [labelModalProducts, setLabelModalProducts] = useState<any[] | null>(null);
   const [labelPickerOpen, setLabelPickerOpen] = useState(false);
   const [labelPickerSearch, setLabelPickerSearch] = useState('');
+  const [labelPickerCategory, setLabelPickerCategory] = useState('ALL');
+  const [selectedLabelProductIds, setSelectedLabelProductIds] = useState<string[]>([]);
 
   // Auto-dismiss toast notice
   useEffect(() => {
@@ -2666,100 +2669,275 @@ function App() {
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#111827', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Tag size={20} color="var(--primary, #dc2626)" /> Pilih Produk untuk Cetak Label
-              </h3>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#111827', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Tag size={20} color="var(--primary, #dc2626)" /> Cetak Label & Barcode Produk
+                </h3>
+                <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '2px' }}>
+                  Pilih produk satuan atau cetak masal keseluruhan katalog
+                </div>
+              </div>
               <button
                 type="button"
-                onClick={() => setLabelPickerOpen(false)}
+                onClick={() => {
+                  setLabelPickerOpen(false);
+                  setSelectedLabelProductIds([]);
+                }}
                 style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#f3f4f6', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
               >
                 <X size={18} color="#6b7280" />
               </button>
             </div>
 
-            <div style={{ position: 'relative', marginBottom: '12px' }}>
-              <Search size={16} style={{ position: 'absolute', left: '12px', top: '12px', color: '#9ca3af' }} />
-              <input
-                type="text"
-                autoFocus
-                placeholder="Ketik nama produk, barcode, atau SKU..."
-                value={labelPickerSearch}
-                onChange={(e) => setLabelPickerSearch(e.target.value)}
-                style={{ width: '100%', padding: '10px 12px 10px 36px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '13.5px', outline: 'none' }}
-              />
+            {/* Filter Kategori & Pencarian */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '8px', marginBottom: '10px' }}>
+              <div style={{ position: 'relative' }}>
+                <Search size={16} style={{ position: 'absolute', left: '12px', top: '11px', color: '#9ca3af' }} />
+                <input
+                  type="text"
+                  autoFocus
+                  placeholder="Cari produk / barcode / SKU..."
+                  value={labelPickerSearch}
+                  onChange={(e) => setLabelPickerSearch(e.target.value)}
+                  style={{ width: '100%', padding: '9px 12px 9px 34px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '13px', outline: 'none' }}
+                />
+              </div>
+
+              <select
+                value={labelPickerCategory}
+                onChange={(e) => setLabelPickerCategory(e.target.value)}
+                style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '13px', background: 'white' }}
+              >
+                <option value="ALL">Semua Kategori ({PRODUCTS.length})</option>
+                {categories.map((c) => (
+                  <option key={c} value={c}>
+                    {c} ({PRODUCTS.filter(p => (p.type || '').toLowerCase() === c.toLowerCase()).length})
+                  </option>
+                ))}
+              </select>
             </div>
 
-            <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px', paddingRight: '4px' }}>
-              {PRODUCTS.filter((p) => {
-                if (!labelPickerSearch.trim()) return true;
+            {/* Panel Aksi Cetak Masal / Keseluruhan */}
+            {(() => {
+              const filteredProds = PRODUCTS.filter((p) => {
+                const catMatch = labelPickerCategory === 'ALL' || (p.type || '').toLowerCase() === labelPickerCategory.toLowerCase();
+                if (!labelPickerSearch.trim()) return catMatch;
                 const q = labelPickerSearch.toLowerCase();
-                return p.name.toLowerCase().includes(q) || (p.barcode && p.barcode.toLowerCase().includes(q)) || p.sku.toLowerCase().includes(q);
-              }).slice(0, 50).map((p) => (
-                <div
-                  key={p.id}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '10px 12px',
-                    borderRadius: '10px',
-                    border: '1px solid #e5e7eb',
-                    background: '#fcfcfd',
-                  }}
-                >
-                  <div style={{ flex: 1, minWidth: 0, paddingRight: '10px' }}>
-                    <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {p.name}
-                    </div>
-                    <div style={{ fontSize: '11.5px', color: '#6b7280', marginTop: '2px', display: 'flex', gap: '8px' }}>
-                      <span>Barcode: <code style={{ fontFamily: 'monospace' }}>{p.barcode || p.sku || p.id}</code></span>
-                      <span>•</span>
-                      <span style={{ fontWeight: 700, color: '#059669' }}>Rp {p.price.toLocaleString('id-ID')}</span>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setLabelPickerOpen(false);
-                      setLabelModalProduct({
-                        id: p.id,
-                        name: p.name,
-                        barcode: p.barcode,
-                        sku: p.sku,
-                        sellingPrice: p.price,
-                        unit: p.unit,
-                      });
-                    }}
+                return catMatch && (p.name.toLowerCase().includes(q) || (p.barcode && p.barcode.toLowerCase().includes(q)) || p.sku.toLowerCase().includes(q));
+              });
+
+              const allFilteredSelected = filteredProds.length > 0 && filteredProds.every(p => selectedLabelProductIds.includes(p.id));
+              const selectedCount = selectedLabelProductIds.length;
+
+              return (
+                <>
+                  <div
                     style={{
-                      padding: '6px 12px',
-                      borderRadius: '8px',
-                      background: '#eff6ff',
-                      color: '#1e40af',
-                      border: '1px solid #bfdbfe',
-                      fontWeight: 700,
-                      fontSize: '12px',
-                      cursor: 'pointer',
-                      whiteSpace: 'nowrap',
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '4px',
+                      justifyContent: 'space-between',
+                      background: '#f8fafc',
+                      padding: '10px 12px',
+                      borderRadius: '10px',
+                      border: '1px solid #e2e8f0',
+                      marginBottom: '12px',
+                      gap: '8px',
+                      flexWrap: 'wrap'
                     }}
                   >
-                    <Tag size={13} /> Cetak Stiker
-                  </button>
-                </div>
-              ))}
-            </div>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12.5px', fontWeight: 700, color: '#334155', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={allFilteredSelected}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedLabelProductIds(Array.from(new Set([...selectedLabelProductIds, ...filteredProds.map(p => p.id)])));
+                          } else {
+                            const uncheckIds = new Set(filteredProds.map(p => p.id));
+                            setSelectedLabelProductIds(selectedLabelProductIds.filter(id => !uncheckIds.has(id)));
+                          }
+                        }}
+                      />
+                      <span>Pilih Semua ({filteredProds.length})</span>
+                    </label>
+
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      {selectedCount > 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const picked = PRODUCTS.filter(p => selectedLabelProductIds.includes(p.id)).map(p => ({
+                              id: p.id,
+                              name: p.name,
+                              barcode: p.barcode,
+                              sku: p.sku,
+                              sellingPrice: p.price,
+                              unit: p.unit,
+                              stock: p.availableStock,
+                            }));
+                            setLabelPickerOpen(false);
+                            setLabelModalProducts(picked);
+                          }}
+                          style={{
+                            padding: '7px 12px',
+                            borderRadius: '8px',
+                            background: '#2563eb',
+                            color: 'white',
+                            border: 'none',
+                            fontWeight: 800,
+                            fontSize: '12px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '5px',
+                            cursor: 'pointer',
+                            boxShadow: '0 2px 6px rgba(37,99,235,0.25)',
+                          }}
+                        >
+                          <Printer size={13} /> Cetak ({selectedCount}) Terpilih
+                        </button>
+                      ) : null}
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const bulkList = filteredProds.map(p => ({
+                            id: p.id,
+                            name: p.name,
+                            barcode: p.barcode,
+                            sku: p.sku,
+                            sellingPrice: p.price,
+                            unit: p.unit,
+                            stock: p.availableStock,
+                          }));
+                          setLabelPickerOpen(false);
+                          setLabelModalProducts(bulkList);
+                        }}
+                        style={{
+                          padding: '7px 14px',
+                          borderRadius: '8px',
+                          background: 'var(--primary, #dc2626)',
+                          color: 'white',
+                          border: 'none',
+                          fontWeight: 800,
+                          fontSize: '12px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          cursor: 'pointer',
+                          boxShadow: '0 2px 8px rgba(220,38,38,0.25)',
+                        }}
+                      >
+                        <Layers size={14} /> Cetak Keseluruhan Barcode ({filteredProds.length})
+                      </button>
+                    </div>
+                  </div>
+
+                  <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px', paddingRight: '4px' }}>
+                    {filteredProds.length === 0 ? (
+                      <div style={{ textAlign: 'center', padding: '30px 10px', color: '#94a3b8', fontSize: '13px' }}>
+                        Tidak ada produk yang cocok dengan pencarian / filter kategori.
+                      </div>
+                    ) : (
+                      filteredProds.map((p) => {
+                        const isSelected = selectedLabelProductIds.includes(p.id);
+                        return (
+                          <div
+                            key={p.id}
+                            onClick={() => {
+                              setSelectedLabelProductIds(prev =>
+                                isSelected ? prev.filter(id => id !== p.id) : [...prev, p.id]
+                              );
+                            }}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              padding: '10px 12px',
+                              borderRadius: '10px',
+                              border: `1.5px solid ${isSelected ? '#3b82f6' : '#e5e7eb'}`,
+                              background: isSelected ? '#f0f7ff' : '#fcfcfd',
+                              cursor: 'pointer',
+                              transition: 'all 0.15s',
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0, paddingRight: '8px' }}>
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedLabelProductIds(prev =>
+                                    isSelected ? prev.filter(id => id !== p.id) : [...prev, p.id]
+                                  );
+                                }}
+                                style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                              />
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                  {p.name}
+                                </div>
+                                <div style={{ fontSize: '11.5px', color: '#6b7280', marginTop: '2px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                  <span>Barcode: <code style={{ fontFamily: 'monospace' }}>{p.barcode || p.sku || p.id}</code></span>
+                                  <span>•</span>
+                                  <span style={{ fontWeight: 700, color: '#059669' }}>Rp {p.price.toLocaleString('id-ID')}</span>
+                                  <span>•</span>
+                                  <span style={{ color: '#64748b' }}>Stok: {p.availableStock} {p.unit}</span>
+                                </div>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setLabelPickerOpen(false);
+                                setLabelModalProduct({
+                                  id: p.id,
+                                  name: p.name,
+                                  barcode: p.barcode,
+                                  sku: p.sku,
+                                  sellingPrice: p.price,
+                                  unit: p.unit,
+                                  stock: p.availableStock,
+                                });
+                              }}
+                              style={{
+                                padding: '6px 12px',
+                                borderRadius: '8px',
+                                background: '#eff6ff',
+                                color: '#1e40af',
+                                border: '1px solid #bfdbfe',
+                                fontWeight: 700,
+                                fontSize: '12px',
+                                cursor: 'pointer',
+                                whiteSpace: 'nowrap',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                              }}
+                            >
+                              <Tag size={13} /> Cetak Stiker
+                            </button>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </>
+              );
+            })()}
           </div>
         </div>
       )}
 
-      {/* MODAL CETAK LABEL STIKER BLUETOOTH / BROWSER (POINT 8) */}
-      {labelModalProduct && (
+      {/* MODAL CETAK LABEL STIKER BLUETOOTH / BROWSER (SINGLE & BULK) */}
+      {(labelModalProduct || labelModalProducts) && (
         <BarcodeLabelModal
           product={labelModalProduct}
-          onClose={() => setLabelModalProduct(null)}
+          products={labelModalProducts || undefined}
+          onClose={() => {
+            setLabelModalProduct(null);
+            setLabelModalProducts(null);
+          }}
         />
       )}
 
