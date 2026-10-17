@@ -56,109 +56,277 @@ export const buildReceiptHtml = (sale: SalesTransaction, opts: ReceiptOptions): 
 
   // Header & footer dari Pengaturan > INVOICE (kosong = default)
   const st = useSettingsStore.getState();
-  const headerText = (st.invoiceHeader || '').trim() ? st.invoiceHeader : defaultInvoiceHeader(opts.storeName);
-  const footerText = (st.invoiceFooter || '').trim() ? st.invoiceFooter : DEFAULT_INVOICE_FOOTER;
-  const textBlock = (text: string) =>
-    text
-      .split(/\r?\n/)
-      .map(l => l.trim())
-      .filter(l => l.length > 0)
-      .map(l => `<div class="center">${esc(l)}</div>`)
-      .join('');
+  const rawHeader = (st.invoiceHeader || '').trim() ? st.invoiceHeader : defaultInvoiceHeader(opts.storeName);
+  const headerLines = rawHeader.split(/\r?\n/).map((l: string) => l.trim()).filter(Boolean);
+  const storeTitle = headerLines[0] || opts.storeName || 'POS MART';
+  const storeSubtitleLines = headerLines.slice(1);
 
-  const cell = (k: string, v: string) => `<div class="c"><span class="k">${k}</span><span class="v">${v}</span></div>`;
-  const row = (l: string, r: string, cls = '') => `<div class="row ${cls}"><span>${l}</span><span>${r}</span></div>`;
+  const rawFooter = (st.invoiceFooter || '').trim() ? st.invoiceFooter : DEFAULT_INVOICE_FOOTER;
+  const footerLines = rawFooter.split(/\r?\n/).map((l: string) => l.trim()).filter(Boolean);
 
-  const items = sale.items
+  const logoHtml = st.appLogo 
+    ? `<div class="center" style="margin-bottom: 6px;">
+        <img src="${st.appLogo}" alt="Logo" class="receipt-logo" />
+       </div>`
+    : '';
+
+  const itemsHtml = sale.items
     .map((i, idx) => {
       const p = products.find(x => x.id === i.productId);
       const unit = p?.unit || 'Pcs';
       const isCustom = Boolean(i.isCustomPrice || (i.originalPrice && i.originalPrice !== i.price));
-      const customLabel = i.customPriceNote ? `* Special Price: ${esc(i.customPriceNote)}` : '* Special Price (Input Manual)';
+      const customLabel = i.customPriceNote ? `* Special: ${esc(i.customPriceNote)}` : '* Special Price';
       const origNote = (isCustom && i.originalPrice) ? ` (Normal: ${idr(i.originalPrice)})` : '';
       return `
       <div class="item">
-        <div class="iname"><span class="no">${idx + 1}.</span> ${esc(i.name)}</div>
-        ${i.variantName ? `<div class="sku">Varian: ${esc(i.variantName)}</div>` : ''}
-        ${p?.sku ? `<div class="sku">${esc(p.sku)}</div>` : ''}
-        ${isCustom ? `<div class="sku" style="font-weight: 700;">${customLabel}${origNote}</div>` : ''}
-        <div class="row"><span>${num(i.qty)} ${esc(unit)} x ${idr(i.price)}</span><span class="amt">${idr(i.subtotal)}</span></div>
+        <div class="item-name"><span class="item-num">${idx + 1}.</span> ${esc(i.name)}</div>
+        ${i.variantName ? `<div class="item-sub">Varian: ${esc(i.variantName)}</div>` : ''}
+        ${p?.sku ? `<div class="item-sub">SKU: ${esc(p.sku)}</div>` : ''}
+        ${isCustom ? `<div class="item-sub item-custom">${customLabel}${origNote}</div>` : ''}
+        <div class="item-row">
+          <span class="item-qty">${num(i.qty)} ${esc(unit)} × ${idr(i.price)}</span>
+          <span class="item-amount">${idr(i.subtotal)}</span>
+        </div>
       </div>`;
     })
     .join('');
-
-  const logoHtml = st.appLogo 
-    ? `<div class="center" style="margin-bottom: 8px;"><img src="${st.appLogo}" alt="Logo" class="receipt-logo" style="max-width: 45mm; max-height: 25mm; object-fit: contain; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;" /></div>`
-    : '';
 
   return `<!doctype html>
 <html><head><meta charset="utf-8"><title>Struk ${esc(sale.id)}</title>
 <style>
   @page { size: 80mm auto; margin: 0; }
-  * { box-sizing: border-box; font-size: 11px !important; font-weight: 400 !important; letter-spacing: 0 !important; }
+  *, *::before, *::after { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; background: #fff; }
-  body { width: 80mm; padding: 3mm 4mm 5mm; font-family: 'Courier New', Consolas, monospace; line-height: 1.3; color: #000; }
-  .center { text-align: center; }
-  img.receipt-logo {
-    display: inline-block;
-    max-width: 45mm;
-    max-height: 25mm;
-    object-fit: contain;
+  body {
+    width: 80mm;
+    padding: 4mm 4mm 6mm;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    line-height: 1.35;
+    color: #000;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
-  .dash, .solid { border: 0; border-top: 1px dashed #000; margin: 5px 0; }
-  .meta { display: grid; grid-template-columns: 1fr 1fr; column-gap: 4mm; row-gap: 2px; }
-  .c { display: flex; justify-content: space-between; gap: 4px; min-width: 0; }
-  .c .k { flex-shrink: 0; }
-  .c .v { text-align: right; overflow-wrap: anywhere; }
-  .row { display: flex; justify-content: space-between; gap: 8px; }
-  .row span:last-child { text-align: right; white-space: nowrap; }
-  .head { display: flex; justify-content: space-between; }
-  .item { margin-bottom: 4px; }
-  .iname { word-break: break-word; }
-  .iname .no { display: inline-block; min-width: 4mm; }
-  .sku { padding-left: 4mm; }
-  .item .row { padding-left: 4mm; }
-  .barcode { margin: 6px 6mm 2px; }
+  .center { text-align: center; }
+  img.receipt-logo {
+    display: inline-block;
+    max-width: 22mm;
+    max-height: 22mm;
+    object-fit: contain;
+    border-radius: 50%;
+    margin: 0 auto;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  .store-name {
+    font-size: 14.5px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    line-height: 1.2;
+    color: #000;
+    margin-bottom: 2px;
+  }
+  .store-sub {
+    font-size: 10.5px;
+    color: #333;
+    line-height: 1.35;
+  }
+  .receipt-badge {
+    display: inline-block;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    color: #222;
+    border: 1px solid #222;
+    border-radius: 3px;
+    padding: 1px 6px;
+    margin-top: 4px;
+    margin-bottom: 2px;
+    text-transform: uppercase;
+  }
+  .dash { border: 0; border-top: 1px dashed #777; margin: 6px 0; }
+  .solid { border: 0; border-top: 1.5px solid #000; margin: 6px 0; }
+  
+  /* Meta Grid */
+  .meta-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 3mm;
+    row-gap: 2px;
+    font-size: 10.5px;
+  }
+  .meta-cell {
+    display: flex;
+    justify-content: space-between;
+    gap: 4px;
+    min-width: 0;
+  }
+  .meta-k { color: #555; font-weight: 500; flex-shrink: 0; }
+  .meta-v { color: #000; font-weight: 700; text-align: right; overflow-wrap: anywhere; }
+
+  /* Items */
+  .items-head {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    color: #222;
+    padding: 2px 0;
+  }
+  .item {
+    margin-bottom: 5px;
+  }
+  .item-name {
+    font-size: 11.5px;
+    font-weight: 700;
+    color: #000;
+    line-height: 1.25;
+    word-break: break-word;
+  }
+  .item-num {
+    display: inline-block;
+    min-width: 3.5mm;
+  }
+  .item-sub {
+    font-size: 9.5px;
+    color: #555;
+    padding-left: 3.5mm;
+    font-family: monospace;
+  }
+  .item-custom {
+    color: #dc2626;
+    font-weight: 700;
+  }
+  .item-row {
+    display: flex;
+    justify-content: space-between;
+    padding-left: 3.5mm;
+    margin-top: 1px;
+  }
+  .item-qty {
+    font-size: 10.5px;
+    color: #444;
+  }
+  .item-amount {
+    font-size: 11.5px;
+    font-weight: 700;
+    color: #000;
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  /* Summary Row */
+  .sum-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: #333;
+    padding: 1.5px 0;
+  }
+  .sum-row.bold {
+    font-weight: 700;
+    color: #000;
+  }
+
+  /* Grand Total Box */
+  .grand-total-box {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-top: 1.5px solid #000;
+    border-bottom: 1.5px solid #000;
+    padding: 5px 0;
+    margin: 5px 0;
+  }
+  .gt-label {
+    font-size: 14px;
+    font-weight: 900;
+    letter-spacing: 0.5px;
+  }
+  .gt-val {
+    font-size: 15.5px;
+    font-weight: 900;
+    letter-spacing: -0.3px;
+  }
+
+  /* Footer */
+  .barcode-wrap {
+    width: 65%;
+    margin: 6px auto 2px;
+  }
+  .nota-code {
+    font-family: monospace;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: #333;
+    margin-top: 1px;
+  }
+  .footer-msg {
+    font-size: 10px;
+    color: #444;
+    line-height: 1.35;
+    margin-top: 4px;
+  }
+  .print-time {
+    font-size: 9px;
+    color: #888;
+    margin-top: 4px;
+  }
 </style></head>
 <body>
   ${logoHtml}
-  ${textBlock(headerText)}
-  <hr class="dash" />
-
-  <div class="meta">
-    ${cell('Nota', esc(noNota))}
-    ${cell('Tgl', tgl)}
-    ${cell('Kasir', esc(sale.employeeName || '-'))}
-    ${cell('Jam', jam)}
-    ${cell('Plg', esc(customer))}
-    ${cell('Tipe', esc(opts.orderType ? (ORDER_LABEL[opts.orderType] || opts.orderType) : '-'))}
+  <div class="center">
+    <div class="store-name">${esc(storeTitle)}</div>
+    ${storeSubtitleLines.map(l => `<div class="store-sub">${esc(l)}</div>`).join('')}
+    <div><span class="receipt-badge">STRUK PEMBELIAN</span></div>
   </div>
 
-  <hr class="solid" />
-  <div class="head"><span>ITEM</span><span>JUMLAH (Rp)</span></div>
-  <hr class="dash" />
-  ${items}
   <hr class="dash" />
 
-  ${row('Total Item', `${sale.items.length} jenis / ${num(totalQty)} qty`)}
-  ${row('Subtotal', rp(sale.subtotal))}
-  ${sale.tax > 0 ? row(`PPN${opts.taxEnabled && opts.taxRate ? ` (${opts.taxRate}%)` : ''}`, rp(sale.tax)) : ''}
-  ${sale.rounding ? row('Pembulatan', rp(sale.rounding)) : ''}
-  <hr class="solid" />
-  ${row('TOTAL', rp(sale.total), 'grand')}
-  <hr class="solid" />
-  ${row('Metode Bayar', esc(sale.paymentMethod))}
-  ${row(isCash ? 'Tunai Diterima' : 'Dibayar', rp(isCash ? sale.tendered : sale.total))}
-  ${isCash ? row('Kembalian', rp(sale.change), 'bold') : ''}
+  <div class="meta-grid">
+    <div class="meta-cell"><span class="meta-k">No. Nota</span><span class="meta-v">${esc(noNota)}</span></div>
+    <div class="meta-cell"><span class="meta-k">Tgl</span><span class="meta-v">${tgl}</span></div>
+    <div class="meta-cell"><span class="meta-k">Kasir</span><span class="meta-v">${esc(sale.employeeName || '-')}</span></div>
+    <div class="meta-cell"><span class="meta-k">Jam</span><span class="meta-v">${jam}</span></div>
+    <div class="meta-cell"><span class="meta-k">Pelanggan</span><span class="meta-v">${esc(customer)}</span></div>
+    <div class="meta-cell"><span class="meta-k">Tipe</span><span class="meta-v">${esc(opts.orderType ? (ORDER_LABEL[opts.orderType] || opts.orderType) : 'Reguler')}</span></div>
+  </div>
+
+  <hr class="dash" />
+  <div class="items-head"><span>ITEM</span><span>JUMLAH (Rp)</span></div>
   <hr class="dash" />
 
-  <div class="barcode">${barcodeSvg(sale.id)}</div>
-  <div class="center nota">${esc(sale.id)}</div>
+  ${itemsHtml}
+
   <hr class="dash" />
-  ${textBlock(footerText)}
-  <div class="center" style="margin-top:4px">Dicetak: ${esc(printedAt)}</div>
+
+  <div class="sum-row"><span>Total Item</span><span style="font-weight:700;">${sale.items.length} jenis / ${num(totalQty)} qty</span></div>
+  <div class="sum-row"><span>Subtotal</span><span>${rp(sale.subtotal)}</span></div>
+  ${sale.tax > 0 ? `<div class="sum-row"><span>PPN (${opts.taxEnabled && opts.taxRate ? `${opts.taxRate}%` : '11%'})</span><span>${rp(sale.tax)}</span></div>` : ''}
+  ${sale.rounding ? `<div class="sum-row"><span>Pembulatan</span><span>${rp(sale.rounding)}</span></div>` : ''}
+
+  <div class="grand-total-box">
+    <span class="gt-label">TOTAL</span>
+    <span class="gt-val">${rp(sale.total)}</span>
+  </div>
+
+  <div class="sum-row"><span>Metode Bayar</span><span style="font-weight:700;">${esc(sale.paymentMethod || 'TUNAI')}</span></div>
+  <div class="sum-row"><span>${isCash ? 'Tunai Diterima' : 'Dibayar'}</span><span>${rp(isCash ? (sale.tendered || sale.total) : sale.total)}</span></div>
+  ${isCash ? `<div class="sum-row bold" style="font-size:11.5px;margin-top:1px;"><span>Kembalian</span><span style="font-weight:900;">${rp(sale.change || 0)}</span></div>` : ''}
+
+  <hr class="dash" />
+
+  <div class="barcode-wrap">${barcodeSvg(sale.id)}</div>
+  <div class="center nota-code">${esc(sale.id)}</div>
+
+  <hr class="dash" />
+
+  <div class="center footer-msg">
+    ${footerLines.map(l => `<div>${esc(l)}</div>`).join('')}
+    <div class="print-time">Dicetak: ${esc(printedAt)}</div>
+  </div>
 </body></html>`;
 };
 

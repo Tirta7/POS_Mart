@@ -235,8 +235,8 @@ export const buildTestReceiptBytes = async (storeName: string, options: EscPosOp
 
   // 0. Cetak Logo Toko jika tersedia
   if (settings.appLogo) {
-    const maxW = pWidth === '80mm' ? 320 : 200;
-    const maxH = pWidth === '80mm' ? 140 : 100;
+    const maxW = pWidth === '80mm' ? 180 : 130;
+    const maxH = pWidth === '80mm' ? 90 : 65;
     const logoBytes = await imageToEscPosRaster(settings.appLogo, maxW, maxH);
     if (logoBytes.length > 0) {
       builder.appendRawBytes(logoBytes);
@@ -293,8 +293,8 @@ export const buildReceiptEscPos = async (
 
   // 0. Cetak Logo Toko jika tersedia (Raster Image GS v 0)
   if (settings.appLogo) {
-    const maxW = pWidth === '80mm' ? 320 : 200;
-    const maxH = pWidth === '80mm' ? 140 : 100;
+    const maxW = pWidth === '80mm' ? 180 : 130;
+    const maxH = pWidth === '80mm' ? 90 : 65;
     const logoBytes = await imageToEscPosRaster(settings.appLogo, maxW, maxH);
     if (logoBytes.length > 0) {
       builder.appendRawBytes(logoBytes);
