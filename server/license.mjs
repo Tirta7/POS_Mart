@@ -93,6 +93,7 @@ setInterval(() => {
 
 let checkTimer = null;
 let messagesTimer = null;
+let lastLoggedStatus = null;
 
 /** Verifikasi lisensi ke VOCML atau offline cache */
 export async function verifikasiAplikasi() {
@@ -134,12 +135,18 @@ export async function verifikasiAplikasi() {
     };
 
     if (!lisensi.allowed) {
-      console.log(`[License] AKSES DITOLAK: ${lisensi.status} - ${lisensi.reason}`);
-      if (lisensi.billing) {
-        console.log(`[License] Tagihan QRIS aktif: ${lisensi.billing.amount_text} (${lisensi.billing.merchant_name})`);
+      if (lastLoggedStatus !== 'denied_' + lisensi.status) {
+        lastLoggedStatus = 'denied_' + lisensi.status;
+        console.log(`[License] AKSES DITOLAK: ${lisensi.status} - ${lisensi.reason}`);
+        if (lisensi.billing) {
+          console.log(`[License] Tagihan QRIS aktif: ${lisensi.billing.amount_text} (${lisensi.billing.merchant_name})`);
+        }
       }
     } else {
-      console.log(`[License] AKSES DIIZINKAN. Status: ${lisensi.status} (Berlaku s/d: ${lisensi.expiresAt})`);
+      if (lastLoggedStatus !== 'allowed_' + lisensi.status) {
+        lastLoggedStatus = 'allowed_' + lisensi.status;
+        console.log(`[License] AKSES DIIZINKAN. Status: ${lisensi.status} (Berlaku s/d: ${lisensi.expiresAt})`);
+      }
     }
 
     broadcastLicense(licenseState);
@@ -154,8 +161,8 @@ export async function verifikasiAplikasi() {
     return licenseState;
   }
 
-  // Cek setiap 5 detik agar pembaruan admin VOCML (termasuk lock/unlock) langsung berlaku cepat
-  const nextInterval = 5000;
+  // Cek setiap 30 detik (jika aktif) atau 10 detik (jika terkunci) agar server tetap ringan dan responsif
+  const nextInterval = licenseState?.allowed ? 30000 : 10000;
   checkTimer = setTimeout(verifikasiAplikasi, nextInterval);
   if (checkTimer?.unref) checkTimer.unref();
 

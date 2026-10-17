@@ -1,19 +1,9 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { useEffect } from 'react';
+import { useEffect, lazy, Suspense } from 'react';
 import { useSettingsStore } from './store/useSettingsStore';
 import { useInventoryStore } from './store/useInventoryStore';
 import { useAuthStore } from './store/useAuthStore';
 import Pos from './Pos';
-import BackofficeLayout from './pages/backoffice/Layout';
-import StockManagement from './pages/backoffice/StockManagement';
-import StockMutation from './pages/backoffice/StockMutation';
-import Purchases from './pages/backoffice/Purchases';
-import SupplierData from './pages/backoffice/SupplierData';
-import EmployeeData from './pages/backoffice/EmployeeData';
-import Settings from './pages/backoffice/Settings';
-import { CustomerData } from './pages/backoffice/CustomerData';
-import Reports from './pages/backoffice/Reports';
-import LoginPage from './pages/LoginPage';
 import { useCustomerStore } from './store/useCustomerStore';
 import { useSalesStore } from './store/useSalesStore';
 import { useHoldStore } from './store/useHoldStore';
@@ -24,6 +14,26 @@ import GlobalNotification from './components/GlobalNotification';
 import BroadcastToast from './components/BroadcastToast';
 import UpdateWatcher from './components/UpdateWatcher';
 import LicenseLockScreen from './components/LicenseLockScreen';
+
+// Code-splitting via lazy loading untuk seluruh halaman Back-Office & Login agar startup/refresh kasir instan!
+const BackofficeLayout = lazy(() => import('./pages/backoffice/Layout'));
+const StockManagement = lazy(() => import('./pages/backoffice/StockManagement'));
+const StockMutation = lazy(() => import('./pages/backoffice/StockMutation'));
+const Purchases = lazy(() => import('./pages/backoffice/Purchases'));
+const SupplierData = lazy(() => import('./pages/backoffice/SupplierData'));
+const EmployeeData = lazy(() => import('./pages/backoffice/EmployeeData'));
+const Settings = lazy(() => import('./pages/backoffice/Settings'));
+const CustomerData = lazy(() => import('./pages/backoffice/CustomerData'));
+const Reports = lazy(() => import('./pages/backoffice/Reports'));
+const LoginPage = lazy(() => import('./pages/LoginPage'));
+
+// Fallback spinner saat transisi antar halaman
+const RouteLoading = () => (
+  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', width: '100vw', background: '#f8fafc', gap: '12px' }}>
+    <div style={{ width: '36px', height: '36px', border: '3px solid #e2e8f0', borderTopColor: '#da291c', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+    <span style={{ fontSize: '13px', fontWeight: 600, color: '#64748b' }}>Memuat halaman...</span>
+  </div>
+);
 
 // Route guard — jika belum login, redirect ke /login
 const RequireAuth = ({ children }: { children: React.ReactNode }) => {
@@ -59,9 +69,7 @@ function App() {
     if (currentUser) {
       fetchProducts();
       fetchCategories();
-      fetchTransactions();
       fetchSales();
-      fetchSettings();
       fetchCustomers();
       fetchSuppliers();
       fetchDrafts();
@@ -158,50 +166,52 @@ function App() {
 
   return (
     <Router>
-      <Routes>
-        {/* Login Route */}
-        <Route
-          path="/login"
-          element={
-            currentUser
-              ? <Navigate to="/" replace />
-              : <LoginPage onLogin={() => { /* handled by store */ }} />
-          }
-        />
+      <Suspense fallback={<RouteLoading />}>
+        <Routes>
+          {/* Login Route */}
+          <Route
+            path="/login"
+            element={
+              currentUser
+                ? <Navigate to="/" replace />
+                : <LoginPage onLogin={() => { /* handled by store */ }} />
+            }
+          />
 
-        {/* POS Route */}
-        <Route
-          path="/"
-          element={
-            <RequireAuth>
-              <Pos />
-            </RequireAuth>
-          }
-        />
+          {/* POS Route */}
+          <Route
+            path="/"
+            element={
+              <RequireAuth>
+                <Pos />
+              </RequireAuth>
+            }
+          />
 
-        {/* Back-Office Routes */}
-        <Route
-          path="/backoffice"
-          element={
-            <RequireAuth>
-              <BackofficeLayout />
-            </RequireAuth>
-          }
-        >
-          <Route index element={<Navigate to="/backoffice/stock" replace />} />
-          <Route path="stock" element={<StockManagement />} />
-          <Route path="stock-mutation" element={<StockMutation />} />
-          <Route path="purchases" element={<Purchases />} />
-          <Route path="customers" element={<CustomerData />} />
-          <Route path="suppliers" element={<SupplierData />} />
-          <Route path="employees" element={<EmployeeData />} />
-          <Route path="reports" element={<Reports />} />
-          <Route path="settings" element={<Settings />} />
-        </Route>
+          {/* Back-Office Routes */}
+          <Route
+            path="/backoffice"
+            element={
+              <RequireAuth>
+                <BackofficeLayout />
+              </RequireAuth>
+            }
+          >
+            <Route index element={<Navigate to="/backoffice/stock" replace />} />
+            <Route path="stock" element={<StockManagement />} />
+            <Route path="stock-mutation" element={<StockMutation />} />
+            <Route path="purchases" element={<Purchases />} />
+            <Route path="customers" element={<CustomerData />} />
+            <Route path="suppliers" element={<SupplierData />} />
+            <Route path="employees" element={<EmployeeData />} />
+            <Route path="reports" element={<Reports />} />
+            <Route path="settings" element={<Settings />} />
+          </Route>
 
-        {/* Catch all */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+          {/* Catch all */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
       <GlobalNotification />
       <BroadcastToast />
       <UpdateWatcher />

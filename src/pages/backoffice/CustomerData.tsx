@@ -1301,3 +1301,5 @@ export const CustomerData = () => {
     </div>
   );
 };
+
+export default CustomerData;
