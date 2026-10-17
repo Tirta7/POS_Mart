@@ -88,7 +88,7 @@ export const buildReceiptHtml = (sale: SalesTransaction, opts: ReceiptOptions): 
     .join('');
 
   const logoHtml = st.appLogo 
-    ? `<div class="center" style="margin-bottom: 8px;"><img src="${st.appLogo}" alt="Logo" style="max-width: 50mm; max-height: 25mm; object-fit: contain; filter: grayscale(100%) brightness(0.6) contrast(2000%);" /></div>`
+    ? `<div class="center" style="margin-bottom: 8px;"><img src="${st.appLogo}" alt="Logo" class="receipt-logo" style="max-width: 45mm; max-height: 25mm; object-fit: contain; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;" /></div>`
     : '';
 
   return `<!doctype html>
@@ -99,6 +99,14 @@ export const buildReceiptHtml = (sale: SalesTransaction, opts: ReceiptOptions): 
   html, body { margin: 0; padding: 0; background: #fff; }
   body { width: 80mm; padding: 3mm 4mm 5mm; font-family: 'Courier New', Consolas, monospace; line-height: 1.3; color: #000; }
   .center { text-align: center; }
+  img.receipt-logo {
+    display: inline-block;
+    max-width: 45mm;
+    max-height: 25mm;
+    object-fit: contain;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
   .dash, .solid { border: 0; border-top: 1px dashed #000; margin: 5px 0; }
   .meta { display: grid; grid-template-columns: 1fr 1fr; column-gap: 4mm; row-gap: 2px; }
   .c { display: flex; justify-content: space-between; gap: 4px; min-width: 0; }
@@ -161,16 +169,61 @@ export const printReceipt = (sale: SalesTransaction, opts: ReceiptOptions) => {
   document.body.appendChild(iframe);
   const doc = iframe.contentDocument || iframe.contentWindow?.document;
   if (!doc || !iframe.contentWindow) {
-    document.body.removeChild(iframe);
+    if (document.body.contains(iframe)) document.body.removeChild(iframe);
     return;
   }
   doc.open();
   doc.write(buildReceiptHtml(sale, opts));
   doc.close();
+
   const win = iframe.contentWindow;
-  setTimeout(() => {
-    win.focus();
-    win.print();
-    setTimeout(() => document.body.contains(iframe) && document.body.removeChild(iframe), 1500);
-  }, 250);
+
+  const triggerPrint = () => {
+    try {
+      win.focus();
+      win.print();
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setTimeout(() => {
+        if (document.body.contains(iframe)) {
+          document.body.removeChild(iframe);
+        }
+      }, 2000);
+    }
+  };
+
+  // Pastikan seluruh gambar (termasuk logo) selesai termuat sebelum dialog cetak dibuka
+  const imgs = Array.from(doc.images || []);
+  if (imgs.length > 0) {
+    let pending = imgs.length;
+    let hasPrinted = false;
+
+    const onDone = () => {
+      pending--;
+      if (pending <= 0 && !hasPrinted) {
+        hasPrinted = true;
+        setTimeout(triggerPrint, 150);
+      }
+    };
+
+    imgs.forEach(img => {
+      if (img.complete) {
+        onDone();
+      } else {
+        img.onload = onDone;
+        img.onerror = onDone;
+      }
+    });
+
+    // Fallback safety timeout 650ms
+    setTimeout(() => {
+      if (!hasPrinted) {
+        hasPrinted = true;
+        triggerPrint();
+      }
+    }, 650);
+  } else {
+    setTimeout(triggerPrint, 250);
+  }
 };

@@ -365,7 +365,7 @@ export const usePrinterStore = create<PrinterState>((set, get) => {
         if (!ok) return false;
       }
 
-      const bytes = buildTestReceiptBytes(storeName, {
+      const bytes = await buildTestReceiptBytes(storeName, {
         paperWidth: get().paperWidth,
         autoCut: get().autoCut
       });
@@ -380,7 +380,7 @@ export const usePrinterStore = create<PrinterState>((set, get) => {
         if (!ok) return false;
       }
 
-      const bytes = buildReceiptEscPos(sale, options, {
+      const bytes = await buildReceiptEscPos(sale, options, {
         paperWidth: get().paperWidth,
         autoCut: get().autoCut
       });

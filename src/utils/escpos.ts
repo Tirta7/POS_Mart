@@ -26,6 +26,15 @@ export class EscPosBuilder {
     this.init();
   }
 
+  appendRawBytes(bytes: number[] | Uint8Array): this {
+    if (bytes instanceof Uint8Array) {
+      for (let i = 0; i < bytes.length; i++) this.buffer.push(bytes[i]);
+    } else {
+      for (let i = 0; i < bytes.length; i++) this.buffer.push(bytes[i]);
+    }
+    return this;
+  }
+
   init(): this {
     this.buffer.push(ESC, 0x40); // Initialize printer
     return this;
@@ -122,11 +131,117 @@ const fmtNum = (n: number | undefined): string => {
 };
 
 /**
+ * Mengonversi gambar URL/Base64 ke ESC/POS Raster Bit Image (GS v 0 0)
+ * Diposisikan di tengah (Center Aligned) dan dikonversi ke monokrom hitam-putih murni.
+ */
+export async function imageToEscPosRaster(
+  imgUrl: string,
+  maxWidthPx: number = 240,
+  maxHeightPx: number = 140
+): Promise<number[]> {
+  return new Promise((resolve) => {
+    if (!imgUrl) return resolve([]);
+
+    const img = new Image();
+    img.crossOrigin = 'Anonymous';
+
+    img.onload = () => {
+      try {
+        let w = img.naturalWidth || img.width || 200;
+        let h = img.naturalHeight || img.height || 100;
+
+        // Skala proporsional
+        const ratio = Math.min(maxWidthPx / w, maxHeightPx / h, 1);
+        w = Math.max(8, Math.round(w * ratio));
+        h = Math.max(8, Math.round(h * ratio));
+
+        // Lebar kelipatan 8 bit (1 byte)
+        w = Math.ceil(w / 8) * 8;
+
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return resolve([]);
+
+        // Latar putih
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, w, h);
+        ctx.drawImage(img, 0, 0, w, h);
+
+        const imgData = ctx.getImageData(0, 0, w, h);
+        const pixels = imgData.data;
+        const widthBytes = w / 8;
+        const bytes: number[] = [];
+
+        // Center command
+        bytes.push(0x1B, 0x61, 0x01); // ESC a 1
+
+        // GS v 0 0 xL xH yL yH
+        bytes.push(
+          0x1D, 0x76, 0x30, 0x00,
+          widthBytes & 0xFF,
+          (widthBytes >> 8) & 0xFF,
+          h & 0xFF,
+          (h >> 8) & 0xFF
+        );
+
+        for (let y = 0; y < h; y++) {
+          for (let xByte = 0; xByte < widthBytes; xByte++) {
+            let b = 0;
+            for (let bit = 0; bit < 8; bit++) {
+              const x = xByte * 8 + bit;
+              const idx = (y * w + x) * 4;
+              const r = pixels[idx];
+              const g = pixels[idx + 1];
+              const bPixel = pixels[idx + 2];
+              const a = pixels[idx + 3];
+
+              // Luminance grayscale
+              const lum = 0.299 * r + 0.587 * g + 0.114 * bPixel;
+              // Pixel gelap (< 175) dan tidak transparan -> bit 1 (hitam)
+              if (a > 50 && lum < 175) {
+                b |= (0x80 >> bit);
+              }
+            }
+            bytes.push(b);
+          }
+        }
+
+        // Line feed kecil setelah logo
+        bytes.push(0x0A);
+        resolve(bytes);
+      } catch (e) {
+        console.warn('Gagal memproses raster logo ESC/POS:', e);
+        resolve([]);
+      }
+    };
+
+    img.onerror = () => {
+      resolve([]);
+    };
+
+    img.src = imgUrl;
+  });
+}
+
+/**
  * Generate binary ESC/POS untuk Struk Uji Coba Printer Bluetooth
  */
-export const buildTestReceiptBytes = (storeName: string, options: EscPosOptions = {}): Uint8Array => {
+export const buildTestReceiptBytes = async (storeName: string, options: EscPosOptions = {}): Promise<Uint8Array> => {
   const pWidth = options.paperWidth || '58mm';
   const builder = new EscPosBuilder(pWidth);
+  const settings = useSettingsStore.getState();
+
+  // 0. Cetak Logo Toko jika tersedia
+  if (settings.appLogo) {
+    const maxW = pWidth === '80mm' ? 320 : 200;
+    const maxH = pWidth === '80mm' ? 140 : 100;
+    const logoBytes = await imageToEscPosRaster(settings.appLogo, maxW, maxH);
+    if (logoBytes.length > 0) {
+      builder.appendRawBytes(logoBytes);
+    }
+  }
 
   builder
     .alignCenter()
@@ -164,17 +279,27 @@ export const buildTestReceiptBytes = (storeName: string, options: EscPosOptions 
 /**
  * Generate binary ESC/POS lengkap dari data transaksi penjualan
  */
-export const buildReceiptEscPos = (
+export const buildReceiptEscPos = async (
   sale: SalesTransaction,
   receiptOpts: ReceiptOptions,
   printerOpts: EscPosOptions = {}
-): Uint8Array => {
+): Promise<Uint8Array> => {
   const pWidth = printerOpts.paperWidth || '58mm';
   const builder = new EscPosBuilder(pWidth);
 
   const settings = useSettingsStore.getState();
   const headerRaw = (settings.invoiceHeader || '').trim() || defaultInvoiceHeader(receiptOpts.storeName || settings.appName || 'POS MART');
   const footerRaw = (settings.invoiceFooter || '').trim() || DEFAULT_INVOICE_FOOTER;
+
+  // 0. Cetak Logo Toko jika tersedia (Raster Image GS v 0)
+  if (settings.appLogo) {
+    const maxW = pWidth === '80mm' ? 320 : 200;
+    const maxH = pWidth === '80mm' ? 140 : 100;
+    const logoBytes = await imageToEscPosRaster(settings.appLogo, maxW, maxH);
+    if (logoBytes.length > 0) {
+      builder.appendRawBytes(logoBytes);
+    }
+  }
 
   // 1. Header Toko
   const headerLines = headerRaw.split('\n').map((s: string) => s.trim()).filter(Boolean);
