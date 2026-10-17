@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { DEFAULT_PRODUCT_IMAGE } from './utils/defaultProductImage';
 
 export interface Product {
   id: string;
@@ -31,7 +32,7 @@ interface AppState {
 
 export const useStore = create<AppState>((set) => ({
   products: [
-    { id: 'P01', name: 'Paket Sembako 1', price: 51000, type: 'Combo', stock: 50, tag: 'BESTSELLER', tagColor: 'promo', badge: '01', img: 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=300&q=80' },
+    { id: 'P01', name: 'Paket Sembako 1', price: 51000, type: 'Combo', stock: 50, tag: 'BESTSELLER', tagColor: 'promo', badge: '01', img: DEFAULT_PRODUCT_IMAGE },
     { id: 'P02', name: 'Beras Rojolele 5kg', price: 72000, type: 'Sembako', stock: 120, tag: 'STOK BANYAK', badge: '02', img: 'https://images.unsplash.com/photo-1586201375761-83865001e31c?auto=format&fit=crop&w=300&q=80' },
     { id: 'P03', name: 'Minyak Goreng 2L', price: 39000, type: 'Sembako', stock: 85, tag: 'PROMO', tagColor: 'promo', badge: '03', img: 'https://images.unsplash.com/photo-1629198688000-71f23e745b6e?auto=format&fit=crop&w=300&q=80' },
     { id: 'P04', name: 'Telur Ayam 1 Kg', price: 28000, type: 'Sembako', stock: 45, badge: '04', img: 'https://images.unsplash.com/photo-1582722872445-44dc5f7e3c8f?auto=format&fit=crop&w=300&q=80' },

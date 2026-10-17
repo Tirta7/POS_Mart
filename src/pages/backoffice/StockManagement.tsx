@@ -17,6 +17,7 @@ import type { MutationLine } from '../../utils/stockMutation';
 import VariantEditor, { makeVariantId, sumVariantQty, findDuplicateVariant } from '../../components/VariantEditor';
 import type { VariantDraft } from '../../types';
 import { exportMasterExcel } from '../../utils/excelExportImport';
+import { getProductImage } from '../../utils/defaultProductImage';
 
 const makeGrNumber = () => {
   const d = new Date();
@@ -304,7 +305,7 @@ const StockManagement: React.FC = () => {
         sellingPrice: Number(sellingPrice),
         wholesalePrice: Number(wholesalePrice),
         minStock: Number(minStock),
-        image: image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=300&q=80',
+        image: image ? getProductImage(image) : '',
         variants: hasVariants
           ? namedVariants.map(v => ({
               id: v.id,
@@ -462,7 +463,7 @@ const StockManagement: React.FC = () => {
           sellingPrice: Number(item.sellingPrice),
           wholesalePrice: Number(item.wholesalePrice || 0),
           minStock: Number(item.minStock || 0),
-          image: item.image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=300&q=80',
+          image: item.image ? getProductImage(item.image) : '',
           // Varian dibuat dengan stok 0; stok masuk lewat mutasi IN per varian
           variants: draftVariants.map(dv => ({
             id: dv.id, name: dv.name, stock: 0,

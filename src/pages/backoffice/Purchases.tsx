@@ -9,6 +9,7 @@ import {
 import type { StockTransaction, Supplier } from '../../types';
 import BarcodeScannerCamera from '../../components/BarcodeScannerCamera';
 import { printPurchaseInvoiceA4 } from '../../utils/distributorInvoice';
+import { getProductImage } from '../../utils/defaultProductImage';
 
 interface CartItem {
   key: string; // productId::variantId|new:nama  (unik per baris belanja)
@@ -688,7 +689,7 @@ const Purchases: React.FC = () => {
       sellingPrice: Number(newProdSellingPrice),
       wholesalePrice: Number(newProdWholesalePrice) || 0,
       minStock: Number(newProdMinStock) || 0,
-      image: newProdImage || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=300&q=80'
+      image: newProdImage ? getProductImage(newProdImage) : ''
     };
 
     const createdProd = await addProduct(newProduct);

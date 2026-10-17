@@ -22,6 +22,7 @@ import ReceiptModal from './components/ReceiptModal';
 import type { SalesTransaction } from './types';
 import ShiftLabel from './components/ShiftLabel';
 import type { ReceiptOptions } from './utils/receipt';
+import { getProductImage, handleProductImageError } from './utils/defaultProductImage';
 
 /** Tanggal & jam real-time (mengikuti jam perangkat), diperbarui tiap detik. */
 function LiveClock() {
@@ -274,7 +275,7 @@ function App() {
       type: p.category,
       unit: p.unit || 'Pcs',
       badge: (i + 1).toString().padStart(2, '0'),
-      img: p.image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=300&q=80',
+      img: getProductImage(p.image),
       tag: isLowStock ? 'STOK TIPIS' : (i === 0 ? 'BESTSELLER' : ''),
       tagColor: isLowStock ? 'promo' : '',
       availableStock: availableStock,  // actual available stock
@@ -1022,9 +1023,7 @@ function App() {
                       src={product.img} 
                       alt={product.name} 
                       className="product-list-img"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=300&q=80';
-                      }}
+                      onError={handleProductImageError}
                     />
                     <div className="product-list-main">
                       <div className="product-list-name" title={product.name}>{product.name}</div>
@@ -1068,9 +1067,7 @@ function App() {
                     src={product.img} 
                     alt={product.name} 
                     className="product-img" 
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=300&q=80';
-                    }}
+                    onError={handleProductImageError}
                   />
                   {product.badge && <div className="product-num">#{product.badge}</div>}
                   {product.tag && (
@@ -1534,7 +1531,7 @@ function App() {
             </div>
             
             <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', backgroundColor: '#f9fafb', padding: '10px', borderRadius: '12px', border: '1px solid #f3f4f6' }}>
-              <img src={weightProduct.img} style={{ width: '50px', height: '50px', objectFit: 'cover', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }} />
+              <img src={getProductImage(weightProduct.img)} onError={handleProductImageError} style={{ width: '50px', height: '50px', objectFit: 'cover', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }} />
               <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                 <div style={{ fontWeight: 'bold', fontSize: '14px', color: '#111827', lineHeight: '1.2', marginBottom: '4px' }}>{weightProduct.name}</div>
                 <div style={{ color: 'var(--primary)', fontWeight: 'bold', fontSize: '13px' }}>{formatIDR(weightProduct.price)} <span style={{ fontSize: '11px', color: '#6b7280', fontWeight: 'normal' }}>/ {weightProduct.unit}</span></div>
@@ -1609,7 +1606,7 @@ function App() {
               <button onClick={() => setVariantProduct(null)} aria-label="Tutup" style={{ background: '#f3f4f6', border: 'none', borderRadius: '50%', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#6b7280' }}><X size={16} /></button>
             </div>
             <div style={{ display: 'flex', gap: '12px', marginBottom: '14px', backgroundColor: '#f9fafb', padding: '10px', borderRadius: '12px', border: '1px solid #f3f4f6' }}>
-              <img src={variantProduct.img} style={{ width: '48px', height: '48px', objectFit: 'cover', borderRadius: '8px' }} />
+              <img src={getProductImage(variantProduct.img)} onError={handleProductImageError} style={{ width: '48px', height: '48px', objectFit: 'cover', borderRadius: '8px' }} />
               <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                 <div style={{ fontWeight: 'bold', fontSize: '14px', color: '#111827', lineHeight: 1.2 }}>{variantProduct.name}</div>
                 <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '2px' }}>{variantProduct.variants.length} varian tersedia</div>

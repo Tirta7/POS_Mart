@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { Product, StockTransaction } from '../types';
+import { getProductImage } from '../utils/defaultProductImage';
 
 interface InventoryState {
   products: Product[];
@@ -51,7 +52,7 @@ const mapProduct = (p: any): Product => ({
   purchasePrice: p.purchase_price,
   sellingPrice: p.selling_price,
   wholesalePrice: p.wholesale_price || 0,
-  image: p.image_url || 'https://via.placeholder.com/150',
+  image: getProductImage(p.image_url),
   variants: (p.variants || []).map((v: any) => ({
     id: v.id,
     name: v.name,
