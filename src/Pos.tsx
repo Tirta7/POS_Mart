@@ -463,6 +463,7 @@ function App() {
       name: p.name,
       price: resolvePrice(p, null, orderType),
       wholesalePrice: effectiveWholesalePrice,
+      purchasePrice: Number(p.purchasePrice) || 0,
       minWholesaleQty: p.minWholesaleQty || 0,
       type: p.category,
       unit: p.unit || 'Pcs',
@@ -2927,7 +2928,13 @@ function App() {
                       </div>
                       <div style={{ fontSize: '10px', color: '#78350f', marginTop: '1px' }}>
                         @{formatIDR(Math.round(boxP / boxCap))}/{retailUnit}
+                        {retailP > boxP / boxCap && <strong style={{ color: '#16a34a' }}> • Hemat {formatIDR(Math.round(retailP - boxP / boxCap))}/{retailUnit}</strong>}
                       </div>
+                      {Number(p.purchasePrice) > 0 && boxP / boxCap < Number(p.purchasePrice) && (
+                        <div style={{ fontSize: '10px', color: '#b91c1c', fontWeight: 800, marginTop: '2px' }}>
+                          ⚠ Di bawah modal ({formatIDR(Number(p.purchasePrice))}/{retailUnit}) — cek harga Dus
+                        </div>
+                      )}
                     </div>
 
                     <div style={{ marginTop: 'auto', paddingTop: '8px', borderTop: '1px dashed #fde68a', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -3005,7 +3012,13 @@ function App() {
                       </div>
                       <div style={{ fontSize: '10px', color: '#075985', marginTop: '1px' }}>
                         @{formatIDR(Math.round(midP / midCap))}/{retailUnit}
+                        {retailP > midP / midCap && <strong style={{ color: '#16a34a' }}> • Hemat {formatIDR(Math.round(retailP - midP / midCap))}/{retailUnit}</strong>}
                       </div>
+                      {Number(p.purchasePrice) > 0 && midP / midCap < Number(p.purchasePrice) && (
+                        <div style={{ fontSize: '10px', color: '#b91c1c', fontWeight: 800, marginTop: '2px' }}>
+                          ⚠ Di bawah modal ({formatIDR(Number(p.purchasePrice))}/{retailUnit}) — cek harga {midUnit}
+                        </div>
+                      )}
                     </div>
 
                     <div style={{ marginTop: 'auto', paddingTop: '8px', borderTop: '1px dashed #bae6fd', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

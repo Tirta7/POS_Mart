@@ -307,7 +307,7 @@ const StockManagement: React.FC = () => {
           midBarcode: finalMidBarcode,
           midCapacity: finalMidCap,
           midPrice: finalMidPrice,
-          retailBarcode: finalRetailBarcode || undefined,
+          retailBarcode: finalRetailBarcode,
           variants: []
         } as any);
 
@@ -642,6 +642,8 @@ const StockManagement: React.FC = () => {
     setName(p.name);
     setCategory(p.category);
     setQty(p.stock);
+    const editBoxCap = Number(p.boxCapacity) || 1;
+    setBoxQty(editBoxCap > 1 ? Math.floor((Number(p.stock) || 0) / editBoxCap) : '');
     setUnit(p.unit || 'Pcs');
     setPurchasePrice(p.purchasePrice);
     const bCap = Number(p.boxCapacity) || 1;
@@ -762,7 +764,7 @@ const StockManagement: React.FC = () => {
     image: si.image,
     boxBarcode: si.boxBarcode || si.barcode,
     boxCapacity: si.boxCapacity || 40,
-    boxPrice: si.boxPrice || si.wholesalePrice,
+    boxPrice: si.boxPrice || 0,
     midUnitName: si.midUnitName || '',
     midBarcode: si.midBarcode || '',
     midCapacity: Number(si.midCapacity || 0),

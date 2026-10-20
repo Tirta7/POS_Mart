@@ -56,7 +56,7 @@ const mapProduct = (p: any): Product => ({
   image: getProductImage(p.image_url),
   boxBarcode: p.box_barcode || p.boxBarcode || '',
   boxCapacity: p.box_capacity || p.boxCapacity || 1,
-  boxPrice: p.box_price || p.boxPrice || (p.wholesale_price || 0),
+  boxPrice: Number(p.box_price ?? p.boxPrice ?? 0),
   midUnitName: p.mid_unit_name || p.midUnitName || '',
   midBarcode: p.mid_barcode || p.midBarcode || '',
   midCapacity: Number(p.mid_capacity ?? p.midCapacity ?? 0),
