@@ -175,11 +175,13 @@ function App() {
   const [editingCartItem, setEditingCartItem] = useState<any>(null);
   const [customPriceInput, setCustomPriceInput] = useState<string>('');
   const [customPriceNoteInput, setCustomPriceNoteInput] = useState<string>('');
+  const [customPriceApplyQty, setCustomPriceApplyQty] = useState<'all' | 'split'>('all');
 
   const openCustomPriceModal = (item: any) => {
     setEditingCartItem(item);
     setCustomPriceInput(String(item.price || 0));
     setCustomPriceNoteInput(item.customPriceNote || (item.isCustomPrice ? 'Harga Khusus' : ''));
+    setCustomPriceApplyQty('all');
     setCustomPriceModalOpen(true);
   };
 
@@ -189,18 +191,68 @@ function App() {
     const origPrice = editingCartItem.originalPrice != null ? editingCartItem.originalPrice : editingCartItem.price;
     const isDifferent = newPrice !== origPrice;
 
-    setCart(prev => prev.map(item => {
-      if (item.cartId === editingCartItem.cartId) {
-        return {
-          ...item,
-          price: newPrice,
-          originalPrice: origPrice,
-          isCustomPrice: isDifferent,
-          customPriceNote: isDifferent ? (customPriceNoteInput.trim() || 'Harga Khusus') : ''
-        };
+    setCart(prev => {
+      // Jika user memilih untuk memisahkan 1 pcs (saat qty > 1)
+      if (customPriceApplyQty === 'split' && editingCartItem.qty > 1 && isDifferent) {
+        const remainingQty = Math.round((editingCartItem.qty - 1) * 1000) / 1000;
+        
+        // Cek apakah sudah ada baris harga normal lain untuk produk & varian ini
+        const existingNormal = prev.find(i => 
+          i.cartId !== editingCartItem.cartId && 
+          sameLine(i, editingCartItem) && 
+          !i.isCustomPrice && 
+          i.price === origPrice
+        );
+
+        let nextCart = prev.map(item => {
+          if (item.cartId === editingCartItem.cartId) {
+            return {
+              ...item,
+              qty: 1,
+              price: newPrice,
+              originalPrice: origPrice,
+              isCustomPrice: true,
+              customPriceNote: customPriceNoteInput.trim() || 'Harga Khusus'
+            };
+          }
+          if (existingNormal && item.cartId === existingNormal.cartId) {
+            return {
+              ...item,
+              qty: Math.round((item.qty + remainingQty) * 1000) / 1000
+            };
+          }
+          return item;
+        });
+
+        if (!existingNormal) {
+          nextCart.push({
+            ...editingCartItem,
+            cartId: Date.now().toString() + Math.random().toString(36).slice(2, 6),
+            qty: remainingQty,
+            price: origPrice,
+            originalPrice: origPrice,
+            isCustomPrice: false,
+            customPriceNote: ''
+          });
+        }
+
+        return nextCart;
       }
-      return item;
-    }));
+
+      // Terapkan ke seluruh kuantitas di baris ini
+      return prev.map(item => {
+        if (item.cartId === editingCartItem.cartId) {
+          return {
+            ...item,
+            price: newPrice,
+            originalPrice: origPrice,
+            isCustomPrice: isDifferent,
+            customPriceNote: isDifferent ? (customPriceNoteInput.trim() || 'Harga Khusus') : ''
+          };
+        }
+        return item;
+      });
+    });
 
     setCustomPriceModalOpen(false);
     setEditingCartItem(null);
@@ -211,18 +263,38 @@ function App() {
     const storeItem = storeProducts.find(p => p.id === editingCartItem.id);
     const standardPrice = storeItem ? resolvePrice(storeItem, editingCartItem.variantId, orderType) : (editingCartItem.originalPrice || editingCartItem.price);
 
-    setCart(prev => prev.map(item => {
-      if (item.cartId === editingCartItem.cartId) {
-        return {
-          ...item,
-          price: standardPrice,
-          originalPrice: standardPrice,
-          isCustomPrice: false,
-          customPriceNote: ''
-        };
+    setCart(prev => {
+      // Cek apakah sudah ada baris harga normal lain untuk produk ini
+      const existingNormalLine = prev.find(i => 
+        i.cartId !== editingCartItem.cartId && 
+        sameLine(i, editingCartItem) && 
+        !i.isCustomPrice && 
+        i.price === standardPrice
+      );
+
+      if (existingNormalLine) {
+        // Gabungkan ke baris normal yang sudah ada
+        return prev
+          .filter(i => i.cartId !== editingCartItem.cartId)
+          .map(i => i.cartId === existingNormalLine.cartId 
+            ? { ...i, qty: Math.round((i.qty + editingCartItem.qty) * 1000) / 1000 } 
+            : i
+          );
       }
-      return item;
-    }));
+
+      return prev.map(item => {
+        if (item.cartId === editingCartItem.cartId) {
+          return {
+            ...item,
+            price: standardPrice,
+            originalPrice: standardPrice,
+            isCustomPrice: false,
+            customPriceNote: ''
+          };
+        }
+        return item;
+      });
+    });
 
     setCustomPriceModalOpen(false);
     setEditingCartItem(null);
@@ -355,42 +427,42 @@ function App() {
 
   const updateQty = (cartId: string, delta: number) => {
     setCart(prev => {
-      let limitReached = false;
-      const nextCart = prev.map(item => {
-        if (item.cartId === cartId) {
-          const newQty = Math.max(0.01, Math.round((item.qty + delta) * 1000) / 1000);
-          if (newQty > item.availableStock) {
-            limitReached = true;
-            return item;
-          }
-          return { ...item, qty: newQty };
-        }
-        return item;
-      });
-      if (limitReached) {
-        alert('Stok tidak mencukupi!');
+      const targetItem = prev.find(i => i.cartId === cartId);
+      if (!targetItem) return prev;
+
+      const newQty = Math.max(0.01, Math.round((targetItem.qty + delta) * 1000) / 1000);
+      
+      // Total qty produk ini dari baris-baris LAIN di keranjang
+      const otherLinesQty = prev
+        .filter(i => sameLine(i, targetItem) && i.cartId !== cartId)
+        .reduce((sum, i) => sum + i.qty, 0);
+
+      if (otherLinesQty + newQty > targetItem.availableStock) {
+        sound.playScanError();
+        alert(`Stok tidak mencukupi! Total di keranjang (${Math.round((otherLinesQty + newQty) * 1000) / 1000}) melebihi stok tersedia (${targetItem.availableStock} ${targetItem.unit || 'Pcs'}).`);
+        return prev;
       }
-      return nextCart;
+
+      return prev.map(item => item.cartId === cartId ? { ...item, qty: newQty } : item);
     });
   };
 
   const setQtyValue = (cartId: string, value: number) => {
     setCart(prev => {
-      let limitReached = false;
-      const nextCart = prev.map(item => {
-        if (item.cartId === cartId) {
-          if (value > item.availableStock) {
-            limitReached = true;
-            return item;
-          }
-          return { ...item, qty: Math.max(0, value) };
-        }
-        return item;
-      });
-      if (limitReached) {
-        alert(`Stok hanya tersedia ${prev.find(i => i.cartId === cartId)?.availableStock} ${prev.find(i => i.cartId === cartId)?.unit}`);
+      const targetItem = prev.find(i => i.cartId === cartId);
+      if (!targetItem) return prev;
+
+      const safeVal = Math.max(0, value);
+      const otherLinesQty = prev
+        .filter(i => sameLine(i, targetItem) && i.cartId !== cartId)
+        .reduce((sum, i) => sum + i.qty, 0);
+
+      if (otherLinesQty + safeVal > targetItem.availableStock) {
+        alert(`Stok tidak mencukupi! Hanya tersedia ${targetItem.availableStock} ${targetItem.unit || 'Pcs'}`);
+        return prev;
       }
-      return nextCart;
+
+      return prev.map(item => item.cartId === cartId ? { ...item, qty: safeVal } : item);
     });
   };
 
@@ -404,21 +476,32 @@ function App() {
     const qtyToAdd = customQty !== undefined ? customQty : 1;
     
     setCart(prev => {
-      const exists = prev.find(i => sameLine(i, product));
-      if (exists) {
-        if (exists.qty + qtyToAdd > product.availableStock) {
-          sound.playScanError();
-          alert(`Stok tidak mencukupi! Hanya tersedia ${product.availableStock} ${product.unit}`);
-          return prev;
-        }
-        return prev.map(i => sameLine(i, product) ? { ...i, qty: Math.round((i.qty + qtyToAdd) * 1000) / 1000 } : i);
-      }
-      
-      if (qtyToAdd > product.availableStock) {
+      // 1. Validasi total stok produk di keranjang (menjumlahkan seluruh baris dengan produk & varian yang sama)
+      const currentTotalInCart = prev
+        .filter(i => sameLine(i, product))
+        .reduce((sum, i) => sum + i.qty, 0);
+
+      if (currentTotalInCart + qtyToAdd > product.availableStock) {
         sound.playScanError();
-        alert(`Stok tidak mencukupi! Hanya tersedia ${product.availableStock} ${product.unit}`);
+        alert(`Stok tidak mencukupi! Hanya tersedia ${product.availableStock} ${product.unit || 'Pcs'}`);
         return prev;
       }
+
+      // 2. Cari baris yang SAMA: produk sama, varian sama, HARGA NORMAL (bukan harga khusus manual), dan harga sama
+      const existsNormalLine = prev.find(i => 
+        sameLine(i, product) && !i.isCustomPrice && i.price === product.price
+      );
+
+      if (existsNormalLine) {
+        return prev.map(i => 
+          i.cartId === existsNormalLine.cartId 
+            ? { ...i, qty: Math.round((i.qty + qtyToAdd) * 1000) / 1000 } 
+            : i
+        );
+      }
+      
+      // 3. Jika belum ada baris normal yang cocok (misalnya item di keranjang memiliki Harga Khusus, atau produk baru),
+      // masukkan sebagai baris item baru yang terpisah
       return [
         ...prev,
         {
@@ -2165,6 +2248,48 @@ function App() {
                   )}
                 </div>
               </div>
+
+              {/* Opsi Penerapan jika Kuantitas > 1 */}
+              {editingCartItem.qty > 1 && (
+                <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '12px' }}>
+                  <div style={{ fontSize: '11.5px', fontWeight: 700, color: '#334155', marginBottom: '8px' }}>
+                    Terapkan Harga Khusus ke:
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                    <button
+                      type="button"
+                      onClick={() => setCustomPriceApplyQty('all')}
+                      style={{
+                        padding: '8px 10px', borderRadius: '8px', fontSize: '11.5px', fontWeight: 700, cursor: 'pointer', textAlign: 'center',
+                        border: customPriceApplyQty === 'all' ? '2px solid #2563eb' : '1px solid #cbd5e1',
+                        background: customPriceApplyQty === 'all' ? '#eff6ff' : 'white',
+                        color: customPriceApplyQty === 'all' ? '#1d4ed8' : '#475569',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      Semua ({editingCartItem.qty} {editingCartItem.unit || 'Pcs'})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCustomPriceApplyQty('split')}
+                      style={{
+                        padding: '8px 10px', borderRadius: '8px', fontSize: '11.5px', fontWeight: 700, cursor: 'pointer', textAlign: 'center',
+                        border: customPriceApplyQty === 'split' ? '2px solid #2563eb' : '1px solid #cbd5e1',
+                        background: customPriceApplyQty === 'split' ? '#eff6ff' : 'white',
+                        color: customPriceApplyQty === 'split' ? '#1d4ed8' : '#475569',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      Hanya 1 {editingCartItem.unit || 'Pcs'} (Pisahkan)
+                    </button>
+                  </div>
+                  {customPriceApplyQty === 'split' && (
+                    <div style={{ fontSize: '11px', color: '#0369a1', marginTop: '8px', background: '#e0f2fe', padding: '6px 10px', borderRadius: '6px', lineHeight: 1.4 }}>
+                      💡 <strong>1 {editingCartItem.unit || 'Pcs'}</strong> diberi harga khusus, dan sisa <strong>{Math.round((editingCartItem.qty - 1) * 1000) / 1000} {editingCartItem.unit || 'Pcs'}</strong> otomatis dipisah menjadi baris tersendiri dengan harga normal.
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Price Input */}
               <div>
