@@ -86,6 +86,7 @@ const StockManagement: React.FC = () => {
   const [qty, setQty] = useState<number | string>('');
   const [unit, setUnit] = useState('Pcs');
   const [purchasePrice, setPurchasePrice] = useState<number | string>('');
+  const [boxPurchasePrice, setBoxPurchasePrice] = useState<number | string>('');
   const [sellingPrice, setSellingPrice] = useState<number | string>('');
   const [wholesalePrice, setWholesalePrice] = useState<number | string>('');
   const [_minWholesaleQty, setMinWholesaleQty] = useState<number | string>('');
@@ -170,6 +171,7 @@ const StockManagement: React.FC = () => {
     setQty('');
     setUnit('Pcs');
     setPurchasePrice('');
+    setBoxPurchasePrice('');
     setSellingPrice('');
     setWholesalePrice('');
     setMinWholesaleQty('');
@@ -638,6 +640,8 @@ const StockManagement: React.FC = () => {
     setQty(p.stock);
     setUnit(p.unit || 'Pcs');
     setPurchasePrice(p.purchasePrice);
+    const bCap = Number(p.boxCapacity) || 1;
+    setBoxPurchasePrice(bCap > 1 && p.purchasePrice ? Math.round(Number(p.purchasePrice) * bCap) : '');
     setSellingPrice(p.sellingPrice);
     setWholesalePrice(p.boxPrice || p.wholesalePrice || 0);
     setMinWholesaleQty(p.boxCapacity || p.minWholesaleQty || '');
@@ -1303,23 +1307,21 @@ const StockManagement: React.FC = () => {
               >
                 <thead>
                   <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', position: 'sticky', top: 0, zIndex: 10 }}>
-                    <th style={{ padding: '10px 12px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', width: '155px', verticalAlign: 'middle' }}>BARCODE KEMASAN</th>
-                    <th style={{ padding: '10px 12px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', width: '100px', verticalAlign: 'middle' }}>SKU</th>
-                    <th style={{ padding: '10px 12px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', verticalAlign: 'middle', minWidth: '220px' }}>NAMA PRODUK & SPESIFIKASI</th>
+                    <th style={{ padding: '10px 14px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', verticalAlign: 'middle', minWidth: '260px' }}>NAMA PRODUK & SPESIFIKASI</th>
                     <th style={{ padding: '10px 12px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', width: '110px', verticalAlign: 'middle' }}>KATEGORI</th>
-                    <th style={{ padding: '10px 12px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', width: '130px', verticalAlign: 'middle' }}>STOK FISIK & DUS</th>
-                    <th style={{ padding: '10px 12px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right', width: '125px', verticalAlign: 'middle' }}>HARGA BELI</th>
-                    <th style={{ padding: '10px 12px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right', width: '115px', verticalAlign: 'middle' }}>HARGA ECER</th>
-                    <th style={{ padding: '10px 12px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right', width: '125px', verticalAlign: 'middle' }}>HARGA DUS</th>
-                    <th style={{ padding: '10px 12px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right', width: '125px', verticalAlign: 'middle' }}>HARGA MENENGAH</th>
-                    <th style={{ padding: '10px 12px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', width: '110px', verticalAlign: 'middle' }}>PROFIT MARGIN</th>
-                    <th style={{ padding: '10px 12px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', width: '150px', verticalAlign: 'middle' }}>AKSI</th>
+                    <th style={{ padding: '10px 12px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', width: '140px', verticalAlign: 'middle' }}>STOK FISIK & DUS</th>
+                    <th style={{ padding: '10px 12px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right', width: '135px', verticalAlign: 'middle' }}>HARGA BELI</th>
+                    <th style={{ padding: '10px 12px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right', width: '120px', verticalAlign: 'middle' }}>HARGA ECER</th>
+                    <th style={{ padding: '10px 12px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right', width: '130px', verticalAlign: 'middle' }}>HARGA DUS</th>
+                    <th style={{ padding: '10px 12px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right', width: '130px', verticalAlign: 'middle' }}>HARGA MENENGAH</th>
+                    <th style={{ padding: '10px 12px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', width: '125px', verticalAlign: 'middle' }}>PROFIT MARGIN</th>
+                    <th style={{ padding: '10px 12px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', width: '145px', verticalAlign: 'middle' }}>AKSI</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredProducts.length === 0 ? (
                     <tr>
-                      <td colSpan={11} style={{ textAlign: 'center', padding: '64px 20px', color: '#64748b', verticalAlign: 'middle' }}>
+                      <td colSpan={9} style={{ textAlign: 'center', padding: '64px 20px', color: '#64748b', verticalAlign: 'middle' }}>
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
                           <PackageCheck size={42} style={{ opacity: 0.25, color: 'var(--primary)' }} />
                           <div style={{ fontSize: '14.5px', fontWeight: 700, color: '#1e293b' }}>Tidak ada produk ditemukan</div>
@@ -1365,11 +1367,12 @@ const StockManagement: React.FC = () => {
                       const remainderPcs = boxCap > 1 ? (stockVal % boxCap) : 0;
 
                       // Box & Mid Pricing
+                      const isBoxActive = boxCap > 1;
                       const boxCost = cost * boxCap;
-                      const boxPriceVal = Number(p.boxPrice) > 0 
-                        ? Number(p.boxPrice) 
-                        : (boxCap > 1 ? (Number(p.wholesalePrice) > 0 ? Number(p.wholesalePrice) : sell * boxCap) : Number(p.wholesalePrice) || 0);
-                      const midPriceVal = Number(p.midPrice) || 0;
+                      const boxPriceVal = isBoxActive 
+                        ? (Number(p.boxPrice) > 0 ? Number(p.boxPrice) : (Number(p.wholesalePrice) > 0 ? Number(p.wholesalePrice) : sell * boxCap))
+                        : 0;
+                      const midPriceVal = hasMid ? Number(p.midPrice) || 0 : 0;
 
                       return (
                         <tr
@@ -1382,127 +1385,12 @@ const StockManagement: React.FC = () => {
                           onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f1f5f9')}
                           onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = idx % 2 === 1 ? '#fafbfc' : '#ffffff')}
                         >
-                          {/* Barcode Kemasan (Dus, Eceran, Menengah) */}
-                          <td style={{ padding: '8px 12px', verticalAlign: 'middle' }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                              {dusBarcode ? (
-                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: '#fffbeb', border: '1px solid #fde68a', padding: '2px 5px', borderRadius: '5px', width: 'fit-content' }}>
-                                  <span style={{ fontSize: '9px', fontWeight: 800, color: '#92400e', background: '#fef3c7', padding: '1px 3px', borderRadius: '3px' }}>DUS</span>
-                                  <span
-                                    title={`Barcode Dus: ${dusBarcode}`}
-                                    style={{
-                                      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-                                      fontSize: '10.5px',
-                                      fontWeight: 700,
-                                      color: '#78350f',
-                                      maxWidth: '90px',
-                                      overflow: 'hidden',
-                                      textOverflow: 'ellipsis',
-                                      whiteSpace: 'nowrap'
-                                    }}
-                                  >
-                                    {dusBarcode}
-                                  </span>
-                                  <button
-                                    type="button"
-                                    onClick={() => copyBarcode(dusBarcode)}
-                                    title="Salin Barcode Dus"
-                                    style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', display: 'inline-flex', color: copiedBarcode === dusBarcode ? '#10b981' : '#b45309' }}
-                                  >
-                                    {copiedBarcode === dusBarcode ? <Check size={10} /> : <Copy size={10} />}
-                                  </button>
-                                </div>
-                              ) : (
-                                <span style={{ color: '#cbd5e1', fontSize: '11px' }}>-</span>
-                              )}
-
-                              {retailBarcode && retailBarcode !== dusBarcode && (
-                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: '#f8fafc', border: '1px solid #e2e8f0', padding: '2px 5px', borderRadius: '5px', width: 'fit-content' }}>
-                                  <span style={{ fontSize: '9px', fontWeight: 800, color: '#475569', background: '#e2e8f0', padding: '1px 3px', borderRadius: '3px' }}>ECER</span>
-                                  <span
-                                    title={`Barcode Eceran: ${retailBarcode}`}
-                                    style={{
-                                      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-                                      fontSize: '10.5px',
-                                      fontWeight: 600,
-                                      color: '#334155',
-                                      maxWidth: '90px',
-                                      overflow: 'hidden',
-                                      textOverflow: 'ellipsis',
-                                      whiteSpace: 'nowrap'
-                                    }}
-                                  >
-                                    {retailBarcode}
-                                  </span>
-                                  <button
-                                    type="button"
-                                    onClick={() => copyBarcode(retailBarcode)}
-                                    title="Salin Barcode Eceran"
-                                    style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', display: 'inline-flex', color: copiedBarcode === retailBarcode ? '#10b981' : '#94a3b8' }}
-                                  >
-                                    {copiedBarcode === retailBarcode ? <Check size={10} /> : <Copy size={10} />}
-                                  </button>
-                                </div>
-                              )}
-
-                              {hasMid && midBarcode && (
-                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: '#f0f9ff', border: '1px solid #bae6fd', padding: '2px 5px', borderRadius: '5px', width: 'fit-content' }}>
-                                  <span style={{ fontSize: '9px', fontWeight: 800, color: '#0369a1', background: '#e0f2fe', padding: '1px 3px', borderRadius: '3px' }}>{midUnit.toUpperCase()}</span>
-                                  <span
-                                    title={`Barcode ${midUnit}: ${midBarcode}`}
-                                    style={{
-                                      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-                                      fontSize: '10.5px',
-                                      fontWeight: 600,
-                                      color: '#0369a1',
-                                      maxWidth: '90px',
-                                      overflow: 'hidden',
-                                      textOverflow: 'ellipsis',
-                                      whiteSpace: 'nowrap'
-                                    }}
-                                  >
-                                    {midBarcode}
-                                  </span>
-                                  <button
-                                    type="button"
-                                    onClick={() => copyBarcode(midBarcode)}
-                                    title={`Salin Barcode ${midUnit}`}
-                                    style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', display: 'inline-flex', color: copiedBarcode === midBarcode ? '#10b981' : '#0284c7' }}
-                                  >
-                                    {copiedBarcode === midBarcode ? <Check size={10} /> : <Copy size={10} />}
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                          </td>
-
-                          {/* SKU */}
-                          <td style={{ padding: '8px 12px', verticalAlign: 'middle' }}>
-                            {p.sku ? (
-                              <span
-                                style={{
-                                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-                                  fontSize: '11px',
-                                  fontWeight: 700,
-                                  color: '#475569',
-                                  background: '#f1f5f9',
-                                  padding: '2px 6px',
-                                  borderRadius: '4px',
-                                  border: '1px solid #e2e8f0'
-                                }}
-                              >
-                                {p.sku}
-                              </span>
-                            ) : (
-                              <span style={{ color: '#cbd5e1', fontSize: '12px' }}>-</span>
-                            )}
-                          </td>
-
-                          {/* Nama Produk & Spesifikasi Kemasan */}
-                          <td style={{ padding: '8px 12px', verticalAlign: 'middle' }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                          {/* 1. NAMA PRODUK & SPESIFIKASI (termasuk SKU & Barcode Kemasan) */}
+                          <td style={{ padding: '10px 14px', verticalAlign: 'middle' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                              {/* Nama Produk + Status Badge */}
                               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                                <span style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>
+                                <span style={{ fontSize: '13.5px', fontWeight: 700, color: '#0f172a', letterSpacing: '-0.2px' }}>
                                   {p.name}
                                 </span>
                                 {p.isPending && (
@@ -1531,15 +1419,130 @@ const StockManagement: React.FC = () => {
                                 )}
                               </div>
 
+                              {/* SKU & Barcode Kemasan Chips (Click to copy) */}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+                                {p.sku && (
+                                  <span
+                                    title={`SKU: ${p.sku}`}
+                                    style={{
+                                      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                                      fontSize: '10px',
+                                      fontWeight: 700,
+                                      color: '#475569',
+                                      background: '#f1f5f9',
+                                      padding: '1px 5px',
+                                      borderRadius: '4px',
+                                      border: '1px solid #e2e8f0',
+                                      letterSpacing: '0.2px'
+                                    }}
+                                  >
+                                    {p.sku}
+                                  </span>
+                                )}
+
+                                {dusBarcode && (
+                                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', background: '#fffbeb', border: '1px solid #fde68a', padding: '1px 5px', borderRadius: '4px' }}>
+                                    <span style={{ fontSize: '8.5px', fontWeight: 800, color: '#92400e', background: '#fef3c7', padding: '0 2px', borderRadius: '2px' }}>
+                                      {boxCap > 1 ? 'DUS' : 'BC'}
+                                    </span>
+                                    <span
+                                      title={`Barcode: ${dusBarcode}`}
+                                      style={{
+                                        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                                        fontSize: '10px',
+                                        fontWeight: 700,
+                                        color: '#78350f',
+                                        maxWidth: '90px',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        whiteSpace: 'nowrap'
+                                      }}
+                                    >
+                                      {dusBarcode}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => copyBarcode(dusBarcode)}
+                                      title="Salin Barcode"
+                                      style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', display: 'inline-flex', color: copiedBarcode === dusBarcode ? '#10b981' : '#b45309' }}
+                                    >
+                                      {copiedBarcode === dusBarcode ? <Check size={9} /> : <Copy size={9} />}
+                                    </button>
+                                  </div>
+                                )}
+
+                                {hasMid && midBarcode && (
+                                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', background: '#f0f9ff', border: '1px solid #bae6fd', padding: '1px 5px', borderRadius: '4px' }}>
+                                    <span style={{ fontSize: '8.5px', fontWeight: 800, color: '#0369a1', background: '#e0f2fe', padding: '0 2px', borderRadius: '2px' }}>
+                                      {midUnit.toUpperCase()}
+                                    </span>
+                                    <span
+                                      title={`Barcode ${midUnit}: ${midBarcode}`}
+                                      style={{
+                                        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                                        fontSize: '10px',
+                                        fontWeight: 600,
+                                        color: '#0369a1',
+                                        maxWidth: '85px',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        whiteSpace: 'nowrap'
+                                      }}
+                                    >
+                                      {midBarcode}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => copyBarcode(midBarcode)}
+                                      title={`Salin Barcode ${midUnit}`}
+                                      style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', display: 'inline-flex', color: copiedBarcode === midBarcode ? '#10b981' : '#0284c7' }}
+                                    >
+                                      {copiedBarcode === midBarcode ? <Check size={9} /> : <Copy size={9} />}
+                                    </button>
+                                  </div>
+                                )}
+
+                                {retailBarcode && retailBarcode !== dusBarcode && (
+                                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', background: '#f8fafc', border: '1px solid #e2e8f0', padding: '1px 5px', borderRadius: '4px' }}>
+                                    <span style={{ fontSize: '8.5px', fontWeight: 800, color: '#475569', background: '#e2e8f0', padding: '0 2px', borderRadius: '2px' }}>
+                                      ECER
+                                    </span>
+                                    <span
+                                      title={`Barcode Eceran: ${retailBarcode}`}
+                                      style={{
+                                        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                                        fontSize: '10px',
+                                        fontWeight: 600,
+                                        color: '#334155',
+                                        maxWidth: '85px',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        whiteSpace: 'nowrap'
+                                      }}
+                                    >
+                                      {retailBarcode}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => copyBarcode(retailBarcode)}
+                                      title="Salin Barcode Eceran"
+                                      style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', display: 'inline-flex', color: copiedBarcode === retailBarcode ? '#10b981' : '#94a3b8' }}
+                                    >
+                                      {copiedBarcode === retailBarcode ? <Check size={9} /> : <Copy size={9} />}
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+
                               {/* Packaging Specification Badges */}
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap', marginTop: '1px' }}>
                                 {boxCap > 1 && (
-                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '10px', fontWeight: 600, color: '#92400e', background: '#fef3c7', border: '1px solid #fde68a', padding: '1px 6px', borderRadius: '4px' }}>
+                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '9.5px', fontWeight: 700, color: '#92400e', background: '#fef3c7', border: '1px solid #fde68a', padding: '1px 5px', borderRadius: '4px' }}>
                                     📦 1 Dus = {boxCap} {unit}
                                   </span>
                                 )}
                                 {hasMid && (
-                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '10px', fontWeight: 600, color: '#0369a1', background: '#e0f2fe', border: '1px solid #bae6fd', padding: '1px 6px', borderRadius: '4px' }}>
+                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '9.5px', fontWeight: 700, color: '#0369a1', background: '#e0f2fe', border: '1px solid #bae6fd', padding: '1px 5px', borderRadius: '4px' }}>
                                     🗂️ 1 {midUnit} = {midCap} {unit}
                                   </span>
                                 )}
@@ -1547,7 +1550,7 @@ const StockManagement: React.FC = () => {
                             </div>
                           </td>
 
-                          {/* Kategori */}
+                          {/* 2. KATEGORI */}
                           <td style={{ padding: '8px 12px', verticalAlign: 'middle' }}>
                             <span
                               style={{
@@ -1568,7 +1571,7 @@ const StockManagement: React.FC = () => {
                             </span>
                           </td>
 
-                          {/* Stok Fisik & Dus */}
+                          {/* 3. STOK FISIK & DUS */}
                           <td style={{ padding: '8px 12px', verticalAlign: 'middle', textAlign: 'center' }}>
                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
                               <div style={{
@@ -1599,22 +1602,38 @@ const StockManagement: React.FC = () => {
                             </div>
                           </td>
 
-                          {/* Harga Beli (Modal) */}
+                          {/* 4. HARGA BELI (Distributor Karton / Eceran) */}
                           <td style={{ padding: '8px 12px', verticalAlign: 'middle', textAlign: 'right' }}>
                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '1px' }}>
-                              <span style={{ fontSize: '12px', fontWeight: 700, color: '#475569' }}>
-                                {formatIDR(cost)}
-                                <span style={{ fontSize: '10px', fontWeight: 500, color: '#94a3b8' }}> /{unit}</span>
-                              </span>
-                              {boxCap > 1 && (
-                                <span style={{ fontSize: '10.5px', fontWeight: 600, color: '#94a3b8' }}>
-                                  {formatIDR(boxCost)} /Dus
-                                </span>
+                              {boxCap > 1 ? (
+                                <>
+                                  <span style={{ fontSize: '12.5px', fontWeight: 800, color: '#0f172a' }}>
+                                    {formatIDR(boxCost)}
+                                    <span style={{ fontSize: '10px', fontWeight: 600, color: '#92400e' }}> /Dus</span>
+                                  </span>
+                                  <span style={{ fontSize: '10px', fontWeight: 600, color: '#64748b' }}>
+                                    ({formatIDR(cost)} /{unit})
+                                  </span>
+                                  {hasMid && (
+                                    <span style={{ fontSize: '9px', fontWeight: 500, color: '#0284c7' }}>
+                                      Modal {midUnit}: {formatIDR(cost * midCap)}
+                                    </span>
+                                  )}
+                                </>
+                              ) : (
+                                <>
+                                  <span style={{ fontSize: '12px', fontWeight: 700, color: '#334155' }}>
+                                    {formatIDR(cost)}
+                                  </span>
+                                  <span style={{ fontSize: '10px', fontWeight: 500, color: '#94a3b8' }}>
+                                    /{unit}
+                                  </span>
+                                </>
                               )}
                             </div>
                           </td>
 
-                          {/* Harga Ecer */}
+                          {/* 5. HARGA ECER */}
                           <td style={{ padding: '8px 12px', verticalAlign: 'middle', textAlign: 'right' }}>
                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '1px' }}>
                               <span style={{ fontSize: '12.5px', fontWeight: 800, color: '#16a34a' }}>
@@ -1626,10 +1645,10 @@ const StockManagement: React.FC = () => {
                             </div>
                           </td>
 
-                          {/* Harga Dus */}
+                          {/* 6. HARGA DUS (Hanya tampil jika boxCap > 1) */}
                           <td style={{ padding: '8px 12px', verticalAlign: 'middle', textAlign: 'right' }}>
                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '1px' }}>
-                              {boxPriceVal > 0 ? (
+                              {boxCap > 1 && boxPriceVal > 0 ? (
                                 <>
                                   <span style={{ fontSize: '12.5px', fontWeight: 800, color: '#b45309' }}>
                                     {formatIDR(boxPriceVal)}
@@ -1639,12 +1658,12 @@ const StockManagement: React.FC = () => {
                                   </span>
                                 </>
                               ) : (
-                                <span style={{ color: '#cbd5e1', fontSize: '12px' }}>-</span>
+                                <span style={{ color: '#cbd5e1', fontSize: '13px', fontWeight: 700 }}>-</span>
                               )}
                             </div>
                           </td>
 
-                          {/* Harga Menengah */}
+                          {/* 7. HARGA MENENGAH */}
                           <td style={{ padding: '8px 12px', verticalAlign: 'middle', textAlign: 'right' }}>
                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '1px' }}>
                               {hasMid && midPriceVal > 0 ? (
@@ -1657,28 +1676,36 @@ const StockManagement: React.FC = () => {
                                   </span>
                                 </>
                               ) : (
-                                <span style={{ color: '#cbd5e1', fontSize: '12px' }}>-</span>
+                                <span style={{ color: '#cbd5e1', fontSize: '13px', fontWeight: 700 }}>-</span>
                               )}
                             </div>
                           </td>
 
-                          {/* Profit Margin */}
+                          {/* 8. PROFIT MARGIN */}
                           <td style={{ padding: '8px 12px', verticalAlign: 'middle' }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
                               <span
                                 style={{
                                   fontSize: '10.5px',
                                   fontWeight: 800,
                                   color: marginColor,
                                   background: marginBg,
-                                  padding: '1px 6px',
+                                  padding: '1px 7px',
                                   borderRadius: '999px',
                                   lineHeight: '1.4'
                                 }}
                               >
                                 {marginPercent > 0 ? '+' : ''}{marginPercent.toFixed(1)}%
                               </span>
-                              <div style={{ width: '56px', height: '3.5px', backgroundColor: '#e2e8f0', borderRadius: '2px', overflow: 'hidden' }}>
+                              <span style={{ fontSize: '9.5px', fontWeight: 600, color: profit >= 0 ? '#15803d' : '#b91c1c' }}>
+                                {profit >= 0 ? '+' : ''}{formatIDR(profit)}/{unit}
+                              </span>
+                              {boxCap > 1 && boxPriceVal > 0 && (
+                                <span style={{ fontSize: '9px', fontWeight: 600, color: (boxPriceVal - boxCost) >= 0 ? '#b45309' : '#b91c1c' }}>
+                                  {(boxPriceVal - boxCost) >= 0 ? '+' : ''}{formatIDR(boxPriceVal - boxCost)}/Dus
+                                </span>
+                              )}
+                              <div style={{ width: '56px', height: '3.5px', backgroundColor: '#e2e8f0', borderRadius: '2px', overflow: 'hidden', marginTop: '2px' }}>
                                 <div style={{ width: barFill, height: '100%', backgroundColor: marginColor, borderRadius: '2px' }} />
                               </div>
                             </div>
@@ -1847,11 +1874,12 @@ const StockManagement: React.FC = () => {
               const fullBoxes = boxCap > 1 ? Math.floor(stockVal / boxCap) : 0;
               const remainderPcs = boxCap > 1 ? (stockVal % boxCap) : 0;
 
+              const isBoxActive = boxCap > 1;
               const boxCost = cost * boxCap;
-              const boxPriceVal = Number(p.boxPrice) > 0 
-                ? Number(p.boxPrice) 
-                : (boxCap > 1 ? (Number(p.wholesalePrice) > 0 ? Number(p.wholesalePrice) : sell * boxCap) : Number(p.wholesalePrice) || 0);
-              const midPriceVal = Number(p.midPrice) || 0;
+              const boxPriceVal = isBoxActive 
+                ? (Number(p.boxPrice) > 0 ? Number(p.boxPrice) : (Number(p.wholesalePrice) > 0 ? Number(p.wholesalePrice) : sell * boxCap))
+                : 0;
+              const midPriceVal = hasMid ? Number(p.midPrice) || 0 : 0;
 
               return (
                 <div key={p.id} className="mobile-stock-card">
@@ -1866,7 +1894,7 @@ const StockManagement: React.FC = () => {
                         <span>SKU: {p.sku || '-'}</span>
                         {dusBarcode && (
                           <span style={{ fontFamily: 'monospace', background: '#fffbeb', color: '#92400e', border: '1px solid #fde68a', padding: '0 4px', borderRadius: '4px', fontSize: '10px' }}>
-                            [DUS] {dusBarcode}
+                            [{boxCap > 1 ? 'DUS' : 'BC'}] {dusBarcode}
                           </span>
                         )}
                         {retailBarcode && retailBarcode !== dusBarcode && (
@@ -1917,21 +1945,24 @@ const StockManagement: React.FC = () => {
                     </div>
                     <div className="mobile-stock-stat">
                       <span className="mobile-stock-stat-label">HARGA BELI</span>
-                      <span className="mobile-stock-stat-val" style={{ color: '#64748b' }}>{formatIDR(cost)}</span>
-                      {boxCap > 1 && (
-                        <span style={{ fontSize: '10px', color: '#94a3b8', marginTop: '2px' }}>
-                          {formatIDR(boxCost)}/Dus
-                        </span>
+                      {boxCap > 1 ? (
+                        <>
+                          <span className="mobile-stock-stat-val" style={{ color: '#0f172a', fontWeight: 800 }}>{formatIDR(boxCost)}/Dus</span>
+                          <span style={{ fontSize: '10px', color: '#64748b', marginTop: '1px' }}>({formatIDR(cost)}/{unit})</span>
+                        </>
+                      ) : (
+                        <span className="mobile-stock-stat-val" style={{ color: '#64748b' }}>{formatIDR(cost)}/{unit}</span>
                       )}
                     </div>
                     <div className="mobile-stock-stat">
                       <span className="mobile-stock-stat-label">HARGA ECER</span>
                       <span className="mobile-stock-stat-val text-green">{formatIDR(sell)}</span>
+                      <span style={{ fontSize: '10px', color: '#16a34a', marginTop: '1px' }}>per {unit}</span>
                     </div>
                     <div className="mobile-stock-extra" style={{ display: 'flex', flexDirection: 'column', gap: '4px', width: '100%' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', fontSize: '11.5px', flexWrap: 'wrap', gap: '6px' }}>
                         <span style={{ color: '#92400e' }}>
-                          Dus: <strong>{boxPriceVal > 0 ? formatIDR(boxPriceVal) : '-'}</strong>
+                          Dus: <strong>{boxCap > 1 && boxPriceVal > 0 ? formatIDR(boxPriceVal) : '-'}</strong>
                         </span>
                         {hasMid && midPriceVal > 0 && (
                           <span style={{ color: '#0369a1' }}>
@@ -2751,6 +2782,11 @@ const StockManagement: React.FC = () => {
                         if (boxQty) {
                           setQty(Number(boxQty) * cap);
                         }
+                        if (boxPurchasePrice !== '') {
+                          setPurchasePrice(Math.round(Number(boxPurchasePrice) / cap));
+                        } else if (purchasePrice !== '' && cap > 1) {
+                          setBoxPurchasePrice(Math.round(Number(purchasePrice) * cap));
+                        }
                       }}
                       className="ios-input-gray ios-input-small"
                       style={{ width: '65px', textAlign: 'center', fontWeight: 800, color: '#7c3aed', background: '#f5f3ff', borderColor: '#ddd6fe' }}
@@ -2998,9 +3034,9 @@ const StockManagement: React.FC = () => {
                 </div>
               )}
 
-              {/* SECTION: STRUKTUR 3 TINGKAT HARGA */}
+              {/* SECTION: STRUKTUR HARGA BELI & HARGA JUAL */}
               <div className="ios-section-header" style={{ marginTop: '22px' }}>
-                <span>STRUKTUR 3 TINGKAT HARGA (IDR)</span>
+                <span>STRUKTUR HARGA BELI (DISTRIBUTOR) &amp; HARGA JUAL</span>
                 {(() => {
                   const m = (Number(sellingPrice) - Number(purchasePrice));
                   const pct = Number(sellingPrice) > 0 ? (m / Number(sellingPrice)) * 100 : 0;
@@ -3014,19 +3050,74 @@ const StockManagement: React.FC = () => {
                 })()}
               </div>
               <div className="ios-group">
-                {/* Harga Modal (Beli) */}
+                {/* 1. Harga Beli Distributor per Dus / Karton (Jika punya Dus) */}
+                {Number(boxCapacity) > 1 && (
+                  <div className="ios-row-horiz" style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                    <div>
+                      <label style={{ color: '#0f172a', fontWeight: 800 }}>Harga Beli Distributor (per Dus / Karton)</label>
+                      <div className="ios-sublabel">Harga nota faktur 1 Dus utuh (isi {boxCapacity} {unit})</div>
+                    </div>
+                    <div className="ios-input-prefix" style={{ background: '#f1f5f9' }}>
+                      <span style={{ color: '#475569', fontWeight: 700 }}>Rp</span>
+                      <input 
+                        type="number" 
+                        inputMode="numeric" 
+                        value={boxPurchasePrice} 
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setBoxPurchasePrice(val === '' ? '' : Number(val));
+                          const bCap = Number(boxCapacity) || 1;
+                          if (val !== '' && bCap > 0) {
+                            setPurchasePrice(Math.round(Number(val) / bCap));
+                          }
+                        }} 
+                        placeholder={purchasePrice && Number(boxCapacity) > 1 ? String(Math.round(Number(purchasePrice) * Number(boxCapacity))) : ''}
+                        className="ios-input-gray" 
+                        style={{ textAlign: 'right', width: '130px', fontWeight: 800, color: '#0f172a' }} 
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* 2. Harga Modal Pokok (HPP Satuan Dasar) */}
                 <div className="ios-row-horiz">
                   <div>
-                    <label>Harga Modal (Beli) per {unit}</label>
-                    <div className="ios-sublabel">Biaya pokok dasar eceran</div>
+                    <label style={{ fontWeight: 700 }}>Harga Pokok Modal (HPP per {unit})</label>
+                    <div className="ios-sublabel">
+                      {Number(boxCapacity) > 1 
+                        ? `Biaya pokok satuan eceran (otomatis: Rp {harga Dus} ÷ ${boxCapacity})`
+                        : `Biaya pokok dasar eceran per ${unit}`}
+                    </div>
                   </div>
                   <div className="ios-input-prefix">
                     <span>Rp</span>
-                    <input type="number" inputMode="numeric" value={purchasePrice} onChange={(e) => setPurchasePrice(e.target.value === '' ? '' : Number(e.target.value))} className="ios-input-gray" style={{ textAlign: 'right', width: '130px', fontWeight: 700 }} />
+                    <input 
+                      type="number" 
+                      inputMode="numeric" 
+                      value={purchasePrice} 
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setPurchasePrice(val === '' ? '' : Number(val));
+                        const bCap = Number(boxCapacity) || 1;
+                        if (val !== '' && bCap > 1) {
+                          setBoxPurchasePrice(Math.round(Number(val) * bCap));
+                        }
+                      }} 
+                      className="ios-input-gray" 
+                      style={{ textAlign: 'right', width: '130px', fontWeight: 700 }} 
+                    />
                   </div>
                 </div>
+
+                {/* Info Estimasi Modal Kemasan Menengah (Jika aktif) */}
+                {hasMidTier && Number(midCapacity) > 1 && purchasePrice !== '' && (
+                  <div style={{ padding: '8px 18px', background: '#eff6ff', borderBottom: '1px solid #dbeafe', fontSize: '11.5px', color: '#1e40af', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>ℹ️ Modal per <strong>1 {midUnitName || 'Kemasan'}</strong> (isi {midCapacity} {unit}):</span>
+                    <strong style={{ fontSize: '12.5px' }}>Rp {(Math.round(Number(purchasePrice) * Number(midCapacity))).toLocaleString('id-ID')}</strong>
+                  </div>
+                )}
                 
-                {/* 1. Harga Jual Eceran */}
+                {/* 3. Harga Jual Eceran */}
                 <div className="ios-row-horiz" style={{ background: '#fff7f7' }}>
                   <div>
                     <label style={{ color: 'var(--primary)', fontWeight: 800 }}>1. Harga Jual Eceran (per {unit})</label>
@@ -3038,30 +3129,32 @@ const StockManagement: React.FC = () => {
                   </div>
                 </div>
 
-                {/* 2. Harga Jual Dus / Karton */}
-                <div className="ios-row-horiz" style={{ background: '#f5f3ff' }}>
-                  <div>
-                    <label style={{ color: '#6d28d9', fontWeight: 800 }}>2. Harga Jual Dus / Karton</label>
-                    <div className="ios-sublabel">Harga 1 Dus utuh (isi {boxCapacity} {unit})</div>
+                {/* 4. Harga Jual Dus / Karton (Hanya jika produk berdus) */}
+                {Number(boxCapacity) > 1 && (
+                  <div className="ios-row-horiz" style={{ background: '#f5f3ff' }}>
+                    <div>
+                      <label style={{ color: '#6d28d9', fontWeight: 800 }}>2. Harga Jual Dus / Karton</label>
+                      <div className="ios-sublabel">Harga 1 Dus utuh (isi {boxCapacity} {unit})</div>
+                    </div>
+                    <div className="ios-input-prefix" style={{ background: '#ede9fe' }}>
+                      <span style={{ color: '#6d28d9' }}>Rp</span>
+                      <input 
+                        type="number" 
+                        inputMode="numeric" 
+                        value={boxPrice} 
+                        onChange={(e) => {
+                          setBoxPrice(e.target.value === '' ? '' : Number(e.target.value));
+                          setWholesalePrice(e.target.value === '' ? '' : Number(e.target.value));
+                        }} 
+                        placeholder={sellingPrice && boxCapacity ? String(Number(sellingPrice) * Number(boxCapacity)) : ''}
+                        className="ios-input-gray" 
+                        style={{ textAlign: 'right', width: '130px', fontWeight: 800, color: '#6d28d9' }} 
+                      />
+                    </div>
                   </div>
-                  <div className="ios-input-prefix" style={{ background: '#ede9fe' }}>
-                    <span style={{ color: '#6d28d9' }}>Rp</span>
-                    <input 
-                      type="number" 
-                      inputMode="numeric" 
-                      value={boxPrice} 
-                      onChange={(e) => {
-                        setBoxPrice(e.target.value === '' ? '' : Number(e.target.value));
-                        setWholesalePrice(e.target.value === '' ? '' : Number(e.target.value));
-                      }} 
-                      placeholder={sellingPrice && boxCapacity ? String(Number(sellingPrice) * Number(boxCapacity)) : ''}
-                      className="ios-input-gray" 
-                      style={{ textAlign: 'right', width: '130px', fontWeight: 800, color: '#6d28d9' }} 
-                    />
-                  </div>
-                </div>
+                )}
 
-                {/* 3. Harga Jual Satuan Menengah (Renceng/Lusin) jika aktif */}
+                {/* 5. Harga Jual Satuan Menengah (Renceng/Lusin) jika aktif */}
                 {hasMidTier && (
                   <div className="ios-row-horiz" style={{ background: '#eff6ff' }}>
                     <div>
