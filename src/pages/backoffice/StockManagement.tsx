@@ -293,6 +293,7 @@ const StockManagement: React.FC = () => {
               purchasePrice: old?.purchasePrice,
               sellingPrice: Number(v.sellingPrice) > 0 ? Number(v.sellingPrice) : undefined,
               wholesalePrice: Number(v.wholesalePrice) > 0 ? Number(v.wholesalePrice) : undefined,
+              minWholesaleQty: Number(v.minWholesaleQty) > 0 ? Number(v.minWholesaleQty) : undefined,
             };
           })
         } as any);
@@ -342,6 +343,7 @@ const StockManagement: React.FC = () => {
               qty: Number(v.qty) || 0,
               sellingPrice: Number(v.sellingPrice) || 0,
               wholesalePrice: Number(v.wholesalePrice) || 0,
+              minWholesaleQty: Number(v.minWholesaleQty) || 0,
             }))
           : undefined,
       };
@@ -590,6 +592,7 @@ const StockManagement: React.FC = () => {
       qty: v.stock,
       sellingPrice: v.sellingPrice ?? '',
       wholesalePrice: v.wholesalePrice ?? '',
+      minWholesaleQty: v.minWholesaleQty ?? '',
     })));
     setIsFormOpen(true); // Buka popup
   };

@@ -204,9 +204,14 @@ export const useInventoryStore = create<InventoryState>()(
             const data = await res.json();
             const updated = mapProduct(data);
             set((state) => ({ products: state.products.map(p => p.id === oldId ? updated : p) }));
+          } else {
+            const err = await res.json().catch(() => ({ error: 'Gagal memperbarui produk di server' }));
+            console.error('Update product error:', err);
+            alert(`Gagal menyimpan perubahan: ${err.error || 'Server error'}`);
           }
         } catch(err) {
           console.error(err);
+          alert('Terjadi kesalahan jaringan saat memperbarui produk');
         }
       },
       
