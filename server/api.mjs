@@ -363,9 +363,16 @@ app.put('/api/saas/products/:id', async (req, res) => {
     if (data.midPrice !== undefined) updateData.mid_price = optNum(data.midPrice);
     if (data.retailBarcode !== undefined) updateData.retail_barcode = data.retailBarcode;
 
+    const existing = await prisma.product.findFirst({
+      where: { id: req.params.id, tenant_id: req.tenantId }
+    });
+    if (!existing) {
+      return res.status(404).json({ error: 'Produk tidak ditemukan atau bukan milik tenant ini' });
+    }
+
     const product = await prisma.$transaction(async (tx) => {
       await tx.product.update({
-        where: { id: req.params.id, tenant_id: req.tenantId },
+        where: { id: req.params.id },
         data: updateData
       });
       if (variantsProvided) {
@@ -929,7 +936,7 @@ app.post('/api/saas/transactions', async (req, res) => {
 
         // Kurangi stok produk (total) secara ATOMIC (Mencegah Race Condition)
         const updatedProduct = await tx.product.update({
-          where: { id: item.product_id, tenant_id: req.tenantId },
+          where: { id: item.product_id },
           data: { stock: { decrement: stockDeduct } }
         });
 
@@ -1055,7 +1062,7 @@ app.put('/api/saas/transactions/:id', async (req, res) => {
               });
             }
             await tx.product.update({
-              where: { id: productId, tenant_id: req.tenantId },
+              where: { id: productId },
               data: { stock: { decrement: round3(diff) } }
             });
           }
@@ -1299,7 +1306,7 @@ app.post('/api/saas/transactions/:id/returns', async (req, res) => {
             });
           }
           await tx.product.update({
-            where: { id: pId, tenant_id: req.tenantId },
+            where: { id: pId },
             data: { stock: { increment: qty } }
           });
 
@@ -1402,7 +1409,7 @@ app.post('/api/saas/transactions/:id/void', async (req, res) => {
           });
         }
         await tx.product.update({
-          where: { id: it.product_id, tenant_id: req.tenantId },
+          where: { id: it.product_id },
           data: { stock: { increment: Number(it.quantity) } }
         });
       }
