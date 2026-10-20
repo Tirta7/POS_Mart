@@ -52,6 +52,7 @@ const mapProduct = (p: any): Product => ({
   purchasePrice: p.purchase_price,
   sellingPrice: p.selling_price,
   wholesalePrice: p.wholesale_price || 0,
+  minWholesaleQty: p.min_wholesale_qty || 0,
   image: getProductImage(p.image_url),
   variants: (p.variants || []).map((v: any) => ({
     id: v.id,
@@ -63,6 +64,7 @@ const mapProduct = (p: any): Product => ({
     purchasePrice: v.purchase_price ?? undefined,
     sellingPrice: v.selling_price ?? undefined,
     wholesalePrice: v.wholesale_price ?? undefined,
+    minWholesaleQty: v.min_wholesale_qty ?? undefined,
   })),
 });
 

@@ -318,6 +318,54 @@ function App() {
     setEditingCartItem(null);
   };
 
+  // State Dialog Konfirmasi Harga Grosir Otomatis
+  interface WholesalePromptData {
+    cartId: string;
+    name: string;
+    variantName?: string;
+    unit: string;
+    qty: number;
+    minWholesaleQty: number;
+    normalPrice: number;
+    wholesalePrice: number;
+  }
+  const [wholesalePrompt, setWholesalePrompt] = useState<WholesalePromptData | null>(null);
+  const [declinedWholesaleCartIds, setDeclinedWholesaleCartIds] = useState<Set<string>>(new Set());
+
+  const handleAcceptWholesale = () => {
+    if (!wholesalePrompt) return;
+    const { cartId, wholesalePrice, minWholesaleQty, unit, name } = wholesalePrompt;
+    setCart(prev => prev.map(item => {
+      if (item.cartId === cartId) {
+        return {
+          ...item,
+          price: wholesalePrice,
+          isCustomPrice: true,
+          customPriceNote: `Harga Grosir (Min ${minWholesaleQty} ${unit})`
+        };
+      }
+      return item;
+    }));
+    sound.playSuccessChime();
+    setToastNotice({
+      type: 'success',
+      message: `Harga Grosir ${formatIDR(wholesalePrice)} diterapkan untuk ${name}`
+    });
+    setWholesalePrompt(null);
+  };
+
+  const handleDeclineWholesale = () => {
+    if (!wholesalePrompt) return;
+    const { cartId } = wholesalePrompt;
+    setDeclinedWholesaleCartIds(prev => {
+      const next = new Set(prev);
+      next.add(cartId);
+      return next;
+    });
+    setWholesalePrompt(null);
+  };
+
+
   // Mobile: keranjang tampil sebagai bottom sheet (gaya iOS)
   const [cartSheetOpen, setCartSheetOpen] = useState(false);
   // Perangkat sentuh (HP/tablet): jangan auto-focus search agar keyboard tidak langsung muncul
@@ -385,6 +433,8 @@ function App() {
       sku: v.sku || '',
       image: v.image || '',
       price: resolvePrice(p, v.id, orderType),
+      wholesalePrice: v.wholesalePrice && v.wholesalePrice > 0 ? v.wholesalePrice : (p.wholesalePrice || 0),
+      minWholesaleQty: v.minWholesaleQty && v.minWholesaleQty > 0 ? v.minWholesaleQty : (p.minWholesaleQty || 0),
       availableStock: v.stock - (v.reserved || 0),
     }));
     
@@ -394,6 +444,8 @@ function App() {
       barcode: p.barcode || p.sku || '',
       name: p.name,
       price: resolvePrice(p, null, orderType),
+      wholesalePrice: p.wholesalePrice || 0,
+      minWholesaleQty: p.minWholesaleQty || 0,
       type: p.category,
       unit: p.unit || 'Pcs',
       badge: (i + 1).toString().padStart(2, '0'),
@@ -512,6 +564,7 @@ function App() {
   };
 
   const updateQty = (cartId: string, delta: number) => {
+    let promptCandidate: WholesalePromptData | null = null;
     setCart(prev => {
       const targetItem = prev.find(i => i.cartId === cartId);
       if (!targetItem) return prev;
@@ -529,11 +582,52 @@ function App() {
         return prev;
       }
 
+      const minW = targetItem.minWholesaleQty || 0;
+      const wPrice = targetItem.wholesalePrice || 0;
+      const normalP = targetItem.originalPrice || targetItem.price;
+
+      // Jika sebelumnya dapat harga grosir otomatis namun qty diturunkan di bawah minimum grosir
+      if (targetItem.isCustomPrice && targetItem.customPriceNote?.toLowerCase().includes('harga grosir') && minW > 0 && newQty < minW) {
+        return prev.map(item => item.cartId === cartId ? {
+          ...item,
+          qty: newQty,
+          price: normalP,
+          isCustomPrice: false,
+          customPriceNote: ''
+        } : item);
+      }
+
+      // Jika qty mencapai atau melebihi minimum grosir dan saat ini belum berharga grosir
+      if (
+        minW > 0 &&
+        wPrice > 0 &&
+        wPrice < normalP &&
+        targetItem.price > wPrice &&
+        newQty >= minW &&
+        !declinedWholesaleCartIds.has(cartId)
+      ) {
+        promptCandidate = {
+          cartId,
+          name: targetItem.name,
+          variantName: targetItem.variantName,
+          unit: targetItem.unit || 'Pcs',
+          qty: newQty,
+          minWholesaleQty: minW,
+          normalPrice: normalP,
+          wholesalePrice: wPrice
+        };
+      }
+
       return prev.map(item => item.cartId === cartId ? { ...item, qty: newQty } : item);
     });
+
+    if (promptCandidate) {
+      setWholesalePrompt(promptCandidate);
+    }
   };
 
   const setQtyValue = (cartId: string, value: number) => {
+    let promptCandidate: WholesalePromptData | null = null;
     setCart(prev => {
       const targetItem = prev.find(i => i.cartId === cartId);
       if (!targetItem) return prev;
@@ -548,8 +642,48 @@ function App() {
         return prev;
       }
 
+      const minW = targetItem.minWholesaleQty || 0;
+      const wPrice = targetItem.wholesalePrice || 0;
+      const normalP = targetItem.originalPrice || targetItem.price;
+
+      // Jika sebelumnya dapat harga grosir otomatis namun qty diturunkan di bawah minimum grosir
+      if (targetItem.isCustomPrice && targetItem.customPriceNote?.toLowerCase().includes('harga grosir') && minW > 0 && safeVal < minW) {
+        return prev.map(item => item.cartId === cartId ? {
+          ...item,
+          qty: safeVal,
+          price: normalP,
+          isCustomPrice: false,
+          customPriceNote: ''
+        } : item);
+      }
+
+      // Jika qty mencapai atau melebihi minimum grosir dan saat ini belum berharga grosir
+      if (
+        minW > 0 &&
+        wPrice > 0 &&
+        wPrice < normalP &&
+        targetItem.price > wPrice &&
+        safeVal >= minW &&
+        !declinedWholesaleCartIds.has(cartId)
+      ) {
+        promptCandidate = {
+          cartId,
+          name: targetItem.name,
+          variantName: targetItem.variantName,
+          unit: targetItem.unit || 'Pcs',
+          qty: safeVal,
+          minWholesaleQty: minW,
+          normalPrice: normalP,
+          wholesalePrice: wPrice
+        };
+      }
+
       return prev.map(item => item.cartId === cartId ? { ...item, qty: safeVal } : item);
     });
+
+    if (promptCandidate) {
+      setWholesalePrompt(promptCandidate);
+    }
   };
 
   const removeRow = (cartId: string) => {
@@ -560,6 +694,7 @@ function App() {
 
   const addToCart = (product: any, customQty?: number) => {
     const qtyToAdd = customQty !== undefined ? customQty : 1;
+    let promptCandidate: WholesalePromptData | null = null;
     
     setCart(prev => {
       // 1. Validasi total stok produk di keranjang (menjumlahkan seluruh baris dengan produk & varian yang sama)
@@ -579,27 +714,81 @@ function App() {
       );
 
       if (existsNormalLine) {
+        const nextQty = Math.round((existsNormalLine.qty + qtyToAdd) * 1000) / 1000;
+        const minW = existsNormalLine.minWholesaleQty || product.minWholesaleQty || 0;
+        const wPrice = existsNormalLine.wholesalePrice || product.wholesalePrice || 0;
+        const normalP = existsNormalLine.originalPrice || product.price;
+
+        if (
+          minW > 0 &&
+          wPrice > 0 &&
+          wPrice < normalP &&
+          existsNormalLine.price > wPrice &&
+          nextQty >= minW &&
+          !declinedWholesaleCartIds.has(existsNormalLine.cartId)
+        ) {
+          promptCandidate = {
+            cartId: existsNormalLine.cartId,
+            name: existsNormalLine.name,
+            variantName: existsNormalLine.variantName,
+            unit: existsNormalLine.unit || 'Pcs',
+            qty: nextQty,
+            minWholesaleQty: minW,
+            normalPrice: normalP,
+            wholesalePrice: wPrice
+          };
+        }
+
         return prev.map(i => 
           i.cartId === existsNormalLine.cartId 
-            ? { ...i, qty: Math.round((i.qty + qtyToAdd) * 1000) / 1000 } 
+            ? { ...i, qty: nextQty } 
             : i
         );
       }
       
-      // 3. Jika belum ada baris normal yang cocok (misalnya item di keranjang memiliki Harga Khusus, atau produk baru),
-      // masukkan sebagai baris item baru yang terpisah
+      // 3. Jika belum ada baris normal yang cocok, masukkan sebagai baris item baru
+      const newCartId = Date.now().toString() + Math.random().toString(36).slice(2, 6);
+      const minW = product.minWholesaleQty || 0;
+      const wPrice = product.wholesalePrice || 0;
+      const normalP = product.price;
+
+      if (
+        minW > 0 &&
+        wPrice > 0 &&
+        wPrice < normalP &&
+        qtyToAdd >= minW &&
+        !declinedWholesaleCartIds.has(newCartId)
+      ) {
+        promptCandidate = {
+          cartId: newCartId,
+          name: product.name,
+          variantName: product.variantName,
+          unit: product.unit || 'Pcs',
+          qty: qtyToAdd,
+          minWholesaleQty: minW,
+          normalPrice: normalP,
+          wholesalePrice: wPrice
+        };
+      }
+
       return [
         ...prev,
         {
           ...product,
-          cartId: Date.now().toString() + Math.random().toString(36).slice(2, 6),
+          cartId: newCartId,
           qty: qtyToAdd,
           originalPrice: product.price,
+          wholesalePrice: product.wholesalePrice || 0,
+          minWholesaleQty: product.minWholesaleQty || 0,
           isCustomPrice: false,
           customPriceNote: ''
         }
       ];
     });
+
+    if (promptCandidate) {
+      setWholesalePrompt(promptCandidate);
+    }
   };
 
   // Tambah ke keranjang (cek satuan berat -> popup jumlah, selain itu langsung +qty)
@@ -641,6 +830,8 @@ function App() {
       barcode: variant.barcode || base.barcode,
       sku: variant.sku || base.sku,
       price: variant.price,
+      wholesalePrice: variant.wholesalePrice && variant.wholesalePrice > 0 ? variant.wholesalePrice : (base.wholesalePrice || 0),
+      minWholesaleQty: variant.minWholesaleQty && variant.minWholesaleQty > 0 ? variant.minWholesaleQty : (base.minWholesaleQty || 0),
       img: variant.image ? getProductImage(variant.image) : base.img,
       availableStock: variant.availableStock,
       unit: variantProduct.unit || 'Pcs',
@@ -733,6 +924,8 @@ function App() {
           barcode: matchedVariant.barcode || base.barcode,
           sku: matchedVariant.sku || base.sku,
           price: matchedVariant.price,
+          wholesalePrice: matchedVariant.wholesalePrice && matchedVariant.wholesalePrice > 0 ? matchedVariant.wholesalePrice : (base.wholesalePrice || 0),
+          minWholesaleQty: matchedVariant.minWholesaleQty && matchedVariant.minWholesaleQty > 0 ? matchedVariant.minWholesaleQty : (base.minWholesaleQty || 0),
           img: matchedVariant.image ? getProductImage(matchedVariant.image) : base.img,
           availableStock: matchedVariant.availableStock,
           unit: matchedProduct.unit || 'Pcs',
@@ -921,6 +1114,7 @@ function App() {
     });
     // Clear current order
     setCart([]);
+    setDeclinedWholesaleCartIds(new Set());
     setOrderType('DINE_IN');
     setSelectedCustomer(null);
     setTenderedStr('');
@@ -1679,7 +1873,10 @@ function App() {
               </div>
             </div>
             <div className="order-actions">
-              <button className="icon-btn" onClick={() => setCart([])}><Trash2 size={16} /></button>
+              <button className="icon-btn" onClick={() => {
+                setCart([]);
+                setDeclinedWholesaleCartIds(new Set());
+              }}><Trash2 size={16} /></button>
               <button className="hold-btn" onClick={handleHold} disabled={cart.length === 0} style={{ opacity: cart.length === 0 ? 0.5 : 1 }}><PauseCircle size={16} /> Hold [F5]</button>
             </div>
           </div>
@@ -1702,28 +1899,52 @@ function App() {
                     <span style={{ fontSize: '11.5px', color: '#64748b', fontWeight: 600 }}>
                       @{formatIDR(item.price)}
                     </span>
-                    <button 
-                      type="button"
-                      onClick={() => openCustomPriceModal(item)}
-                      style={{
-                        border: item.isCustomPrice ? '1px solid #fde68a' : '1px solid #e2e8f0',
-                        background: item.isCustomPrice ? '#fef3c7' : '#f8fafc',
-                        color: item.isCustomPrice ? '#b45309' : '#475569',
-                        padding: '1px 7px',
-                        borderRadius: '4px',
-                        fontSize: '10.5px',
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '3px',
-                        transition: 'all 0.15s ease'
-                      }}
-                      title="Ubah harga satuan secara manual (Harga Khusus)"
-                    >
-                      <Edit3 size={10} />
-                      {item.isCustomPrice ? 'Harga Khusus' : 'Ubah Harga'}
-                    </button>
+                    {item.isCustomPrice && item.customPriceNote?.toLowerCase().includes('grosir') ? (
+                      <button 
+                        type="button"
+                        onClick={() => openCustomPriceModal(item)}
+                        style={{
+                          border: '1px solid #bae6fd',
+                          background: '#e0f2fe',
+                          color: '#0369a1',
+                          padding: '1px 7px',
+                          borderRadius: '4px',
+                          fontSize: '10.5px',
+                          fontWeight: 800,
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '3px'
+                        }}
+                        title="Harga Grosir Aktif (Klik untuk ubah)"
+                      >
+                        <Package size={10} />
+                        Grosir
+                      </button>
+                    ) : (
+                      <button 
+                        type="button"
+                        onClick={() => openCustomPriceModal(item)}
+                        style={{
+                          border: item.isCustomPrice ? '1px solid #fde68a' : '1px solid #e2e8f0',
+                          background: item.isCustomPrice ? '#fef3c7' : '#f8fafc',
+                          color: item.isCustomPrice ? '#b45309' : '#475569',
+                          padding: '1px 7px',
+                          borderRadius: '4px',
+                          fontSize: '10.5px',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '3px',
+                          transition: 'all 0.15s ease'
+                        }}
+                        title="Ubah harga satuan secara manual (Harga Khusus)"
+                      >
+                        <Edit3 size={10} />
+                        {item.isCustomPrice ? 'Harga Khusus' : 'Ubah Harga'}
+                      </button>
+                    )}
                     {item.isCustomPrice && item.originalPrice && item.originalPrice !== item.price && (
                       <span style={{ fontSize: '10.5px', textDecoration: 'line-through', color: '#94a3b8' }}>
                         {formatIDR(item.originalPrice)}
@@ -1732,7 +1953,12 @@ function App() {
                   </div>
 
                   {item.isCustomPrice && item.customPriceNote && (
-                    <div style={{ fontSize: '10.5px', color: '#b45309', fontWeight: 600, marginTop: '2px' }}>
+                    <div style={{
+                      fontSize: '10.5px',
+                      color: item.customPriceNote.toLowerCase().includes('grosir') ? '#0284c7' : '#b45309',
+                      fontWeight: 700,
+                      marginTop: '2px'
+                    }}>
                       * {item.customPriceNote}
                     </div>
                   )}
@@ -2167,6 +2393,7 @@ function App() {
                 setPaymentPopupOpen(false);
                 setCartSheetOpen(false);
                 setCart([]);
+                setDeclinedWholesaleCartIds(new Set());
                 setTenderedStr('');
                 setSelectedCustomer(null);
                 setOrderType('DINE_IN');
@@ -2683,6 +2910,144 @@ function App() {
                   style={{ border: 'none', background: 'var(--primary)', color: 'white', borderRadius: '8px', padding: '8px 16px', fontSize: '12.5px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
                 >
                   <Check size={16} /> Terapkan Harga
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL PERINGATAN / KONFIRMASI HARGA GROSIR */}
+      {wholesalePrompt && (
+        <div 
+          className="modal-overlay"
+          style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            backgroundColor: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(4px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            zIndex: 10000, padding: '16px'
+          }}
+        >
+          <div 
+            className="modal-content animate-in zoom-in-95 duration-200"
+            style={{
+              width: '100%', maxWidth: '440px', background: 'white',
+              borderRadius: '20px', overflow: 'hidden',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+              border: '1px solid #e2e8f0'
+            }}
+          >
+            {/* Header */}
+            <div style={{
+              background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+              padding: '20px', color: 'white', display: 'flex', alignItems: 'center', gap: '14px'
+            }}>
+              <div style={{
+                width: '44px', height: '44px', borderRadius: '12px',
+                background: 'rgba(255, 255, 255, 0.2)', backdropFilter: 'blur(6px)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
+              }}>
+                <Package size={24} color="#ffffff" />
+              </div>
+              <div>
+                <span style={{
+                  fontSize: '11px', fontWeight: 800, textTransform: 'uppercase',
+                  letterSpacing: '0.05em', background: 'rgba(255, 255, 255, 0.25)',
+                  padding: '2px 8px', borderRadius: '4px', display: 'inline-block', marginBottom: '4px'
+                }}>
+                  Penawaran Grosir Otomatis
+                </span>
+                <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 800, lineHeight: 1.2 }}>
+                  Terapkan Harga Grosir?
+                </h3>
+              </div>
+            </div>
+
+            {/* Body */}
+            <div style={{ padding: '20px' }}>
+              <div style={{ marginBottom: '16px' }}>
+                <div style={{ fontSize: '15px', fontWeight: 800, color: '#0f172a' }}>
+                  {wholesalePrompt.name}
+                </div>
+                {wholesalePrompt.variantName && (
+                  <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>
+                    Varian: {wholesalePrompt.variantName}
+                  </div>
+                )}
+              </div>
+
+              {/* Requirement Alert Notice */}
+              <div style={{
+                background: '#f0f9ff', border: '1px solid #bae6fd',
+                borderRadius: '12px', padding: '12px 14px', marginBottom: '16px',
+                display: 'flex', alignItems: 'flex-start', gap: '10px'
+              }}>
+                <CheckCircle2 size={18} color="#0284c7" style={{ marginTop: '2px', flexShrink: 0 }} />
+                <div style={{ fontSize: '13px', color: '#0369a1', lineHeight: 1.4 }}>
+                  Kasir menginput kuantitas <strong>{wholesalePrompt.qty} {wholesalePrompt.unit}</strong>.
+                  Item ini memenuhi syarat grosir (minimum <strong>{wholesalePrompt.minWholesaleQty} {wholesalePrompt.unit}</strong>).
+                </div>
+              </div>
+
+              {/* Price comparison card */}
+              <div style={{
+                background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px',
+                padding: '14px', marginBottom: '20px'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', fontSize: '13px' }}>
+                  <span style={{ color: '#64748b' }}>Harga Eceran Normal:</span>
+                  <span style={{ color: '#64748b', textDecoration: 'line-through' }}>
+                    {formatIDR(wholesalePrompt.normalPrice)} / {wholesalePrompt.unit}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', fontSize: '13.5px' }}>
+                  <span style={{ fontWeight: 700, color: '#0284c7' }}>Harga Grosir:</span>
+                  <span style={{ fontWeight: 800, fontSize: '16px', color: '#0284c7' }}>
+                    {formatIDR(wholesalePrompt.wholesalePrice)} / {wholesalePrompt.unit}
+                  </span>
+                </div>
+                <div style={{
+                  borderTop: '1px dashed #cbd5e1', paddingTop: '10px',
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                }}>
+                  <span style={{ fontSize: '12px', color: '#16a34a', fontWeight: 700 }}>
+                    💡 Total Hemat Pelanggan:
+                  </span>
+                  <span style={{ fontSize: '13.5px', color: '#16a34a', fontWeight: 800 }}>
+                    {formatIDR((wholesalePrompt.normalPrice - wholesalePrompt.wholesalePrice) * wholesalePrompt.qty)}
+                  </span>
+                </div>
+              </div>
+
+              <div style={{ fontSize: '13px', color: '#334155', fontWeight: 600, textAlign: 'center', marginBottom: '20px' }}>
+                Apakah Anda ingin merubah harga item ini menjadi Harga Grosir?
+              </div>
+
+              {/* Action Buttons */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <button
+                  type="button"
+                  onClick={handleDeclineWholesale}
+                  style={{
+                    padding: '12px', border: '1.5px solid #cbd5e1', borderRadius: '12px',
+                    background: '#ffffff', color: '#64748b', fontWeight: 700,
+                    fontSize: '13px', cursor: 'pointer', transition: 'all 0.15s ease'
+                  }}
+                >
+                  TIDAK, Tetap Eceran
+                </button>
+                <button
+                  type="button"
+                  onClick={handleAcceptWholesale}
+                  style={{
+                    padding: '12px', border: 'none', borderRadius: '12px',
+                    background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+                    color: 'white', fontWeight: 800, fontSize: '13px', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                    boxShadow: '0 4px 12px rgba(2, 132, 199, 0.35)'
+                  }}
+                >
+                  <Check size={16} /> YA, Ubah ke Grosir
                 </button>
               </div>
             </div>

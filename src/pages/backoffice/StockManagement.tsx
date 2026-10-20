@@ -109,6 +109,7 @@ const StockManagement: React.FC = () => {
   const [purchasePrice, setPurchasePrice] = useState<number | string>('');
   const [sellingPrice, setSellingPrice] = useState<number | string>('');
   const [wholesalePrice, setWholesalePrice] = useState<number | string>('');
+  const [minWholesaleQty, setMinWholesaleQty] = useState<number | string>('');
   const [minStock, setMinStock] = useState<number | string>('');
   const [image, setImage] = useState('');
   const [variants, setVariants] = useState<VariantDraft[]>([]);
@@ -175,6 +176,7 @@ const StockManagement: React.FC = () => {
     setPurchasePrice('');
     setSellingPrice('');
     setWholesalePrice('');
+    setMinWholesaleQty('');
     setMinStock('');
     setImage('');
     setVariants([]);
@@ -276,6 +278,7 @@ const StockManagement: React.FC = () => {
           purchasePrice: baseCost,
           sellingPrice: Number(sellingPrice),
           wholesalePrice: Number(wholesalePrice),
+          minWholesaleQty: Number(minWholesaleQty) || 0,
           minStock: Number(minStock),
           image: image || original.image,
           variants: namedVariants.map(v => {
@@ -326,6 +329,7 @@ const StockManagement: React.FC = () => {
         purchasePrice: Number(purchasePrice),
         sellingPrice: Number(sellingPrice),
         wholesalePrice: Number(wholesalePrice),
+        minWholesaleQty: Number(minWholesaleQty) || 0,
         minStock: Number(minStock),
         image: image ? getProductImage(image) : '',
         variants: hasVariants
@@ -494,6 +498,7 @@ const StockManagement: React.FC = () => {
           purchasePrice: buyPrice,
           sellingPrice: Number(item.sellingPrice),
           wholesalePrice: Number(item.wholesalePrice || 0),
+          minWholesaleQty: Number(item.minWholesaleQty || 0),
           minStock: Number(item.minStock || 0),
           image: item.image ? getProductImage(item.image) : '',
           // Varian dibuat dengan stok 0; stok masuk lewat mutasi IN per varian
@@ -573,6 +578,7 @@ const StockManagement: React.FC = () => {
     setPurchasePrice(p.purchasePrice);
     setSellingPrice(p.sellingPrice);
     setWholesalePrice(p.wholesalePrice || 0);
+    setMinWholesaleQty(p.minWholesaleQty || '');
     setMinStock(p.minStock || 0);
     setImage(p.image || '');
     setVariants((p.variants || []).map((v: any) => ({
@@ -2232,6 +2238,10 @@ const StockManagement: React.FC = () => {
                   : 'Satu produk, banyak varian dengan harga sama? Cukup ketik nama varian dipisah koma lalu isi qty tiap varian. Harga varian dikosongkan = ikut harga produk di bawah.'}
               />
 
+              <div style={{ marginTop: '8px', padding: '10px 12px', background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: '10px', fontSize: '11.5px', color: '#5b21b6', lineHeight: 1.45 }}>
+                📦 <strong>Tips Jual Barang Karton &amp; Eceran (cth: Indomie):</strong> Anda bisa input 2 varian di atas: <strong>"Satuan (Pcs)"</strong> (scan barcode bungkus) dan <strong>"1 Karton (Dus isi 40)"</strong> (scan barcode kardus luar dengan harga 1 dus). Atau jika stok dihitung per Pcs, cukup atur <strong>Minimum Grosir</strong> di bawah agar kasir otomatis menawarkan harga grosir/karton saat beli banyak.
+              </div>
+
               {/* SECTION: MANAJEMEN STOK & SATUAN */}
               <div className="ios-section-header" style={{ marginTop: '20px' }}>
                 <span>MANAJEMEN STOK &amp; SATUAN</span>
@@ -2294,7 +2304,28 @@ const StockManagement: React.FC = () => {
                       <div className="ios-sublabel">Peringatan saat stok di bawah nilai ini</div>
                     </div>
                   </div>
-                  <input type="number" step="any" inputMode="decimal" value={minStock} onChange={(e) => setMinStock(e.target.value === '' ? '' : Number(e.target.value))} className="ios-input-gray ios-input-small" style={{ width: '60px', textAlign: 'center' }} />
+                  <input type="number" step="any" inputMode="decimal" value={minStock} onChange={(e) => setMinStock(e.target.value === '' ? '' : Number(e.target.value))} className="ios-input-gray ios-input-small" style={{ width: '60px', textAlign: 'center' }} placeholder="0" />
+                </div>
+
+                <div className="ios-row-horiz" style={{ borderTop: '1px solid #f1f5f9' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#1d4ed8' }}>
+                        Minimum Grosir (Qty) 🏷️
+                      </label>
+                      <div className="ios-sublabel">Kasir otomatis tawarkan Harga Grosir jika beli ≥ jumlah ini (cth: 12 pcs / 40 dus)</div>
+                    </div>
+                  </div>
+                  <input
+                    type="number"
+                    step="any"
+                    inputMode="decimal"
+                    value={minWholesaleQty}
+                    onChange={(e) => setMinWholesaleQty(e.target.value === '' ? '' : Number(e.target.value))}
+                    className="ios-input-gray ios-input-small"
+                    style={{ width: '60px', textAlign: 'center', fontWeight: 700, color: '#1d4ed8', background: '#eff6ff', borderColor: '#bfdbfe' }}
+                    placeholder="12"
+                  />
                 </div>
               </div>
 

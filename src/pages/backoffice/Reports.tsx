@@ -65,6 +65,7 @@ const Reports: React.FC = () => {
   const [paymentMethod, setPaymentMethod] = useState('ALL');
   const [sortBy, setSortBy] = useState<'latest' | 'oldest'>('latest');
   const [specialPriceOnly, setSpecialPriceOnly] = useState(false);
+  const [wholesaleOnly, setWholesaleOnly] = useState(false);
 
   // Detail Modal for Sales / Custom Price
   const [selectedSaleDetail, setSelectedSaleDetail] = useState<any | null>(null);
@@ -147,6 +148,21 @@ const Reports: React.FC = () => {
         return acc;
       }, 0);
 
+      const hasWholesale = (sale.items || []).some(it => it.customPriceNote?.toLowerCase().includes('grosir'));
+      const wholesaleCount = (sale.items || []).filter(it => it.customPriceNote?.toLowerCase().includes('grosir')).length;
+      const totalWholesaleSavings = (sale.items || []).reduce((acc, it) => {
+        if (it.customPriceNote?.toLowerCase().includes('grosir') && it.originalPrice && it.originalPrice > it.price) {
+          return acc + ((it.originalPrice - it.price) * (it.qty || 1));
+        }
+        return acc;
+      }, 0);
+      const totalWholesaleAmount = (sale.items || []).reduce((acc, it) => {
+        if (it.customPriceNote?.toLowerCase().includes('grosir')) {
+          return acc + ((it.price || 0) * (it.qty || 1));
+        }
+        return acc;
+      }, 0);
+
       return {
         ...sale,
         customerName,
@@ -155,14 +171,22 @@ const Reports: React.FC = () => {
         totalPurchasePrice,
         hasSpecialPrice,
         specialPriceCount,
-        totalSpecialSavings
+        totalSpecialSavings,
+        hasWholesale,
+        wholesaleCount,
+        totalWholesaleSavings,
+        totalWholesaleAmount
       };
     });
   }, [sales, customers, products]);
 
-  // Total transactions containing special prices
+  // Total transactions containing special prices and wholesale
   const totalSpecialPriceTx = useMemo(() => {
     return enrichedSales.filter(s => s.hasSpecialPrice).length;
+  }, [enrichedSales]);
+
+  const totalWholesaleTx = useMemo(() => {
+    return enrichedSales.filter(s => s.hasWholesale).length;
   }, [enrichedSales]);
 
   // Apply filters
@@ -201,6 +225,10 @@ const Reports: React.FC = () => {
       result = result.filter(sale => sale.hasSpecialPrice);
     }
 
+    if (wholesaleOnly) {
+      result = result.filter(sale => sale.hasWholesale);
+    }
+
     if (salesStatusFilter === 'PAID') {
       result = result.filter(sale => sale.paymentStatus === 'PAID' && sale.status !== 'VOID');
     } else if (salesStatusFilter === 'TEMPO') {
@@ -218,7 +246,7 @@ const Reports: React.FC = () => {
     });
 
     return result;
-  }, [enrichedSales, searchQuery, startDate, endDate, paymentMethod, specialPriceOnly, salesStatusFilter, sortBy]);
+  }, [enrichedSales, searchQuery, startDate, endDate, paymentMethod, specialPriceOnly, wholesaleOnly, salesStatusFilter, sortBy]);
 
   // Piutang Pelanggan / Grosir (Tempo & Cicilan)
   const totalCustomerReceivables = useMemo(() => {
@@ -737,6 +765,31 @@ const Reports: React.FC = () => {
                 <span>Special Price ({totalSpecialPriceTx})</span>
               </button>
 
+              {/* Wholesale Filter Button */}
+              <button
+                type="button"
+                onClick={() => setWholesaleOnly(!wholesaleOnly)}
+                style={{
+                  border: wholesaleOnly ? '1.5px solid #0284c7' : '1px solid #cbd5e1',
+                  borderRadius: '8px',
+                  height: '34px',
+                  padding: '0 11px',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  background: wholesaleOnly ? '#e0f2fe' : '#ffffff',
+                  color: wholesaleOnly ? '#0369a1' : '#475569',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease'
+                }}
+                title="Filter transaksi dengan Penjualan Grosir / Kartonan"
+              >
+                <Package size={13} color={wholesaleOnly ? '#0369a1' : '#64748b'} />
+                <span>Grosir ({totalWholesaleTx})</span>
+              </button>
+
               {/* Status Filter */}
               <select
                 value={salesStatusFilter}
@@ -967,7 +1020,16 @@ const Reports: React.FC = () => {
                                   +{(sale.items || []).length - 2} produk lainnya...
                                 </button>
                               )}
-                              {sale.hasSpecialPrice && (
+                              {sale.hasWholesale && (
+                                <div style={{
+                                  display: 'inline-flex', alignItems: 'center', gap: '4px',
+                                  background: '#e0f2fe', color: '#0369a1', border: '1px solid #bae6fd',
+                                  borderRadius: '4px', padding: '1px 6px', fontSize: '10px', fontWeight: 800, width: 'fit-content'
+                                }}>
+                                  <Package size={10} /> Transaksi Grosir
+                                </div>
+                              )}
+                              {sale.hasSpecialPrice && !sale.hasWholesale && (
                                 <div style={{
                                   display: 'inline-flex', alignItems: 'center', gap: '4px',
                                   background: '#fffbeb', color: '#b45309', border: '1px dashed #fcd34d',
@@ -1273,6 +1335,30 @@ const Reports: React.FC = () => {
                 <Tag size={13} color={specialPriceOnly ? '#b45309' : '#64748b'} />
                 <span>Hanya Special Price ({totalSpecialPriceTx} transaksi)</span>
               </button>
+
+              {/* Mobile Wholesale Filter Button */}
+              <button
+                type="button"
+                onClick={() => setWholesaleOnly(!wholesaleOnly)}
+                style={{
+                  border: wholesaleOnly ? '1.5px solid #0284c7' : '1px solid #e2e8f0',
+                  borderRadius: '10px',
+                  height: '38px',
+                  padding: '0 12px',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  background: wholesaleOnly ? '#e0f2fe' : '#f8fafc',
+                  color: wholesaleOnly ? '#0369a1' : '#475569',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  cursor: 'pointer'
+                }}
+              >
+                <Package size={13} color={wholesaleOnly ? '#0369a1' : '#64748b'} />
+                <span>Hanya Transaksi Grosir ({totalWholesaleTx} transaksi)</span>
+              </button>
             </div>
 
             {/* Restock Alert Banner */}
@@ -1467,7 +1553,16 @@ const Reports: React.FC = () => {
                               )}
                             </div>
                           ))}
-                          {sale.hasSpecialPrice && (
+                          {sale.hasWholesale && (
+                            <div style={{
+                              display: 'inline-flex', alignItems: 'center', gap: '4px',
+                              background: '#e0f2fe', color: '#0369a1', border: '1px solid #bae6fd',
+                              borderRadius: '6px', padding: '3px 8px', fontSize: '10.5px', fontWeight: 800, marginTop: '2px', width: 'fit-content'
+                            }}>
+                              <Package size={11} /> Penjualan Grosir
+                            </div>
+                          )}
+                          {sale.hasSpecialPrice && !sale.hasWholesale && (
                             <div style={{
                               display: 'inline-flex', alignItems: 'center', gap: '4px',
                               background: '#fffbeb', color: '#b45309', border: '1px dashed #fcd34d',
@@ -2277,7 +2372,33 @@ const Reports: React.FC = () => {
             {/* Modal Body */}
             <div style={{ padding: '20px 24px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
               {/* Special Price Highlight Alert Banner */}
-              {selectedSaleDetail.hasSpecialPrice && (
+              {selectedSaleDetail.hasWholesale && (
+                <div style={{
+                  background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)',
+                  border: '1.5px solid #bae6fd', borderRadius: '14px', padding: '14px 18px',
+                  display: 'flex', alignItems: 'flex-start', gap: '14px'
+                }}>
+                  <div style={{
+                    width: '36px', height: '36px', borderRadius: '10px', background: '#0284c7',
+                    color: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
+                  }}>
+                    <Package size={18} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '14px', fontWeight: 800, color: '#0369a1' }}>
+                      Transaksi Memuat Penjualan Grosir / Kartonan
+                    </div>
+                    <div style={{ fontSize: '12.5px', color: '#0284c7', marginTop: '2px', lineHeight: 1.4 }}>
+                      Terdapat <strong>{selectedSaleDetail.wholesaleCount} item grosir</strong> dengan total nilai transaksi grosir <strong>{formatIDR(selectedSaleDetail.totalWholesaleAmount || 0)}</strong>.
+                      {selectedSaleDetail.totalWholesaleSavings > 0 && (
+                        <span> Total hemat grosir pelanggan: <strong style={{ textDecoration: 'underline' }}>{formatIDR(selectedSaleDetail.totalWholesaleSavings)}</strong>.</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {selectedSaleDetail.hasSpecialPrice && !selectedSaleDetail.hasWholesale && (
                 <div style={{
                   background: 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)',
                   border: '1.5px solid #fde68a', borderRadius: '14px', padding: '14px 18px',
@@ -2403,13 +2524,23 @@ const Reports: React.FC = () => {
                             {/* Skema Harga */}
                             <td style={{ padding: '12px 14px' }}>
                               {isSpecial ? (
-                                <span style={{
-                                  background: '#fef3c7', color: '#b45309', border: '1px solid #fde68a',
-                                  borderRadius: '6px', padding: '3px 8px', fontSize: '11px', fontWeight: 800,
-                                  display: 'inline-flex', alignItems: 'center', gap: '4px'
-                                }}>
-                                  <Tag size={11} /> SPECIAL (Manual)
-                                </span>
+                                it.customPriceNote?.toLowerCase().includes('grosir') ? (
+                                  <span style={{
+                                    background: '#e0f2fe', color: '#0369a1', border: '1px solid #bae6fd',
+                                    borderRadius: '6px', padding: '3px 8px', fontSize: '11px', fontWeight: 800,
+                                    display: 'inline-flex', alignItems: 'center', gap: '4px'
+                                  }}>
+                                    <Package size={11} /> GROSIR
+                                  </span>
+                                ) : (
+                                  <span style={{
+                                    background: '#fef3c7', color: '#b45309', border: '1px solid #fde68a',
+                                    borderRadius: '6px', padding: '3px 8px', fontSize: '11px', fontWeight: 800,
+                                    display: 'inline-flex', alignItems: 'center', gap: '4px'
+                                  }}>
+                                    <Tag size={11} /> SPECIAL (Manual)
+                                  </span>
+                                )
                               ) : (
                                 <span style={{
                                   background: '#f1f5f9', color: '#64748b',

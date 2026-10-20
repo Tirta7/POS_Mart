@@ -68,6 +68,7 @@ const syncProductVariants = async (tx, tenantId, productId, variants) => {
       purchase_price: optNum(v.purchasePrice ?? v.purchase_price ?? v.harga_beli),
       selling_price: optNum(v.sellingPrice ?? v.selling_price ?? v.harga_jual),
       wholesale_price: optNum(v.wholesalePrice ?? v.wholesale_price ?? v.harga_grosir),
+      min_wholesale_qty: optNum(v.minWholesaleQty ?? v.min_wholesale_qty),
       barcode,
       sku,
       image_url,
@@ -289,6 +290,7 @@ app.post('/api/saas/products', async (req, res) => {
           purchase_price: Number(data.purchasePrice || 0),
           selling_price: Number(data.sellingPrice || 0),
           wholesale_price: Number(data.wholesalePrice || 0),
+          min_wholesale_qty: optNum(data.minWholesaleQty),
           stock: incomingVariants.length > 0 ? 0 : round3(data.stock),
           min_stock: Number(data.minStock || 0),
           unit: data.unit ? String(data.unit) : 'Pcs',
@@ -339,6 +341,7 @@ app.put('/api/saas/products/:id', async (req, res) => {
     if (data.purchasePrice !== undefined) updateData.purchase_price = Number(data.purchasePrice);
     if (data.sellingPrice !== undefined) updateData.selling_price = Number(data.sellingPrice);
     if (data.wholesalePrice !== undefined) updateData.wholesale_price = Number(data.wholesalePrice);
+    if (data.minWholesaleQty !== undefined) updateData.min_wholesale_qty = optNum(data.minWholesaleQty);
     if (data.stock !== undefined && !hasVariants) updateData.stock = Number(data.stock);
     if (data.minStock !== undefined) updateData.min_stock = Number(data.minStock);
     if (data.unit !== undefined && data.unit) updateData.unit = String(data.unit);

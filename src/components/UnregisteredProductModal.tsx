@@ -37,6 +37,7 @@ export default function UnregisteredProductModal({
   const [purchasePrice, setPurchasePrice] = useState<number | ''>('');
   const [sellingPrice, setSellingPrice] = useState<number | ''>('');
   const [wholesalePrice, setWholesalePrice] = useState<number | ''>('');
+  const [minWholesaleQty, setMinWholesaleQty] = useState<number | ''>('');
 
   // Category Modal State
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
@@ -61,6 +62,7 @@ export default function UnregisteredProductModal({
       setPurchasePrice('');
       setSellingPrice('');
       setWholesalePrice('');
+      setMinWholesaleQty('');
       setIsSubmitting(false);
     }
   }, [isOpen, initialBarcode, initialQty, categories]);
@@ -134,6 +136,7 @@ export default function UnregisteredProductModal({
         purchasePrice: buyNum,
         sellingPrice: sellNum,
         wholesalePrice: Number(wholesalePrice) || 0,
+        minWholesaleQty: Number(minWholesaleQty) || 0,
         image: '',
         variants: hasVariants
           ? namedVariants.map((v: VariantDraft) => ({
@@ -606,6 +609,36 @@ export default function UnregisteredProductModal({
                     fontSize: '14px',
                     fontWeight: 800,
                     color: '#0f172a'
+                  }}
+                />
+              </div>
+
+              {/* Minimum Grosir (Qty) */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', borderTop: '1px solid #f1f5f9' }}>
+                <div>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 700, color: '#1d4ed8' }}>
+                    Min. Pembelian Grosir (Qty) 🏷️
+                  </label>
+                  <div style={{ fontSize: '11.5px', color: '#64748b' }}>
+                    Tawarkan Harga Grosir jika beli ≥ jumlah ini
+                  </div>
+                </div>
+                <input
+                  type="number"
+                  min={0}
+                  placeholder="12"
+                  value={minWholesaleQty}
+                  onChange={(e) => setMinWholesaleQty(e.target.value === '' ? '' : Math.max(0, Number(e.target.value)))}
+                  style={{
+                    width: '65px',
+                    textAlign: 'center',
+                    padding: '6px 8px',
+                    borderRadius: '8px',
+                    border: '1px solid #bfdbfe',
+                    background: '#eff6ff',
+                    fontSize: '14px',
+                    fontWeight: 800,
+                    color: '#1d4ed8'
                   }}
                 />
               </div>

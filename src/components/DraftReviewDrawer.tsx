@@ -28,6 +28,7 @@ export interface ReviewItem {
   sellingPrice: number;
   wholesalePrice?: number;
   minStock?: number;
+  minWholesaleQty?: number;
   image?: string;
   pending?: boolean;
   grNumber?: string;
@@ -73,6 +74,7 @@ const DraftReviewDrawer: React.FC<Props> = ({ items, mode, categories, onClose, 
       unit: item.unit,
       qty: item.qty,
       minStock: item.minStock ?? 0,
+      minWholesaleQty: item.minWholesaleQty ?? 0,
       purchasePrice: item.purchasePrice,
       sellingPrice: item.sellingPrice,
       wholesalePrice: item.wholesalePrice ?? 0,
@@ -115,6 +117,7 @@ const DraftReviewDrawer: React.FC<Props> = ({ items, mode, categories, onClose, 
       unit: form.unit,
       qty,
       minStock: Number(form.minStock || 0),
+      minWholesaleQty: Number(form.minWholesaleQty || 0),
       purchasePrice: Number(form.purchasePrice || 0),
       sellingPrice: Number(form.sellingPrice),
       wholesalePrice: Number(form.wholesalePrice || 0),
@@ -316,7 +319,7 @@ const DraftReviewDrawer: React.FC<Props> = ({ items, mode, categories, onClose, 
                             <input type="number" min="0" className="bo-input" style={inputStyle} value={form.minStock} onChange={e => setNum('minStock', e.target.value)} />
                           </div>
                         </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '8px' }}>
                           <div>
                             <label style={labelStyle}>Harga Beli</label>
                             <input type="number" min="0" className="bo-input" style={inputStyle} value={form.purchasePrice} onChange={e => setNum('purchasePrice', e.target.value)} />
@@ -328,6 +331,10 @@ const DraftReviewDrawer: React.FC<Props> = ({ items, mode, categories, onClose, 
                           <div>
                             <label style={labelStyle}>Harga Grosir</label>
                             <input type="number" min="0" className="bo-input" style={inputStyle} value={form.wholesalePrice} onChange={e => setNum('wholesalePrice', e.target.value)} />
+                          </div>
+                          <div>
+                            <label style={{ ...labelStyle, color: '#1d4ed8' }}>Min Grosir (Qty)</label>
+                            <input type="number" min="0" className="bo-input" style={{ ...inputStyle, background: '#eff6ff', color: '#1d4ed8', fontWeight: 700 }} value={form.minWholesaleQty} onChange={e => setNum('minWholesaleQty', e.target.value)} placeholder="12" />
                           </div>
                         </div>
                         <div>

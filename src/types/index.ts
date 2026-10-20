@@ -13,6 +13,7 @@ export interface Product {
   purchasePrice: number;
   sellingPrice: number;
   wholesalePrice?: number;
+  minWholesaleQty?: number; // Minimum qty pembelian agar dapat harga grosir
   image?: string;
   isPending?: boolean; // Flag to indicate if the product is a draft in Goods Receipt
   variants?: ProductVariant[]; // Varian (mis. warna). Jika ada, stok produk = total stok varian
@@ -31,6 +32,7 @@ export interface ProductVariant {
   purchasePrice?: number;
   sellingPrice?: number;
   wholesalePrice?: number;
+  minWholesaleQty?: number;
 }
 
 /** Varian untuk input form (qty/harga berupa string agar bisa dikosongkan saat mengetik) */
@@ -43,6 +45,7 @@ export interface VariantDraft {
   qty: number | string;
   sellingPrice?: number | string;
   wholesalePrice?: number | string;
+  minWholesaleQty?: number | string;
 }
 
 export interface Supplier {
