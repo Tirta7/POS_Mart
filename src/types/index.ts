@@ -123,6 +123,39 @@ export interface SalesTransaction {
   customerName?: string;
   employeeId?: string;
   employeeName?: string;
+  status?: string;
+  paymentStatus?: string;
+  paidAmount?: number;
+  remainingAmount?: number;
+  dueDate?: string;
+  notes?: string;
+  payments?: {
+    id: string;
+    amount: number;
+    payment_method: string;
+    payment_date: string;
+    cashier_name?: string;
+    note?: string;
+  }[];
+  returns?: {
+    id: string;
+    return_number: string;
+    total_refund: number;
+    refund_method: string;
+    reason?: string;
+    created_at: string;
+    employee_name?: string;
+    items?: {
+      id: string;
+      product_id: string;
+      variant_name?: string;
+      quantity: number;
+      refund_price: number;
+      subtotal: number;
+      return_to_stock: boolean;
+      product?: { name: string };
+    }[];
+  }[];
   items: {
     productId: string;
     variantId?: string;

@@ -313,8 +313,16 @@ export const buildReceiptHtml = (sale: SalesTransaction, opts: ReceiptOptions): 
   </div>
 
   <div class="sum-row"><span>Metode Bayar</span><span style="font-weight:700;">${esc(sale.paymentMethod || 'TUNAI')}</span></div>
+  ${sale.paymentMethod === 'TEMPO' || (sale.paymentStatus && sale.paymentStatus !== 'PAID') ? `
+  <div class="sum-row"><span>Status Pembayaran</span><span style="font-weight:700;color:${sale.paymentStatus === 'PAID' ? '#16a34a' : '#d97706'};">${sale.paymentStatus === 'PAID' ? 'LUNAS' : sale.paymentStatus === 'PARTIAL' ? 'CICILAN (SEBAGIAN)' : 'TEMPO (BELUM DIBAYAR)'}</span></div>
+  <div class="sum-row"><span>Total Terbayar (DP)</span><span style="font-weight:700;">${rp(sale.paidAmount || 0)}</span></div>
+  <div class="sum-row bold" style="font-size:11.5px;color:#dc2626;"><span>Sisa Piutang / Tagihan</span><span style="font-weight:900;">${rp(sale.remainingAmount != null ? sale.remainingAmount : (sale.total - (sale.paidAmount || 0)))}</span></div>
+  ${sale.dueDate ? `<div class="sum-row"><span>Jatuh Tempo</span><span style="font-weight:700;">${new Date(sale.dueDate).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}</span></div>` : ''}
+  ` : `
   <div class="sum-row"><span>${isCash ? 'Tunai Diterima' : 'Dibayar'}</span><span>${rp(isCash ? (sale.tendered || sale.total) : sale.total)}</span></div>
   ${isCash ? `<div class="sum-row bold" style="font-size:11.5px;margin-top:1px;"><span>Kembalian</span><span style="font-weight:900;">${rp(sale.change || 0)}</span></div>` : ''}
+  `}
+  ${sale.status === 'VOID' ? `<div style="text-align:center;padding:4px;margin-top:6px;border:1.5px solid #dc2626;color:#dc2626;font-weight:900;font-size:12px;letter-spacing:1.5px;">NOTA DIBATALKAN (VOID)</div>` : ''}
 
   <hr class="dash" />
 

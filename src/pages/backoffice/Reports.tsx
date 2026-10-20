@@ -11,8 +11,13 @@ import {
   TrendingUp, AlertTriangle, DollarSign, Search, 
   CreditCard, CheckCircle2, Printer, Copy, Download, 
   FileSpreadsheet, RefreshCw, X, MessageSquare,
-  Package, Check, Tag, Eye, Info
+  Package, Check, Tag, Eye, Info,
+  RotateCcw, Edit3, Trash2, Calendar, Clock
 } from 'lucide-react';
+import EditInvoiceModal from '../../components/EditInvoiceModal';
+import SalesReturnModal from '../../components/SalesReturnModal';
+import InstallmentPaymentModal from '../../components/InstallmentPaymentModal';
+import VoidTransactionModal from '../../components/VoidTransactionModal';
 import { exportMasterExcel } from '../../utils/excelExportImport';
 
 const Reports: React.FC = () => {
@@ -63,6 +68,13 @@ const Reports: React.FC = () => {
 
   // Detail Modal for Sales / Custom Price
   const [selectedSaleDetail, setSelectedSaleDetail] = useState<any | null>(null);
+
+  // Modal states for Invoice Editing, Returns, Installment Payment, and Void
+  const [editingInvoiceSale, setEditingInvoiceSale] = useState<SalesTransaction | null>(null);
+  const [returnSale, setReturnSale] = useState<SalesTransaction | null>(null);
+  const [paymentSale, setPaymentSale] = useState<SalesTransaction | null>(null);
+  const [voidSaleTarget, setVoidSaleTarget] = useState<SalesTransaction | null>(null);
+  const [salesStatusFilter, setSalesStatusFilter] = useState<'ALL' | 'PAID' | 'TEMPO' | 'RETURN' | 'VOID'>('ALL');
 
   // Supplier Debt modal
   const [isDebtModalOpen, setIsDebtModalOpen] = useState(false);
@@ -189,6 +201,16 @@ const Reports: React.FC = () => {
       result = result.filter(sale => sale.hasSpecialPrice);
     }
 
+    if (salesStatusFilter === 'PAID') {
+      result = result.filter(sale => sale.paymentStatus === 'PAID' && sale.status !== 'VOID');
+    } else if (salesStatusFilter === 'TEMPO') {
+      result = result.filter(sale => (sale.paymentStatus === 'PARTIAL' || sale.paymentStatus === 'UNPAID') && sale.status !== 'VOID');
+    } else if (salesStatusFilter === 'RETURN') {
+      result = result.filter(sale => (sale.returns && sale.returns.length > 0) || sale.status === 'RETURNED' || sale.status === 'PARTIAL_RETURN');
+    } else if (salesStatusFilter === 'VOID') {
+      result = result.filter(sale => sale.status === 'VOID');
+    }
+
     result.sort((a, b) => {
       const dateA = new Date(a.date).getTime();
       const dateB = new Date(b.date).getTime();
@@ -196,7 +218,19 @@ const Reports: React.FC = () => {
     });
 
     return result;
-  }, [enrichedSales, searchQuery, startDate, endDate, paymentMethod, specialPriceOnly, sortBy]);
+  }, [enrichedSales, searchQuery, startDate, endDate, paymentMethod, specialPriceOnly, salesStatusFilter, sortBy]);
+
+  // Piutang Pelanggan / Grosir (Tempo & Cicilan)
+  const totalCustomerReceivables = useMemo(() => {
+    return enrichedSales.reduce((acc, s) => {
+      if (s.status === 'VOID') return acc;
+      return acc + (s.remainingAmount || (s.paymentStatus === 'PAID' ? 0 : Math.max(0, (s.total || 0) - (s.paidAmount || 0))));
+    }, 0);
+  }, [enrichedSales]);
+
+  const tempoSalesCount = useMemo(() => {
+    return enrichedSales.filter(s => (s.paymentStatus === 'PARTIAL' || s.paymentStatus === 'UNPAID') && s.status !== 'VOID').length;
+  }, [enrichedSales]);
 
   // Summaries
   const totalRevenue = enrichedSales.reduce((sum, sale) => sum + (sale.total || sale.subtotal || 0), 0);
@@ -440,9 +474,15 @@ const Reports: React.FC = () => {
           <div style={{ fontSize: isMobileScreen ? '18px' : '22px', fontWeight: 900, color: '#0f172a', lineHeight: 1.1 }}>
             {totalTransactions} <span style={{ fontSize: '13px', fontWeight: 600, color: '#64748b' }}>Nota</span>
           </div>
-          <span style={{ fontSize: '11.5px', color: '#16a34a', marginTop: '6px', fontWeight: 700 }}>
-            ● 100% Lunas Terverifikasi
-          </span>
+          {tempoSalesCount > 0 ? (
+            <span style={{ fontSize: '11.5px', color: '#d97706', marginTop: '6px', fontWeight: 700 }}>
+              ● {tempoSalesCount} Piutang Grosir ({formatIDR(totalCustomerReceivables)})
+            </span>
+          ) : (
+            <span style={{ fontSize: '11.5px', color: '#16a34a', marginTop: '6px', fontWeight: 700 }}>
+              ● 100% Lunas Terverifikasi
+            </span>
+          )}
         </div>
 
         {/* Card 4: KEWAJIBAN HUTANG SUPPLIER */}
@@ -697,6 +737,22 @@ const Reports: React.FC = () => {
                 <span>Special Price ({totalSpecialPriceTx})</span>
               </button>
 
+              {/* Status Filter */}
+              <select
+                value={salesStatusFilter}
+                onChange={(e) => setSalesStatusFilter(e.target.value as any)}
+                style={{
+                  border: '1px solid #cbd5e1', borderRadius: '8px',
+                  height: '34px', padding: '0 10px', fontSize: '12px', background: '#ffffff', color: '#1e293b', fontWeight: 600
+                }}
+              >
+                <option value="ALL">Semua Status Nota</option>
+                <option value="PAID">Lunas Saja</option>
+                <option value="TEMPO">Tempo / Cicilan (Piutang)</option>
+                <option value="RETURN">Ada Retur</option>
+                <option value="VOID">Dibatalkan (VOID)</option>
+              </select>
+
               {/* Payment Method filter */}
               <select
                 value={paymentMethod}
@@ -709,8 +765,9 @@ const Reports: React.FC = () => {
                 <option value="ALL">Semua Metode Bayar</option>
                 <option value="TUNAI">TUNAI</option>
                 <option value="QRIS">QRIS</option>
-                <option value="KARTU KREDIT">KARTU KREDIT</option>
-                <option value="KARTU DEBIT">KARTU DEBIT</option>
+                <option value="EDC">DEBIT / EDC</option>
+                <option value="TEMPO">TEMPO / GROSIR</option>
+                <option value="KUPON">KUPON</option>
               </select>
 
               {/* Sort by */}
@@ -951,17 +1008,58 @@ const Reports: React.FC = () => {
 
                           {/* Status */}
                           <td style={{ padding: '12px 16px', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                            <span style={{
-                              background: '#dcfce7', color: '#15803d', fontSize: '11px', fontWeight: 800,
-                              padding: '2px 8px', borderRadius: '6px'
-                            }}>
-                              LUNAS
-                            </span>
+                            {sale.status === 'VOID' ? (
+                              <span style={{
+                                background: '#fee2e2', color: '#dc2626', border: '1px solid #fecaca',
+                                fontSize: '11px', fontWeight: 800, padding: '2px 8px', borderRadius: '6px'
+                              }}>
+                                BATAL (VOID)
+                              </span>
+                            ) : sale.paymentStatus === 'PARTIAL' ? (
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+                                <span style={{
+                                  background: '#fef3c7', color: '#b45309', border: '1px solid #fde68a',
+                                  fontSize: '10.5px', fontWeight: 800, padding: '2px 8px', borderRadius: '6px'
+                                }}>
+                                  CICILAN
+                                </span>
+                                <span style={{ fontSize: '10px', color: '#dc2626', fontWeight: 700 }}>
+                                  Sisa: {formatIDR(sale.remainingAmount != null ? sale.remainingAmount : Math.max(0, (sale.total || 0) - (sale.paidAmount || 0)))}
+                                </span>
+                              </div>
+                            ) : sale.paymentStatus === 'UNPAID' ? (
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+                                <span style={{
+                                  background: '#fee2e2', color: '#b91c1c', border: '1px solid #fca5a5',
+                                  fontSize: '10.5px', fontWeight: 800, padding: '2px 8px', borderRadius: '6px'
+                                }}>
+                                  TEMPO
+                                </span>
+                                <span style={{ fontSize: '10px', color: '#dc2626', fontWeight: 700 }}>
+                                  Sisa: {formatIDR(sale.remainingAmount != null ? sale.remainingAmount : Math.max(0, (sale.total || 0) - (sale.paidAmount || 0)))}
+                                </span>
+                              </div>
+                            ) : (
+                              <span style={{
+                                background: '#dcfce7', color: '#15803d', fontSize: '11px', fontWeight: 800,
+                                padding: '2px 8px', borderRadius: '6px'
+                              }}>
+                                LUNAS
+                              </span>
+                            )}
+                            {sale.returns && sale.returns.length > 0 && (
+                              <div style={{
+                                marginTop: '3px', fontSize: '9.5px', fontWeight: 800,
+                                background: '#f3e8ff', color: '#7e22ce', padding: '1px 6px', borderRadius: '4px'
+                              }}>
+                                RETUR ({sale.returns.length})
+                              </div>
+                            )}
                           </td>
 
-                          {/* Aksi: Detail & Cetak Nota */}
+                          {/* Aksi: Detail, Edit, Retur, Cicil, Cetak */}
                           <td style={{ padding: '12px 16px', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px' }}>
                               <button
                                 type="button"
                                 onClick={() => setSelectedSaleDetail(sale)}
@@ -970,17 +1068,63 @@ const Reports: React.FC = () => {
                                   borderRadius: '8px', padding: '5px 8px', fontSize: '11.5px', fontWeight: 700,
                                   display: 'inline-flex', alignItems: 'center', gap: '4px', cursor: 'pointer'
                                 }}
-                                title="Lihat Detail & Analisis Transaksi"
+                                title="Lihat Detail Transaksi"
                               >
                                 <Eye size={13} /> Detail
                               </button>
+
+                              {sale.status !== 'VOID' && (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingInvoiceSale(sale)}
+                                    style={{
+                                      background: '#eff6ff', border: '1px solid #bfdbfe', color: '#2563eb',
+                                      borderRadius: '8px', padding: '5px 7px', fontSize: '11.5px', fontWeight: 700,
+                                      display: 'inline-flex', alignItems: 'center', cursor: 'pointer'
+                                    }}
+                                    title="Edit Invoice / Koreksi Transaksi"
+                                  >
+                                    <Edit3 size={13} />
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => setReturnSale(sale)}
+                                    style={{
+                                      background: '#fff7ed', border: '1px solid #fdba74', color: '#c2410c',
+                                      borderRadius: '8px', padding: '5px 7px', fontSize: '11.5px', fontWeight: 700,
+                                      display: 'inline-flex', alignItems: 'center', cursor: 'pointer'
+                                    }}
+                                    title="Retur Barang"
+                                  >
+                                    <RotateCcw size={13} />
+                                  </button>
+
+                                  {(sale.paymentStatus === 'PARTIAL' || sale.paymentStatus === 'UNPAID') && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setPaymentSale(sale)}
+                                      style={{
+                                        background: '#ecfdf5', border: '1px solid #a7f3d0', color: '#059669',
+                                        borderRadius: '8px', padding: '5px 7px', fontSize: '11.5px', fontWeight: 700,
+                                        display: 'inline-flex', alignItems: 'center', cursor: 'pointer'
+                                      }}
+                                      title="Bayar Cicilan / Pelunasan"
+                                    >
+                                      <CreditCard size={13} />
+                                    </button>
+                                  )}
+                                </>
+                              )}
+
                               <button
                                 type="button"
                                 onClick={() => setReprint({ sale, options: { storeName: appName, customerName: sale.customerName, taxEnabled, taxRate } })}
                                 style={{
                                   background: '#f8fafc', border: '1px solid #cbd5e1', color: '#0f172a',
-                                  borderRadius: '8px', padding: '5px 8px', fontSize: '11.5px', fontWeight: 700,
-                                  display: 'inline-flex', alignItems: 'center', gap: '4px', cursor: 'pointer'
+                                  borderRadius: '8px', padding: '5px 7px', fontSize: '11.5px', fontWeight: 700,
+                                  display: 'inline-flex', alignItems: 'center', cursor: 'pointer'
                                 }}
                                 title="Cetak Ulang Struk"
                               >
@@ -2081,12 +2225,35 @@ const Reports: React.FC = () => {
                     }}>
                       {selectedSaleDetail.id}
                     </span>
-                    <span style={{
-                      background: '#dcfce7', color: '#15803d', fontSize: '11px', fontWeight: 800,
-                      padding: '2px 8px', borderRadius: '6px'
-                    }}>
-                      LUNAS
-                    </span>
+                    {selectedSaleDetail.status === 'VOID' ? (
+                      <span style={{
+                        background: '#fee2e2', color: '#dc2626', fontSize: '11px', fontWeight: 800,
+                        padding: '2px 8px', borderRadius: '6px'
+                      }}>
+                        BATAL (VOID)
+                      </span>
+                    ) : selectedSaleDetail.paymentStatus === 'PARTIAL' ? (
+                      <span style={{
+                        background: '#fef3c7', color: '#b45309', fontSize: '11px', fontWeight: 800,
+                        padding: '2px 8px', borderRadius: '6px'
+                      }}>
+                        CICILAN
+                      </span>
+                    ) : selectedSaleDetail.paymentStatus === 'UNPAID' ? (
+                      <span style={{
+                        background: '#fee2e2', color: '#b91c1c', fontSize: '11px', fontWeight: 800,
+                        padding: '2px 8px', borderRadius: '6px'
+                      }}>
+                        TEMPO (BELUM LUNAS)
+                      </span>
+                    ) : (
+                      <span style={{
+                        background: '#dcfce7', color: '#15803d', fontSize: '11px', fontWeight: 800,
+                        padding: '2px 8px', borderRadius: '6px'
+                      }}>
+                        LUNAS
+                      </span>
+                    )}
                   </div>
                   <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#64748b' }}>
                     {new Date(selectedSaleDetail.date).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} • {new Date(selectedSaleDetail.date).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} WIB
@@ -2282,6 +2449,137 @@ const Reports: React.FC = () => {
                 </div>
               </div>
 
+              {/* VOID Banner */}
+              {selectedSaleDetail.status === 'VOID' && (
+                <div style={{
+                  background: '#fee2e2', border: '1.5px solid #fca5a5', borderRadius: '14px', padding: '14px 18px',
+                  display: 'flex', alignItems: 'center', gap: '12px', color: '#991b1b'
+                }}>
+                  <AlertTriangle size={24} color="#dc2626" />
+                  <div>
+                    <div style={{ fontWeight: 800, fontSize: '14px' }}>Transaksi Telah Dibatalkan (VOID)</div>
+                    <div style={{ fontSize: '12px', marginTop: '2px' }}>
+                      {selectedSaleDetail.notes || 'Seluruh item transaksi ini telah dikembalikan ke stok gudang/rak.'}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Wholesale Tempo / Installment Status Card */}
+              {(selectedSaleDetail.paymentStatus === 'PARTIAL' || selectedSaleDetail.paymentStatus === 'UNPAID') && selectedSaleDetail.status !== 'VOID' && (
+                <div style={{
+                  background: '#fffbeb', border: '1.5px solid #fde68a', borderRadius: '14px', padding: '16px',
+                  display: 'flex', flexDirection: 'column', gap: '10px'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Clock size={18} color="#d97706" />
+                      <span style={{ fontSize: '13.5px', fontWeight: 800, color: '#92400e' }}>
+                        Status Pembayaran: {selectedSaleDetail.paymentStatus === 'PARTIAL' ? 'SEBAGIAN / CICILAN' : 'TEMPO / BELUM LUNAS'}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPaymentSale(selectedSaleDetail);
+                        setSelectedSaleDetail(null);
+                      }}
+                      style={{
+                        background: '#059669', color: '#ffffff', border: 'none', borderRadius: '8px',
+                        padding: '6px 14px', fontSize: '12px', fontWeight: 800, cursor: 'pointer',
+                        display: 'inline-flex', alignItems: 'center', gap: '6px'
+                      }}
+                    >
+                      <CreditCard size={14} /> Bayar Cicilan / Pelunasan
+                    </button>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', background: '#ffffff', padding: '10px 14px', borderRadius: '10px', border: '1px solid #fef3c7' }}>
+                    <div>
+                      <div style={{ fontSize: '11px', color: '#64748b' }}>Total Tagihan:</div>
+                      <div style={{ fontSize: '14px', fontWeight: 800, color: '#0f172a' }}>{formatIDR(selectedSaleDetail.total)}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '11px', color: '#64748b' }}>Sudah Dibayar:</div>
+                      <div style={{ fontSize: '14px', fontWeight: 800, color: '#16a34a' }}>{formatIDR(selectedSaleDetail.paidAmount || 0)}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '11px', color: '#b91c1c' }}>Sisa Piutang:</div>
+                      <div style={{ fontSize: '15px', fontWeight: 900, color: '#dc2626' }}>
+                        {formatIDR(selectedSaleDetail.remainingAmount != null ? selectedSaleDetail.remainingAmount : Math.max(0, selectedSaleDetail.total - (selectedSaleDetail.paidAmount || 0)))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {selectedSaleDetail.dueDate && (
+                    <div style={{ fontSize: '12px', color: '#92400e', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Calendar size={13} />
+                      <span>Jatuh Tempo: <strong>{new Date(selectedSaleDetail.dueDate).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</strong></span>
+                    </div>
+                  )}
+                  {selectedSaleDetail.notes && (
+                    <div style={{ fontSize: '11.5px', color: '#78350f', background: '#fef3c7', padding: '6px 10px', borderRadius: '6px' }}>
+                      Catatan: "{selectedSaleDetail.notes}"
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Riwayat Pembayaran Cicilan */}
+              {selectedSaleDetail.payments && selectedSaleDetail.payments.length > 0 && (
+                <div style={{ background: '#f8fafc', borderRadius: '12px', padding: '12px 16px', border: '1px solid #e2e8f0' }}>
+                  <div style={{ fontSize: '12.5px', fontWeight: 800, color: '#334155', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Clock size={14} /> Riwayat Pembayaran Masuk ({selectedSaleDetail.payments.length})
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    {selectedSaleDetail.payments.map((p: any, idx: number) => (
+                      <div key={idx} style={{
+                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                        background: '#ffffff', padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '12px'
+                      }}>
+                        <div>
+                          <span style={{ fontWeight: 700, color: '#0f172a' }}>{new Date(p.payment_date).toLocaleDateString('id-ID')} • {new Date(p.payment_date).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</span>
+                          <span style={{ color: '#64748b', marginLeft: '6px' }}>({p.payment_method})</span>
+                          {p.note && <div style={{ fontSize: '11px', color: '#94a3b8' }}>{p.note}</div>}
+                        </div>
+                        <div style={{ fontWeight: 800, color: '#16a34a' }}>
+                          +{formatIDR(p.amount)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Riwayat Retur Penjualan */}
+              {selectedSaleDetail.returns && selectedSaleDetail.returns.length > 0 && (
+                <div style={{ background: '#fef2f2', borderRadius: '12px', padding: '12px 16px', border: '1px solid #fecaca' }}>
+                  <div style={{ fontSize: '12.5px', fontWeight: 800, color: '#991b1b', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <RotateCcw size={14} /> Riwayat Retur Penjualan ({selectedSaleDetail.returns.length})
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    {selectedSaleDetail.returns.map((ret: any, idx: number) => (
+                      <div key={idx} style={{
+                        background: '#ffffff', padding: '8px 12px', borderRadius: '8px', border: '1px solid #fed7d7', fontSize: '12px'
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontWeight: 700, color: '#0f172a' }}>No. Retur: {ret.return_number}</span>
+                          <span style={{ fontWeight: 800, color: '#dc2626' }}>Refund: -{formatIDR(ret.total_refund)}</span>
+                        </div>
+                        <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                          Alasan: {ret.reason || 'Barang Diretur'} • Metode: {ret.refund_method === 'CASH' ? 'Pengembalian Uang Kas' : 'Potong Tagihan'}
+                        </div>
+                        {ret.items && ret.items.length > 0 && (
+                          <div style={{ marginTop: '4px', fontSize: '11px', color: '#334155', borderTop: '1px dashed #e2e8f0', paddingTop: '4px' }}>
+                            Item diretur: {ret.items.map((i: any) => `${i.quantity}x ${i.product?.name || 'Produk'} (${i.return_to_stock ? 'Masuk Stok' : 'Rusak/Afkir'})`).join(', ')}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Financial Calculation Summary */}
               <div style={{
                 background: '#f8fafc', borderRadius: '14px', padding: '16px',
@@ -2333,20 +2631,92 @@ const Reports: React.FC = () => {
             {/* Modal Footer Actions */}
             <div style={{
               padding: '14px 24px', borderTop: '1px solid #f1f5f9', background: '#fafbfc',
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px'
             }}>
-              <button
-                type="button"
-                onClick={() => setSelectedSaleDetail(null)}
-                style={{
-                  background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '10px',
-                  padding: '9px 18px', fontSize: '13px', fontWeight: 700, color: '#475569', cursor: 'pointer'
-                }}
-              >
-                Tutup
-              </button>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <button
+                  type="button"
+                  onClick={() => setSelectedSaleDetail(null)}
+                  style={{
+                    background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '10px',
+                    padding: '9px 18px', fontSize: '13px', fontWeight: 700, color: '#475569', cursor: 'pointer'
+                  }}
+                >
+                  Tutup
+                </button>
 
-              <div style={{ display: 'flex', gap: '8px' }}>
+                {selectedSaleDetail.status !== 'VOID' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setVoidSaleTarget(selectedSaleDetail);
+                      setSelectedSaleDetail(null);
+                    }}
+                    style={{
+                      background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: '10px',
+                      padding: '9px 14px', fontSize: '12px', fontWeight: 700, color: '#e11d48',
+                      display: 'inline-flex', alignItems: 'center', gap: '5px', cursor: 'pointer'
+                    }}
+                    title="Batalkan transaksi ini dan kembalikan stok"
+                  >
+                    <Trash2 size={13} /> Void Nota
+                  </button>
+                )}
+              </div>
+
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                {selectedSaleDetail.status !== 'VOID' && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingInvoiceSale(selectedSaleDetail);
+                        setSelectedSaleDetail(null);
+                      }}
+                      style={{
+                        background: '#ffffff', border: '1.5px solid #2563eb', borderRadius: '10px',
+                        padding: '9px 15px', fontSize: '13px', fontWeight: 800, color: '#2563eb',
+                        display: 'inline-flex', alignItems: 'center', gap: '6px', cursor: 'pointer'
+                      }}
+                    >
+                      <Edit3 size={14} /> Edit Invoice
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setReturnSale(selectedSaleDetail);
+                        setSelectedSaleDetail(null);
+                      }}
+                      style={{
+                        background: '#fff7ed', border: '1.5px solid #fdba74', borderRadius: '10px',
+                        padding: '9px 15px', fontSize: '13px', fontWeight: 800, color: '#c2410c',
+                        display: 'inline-flex', alignItems: 'center', gap: '6px', cursor: 'pointer'
+                      }}
+                    >
+                      <RotateCcw size={14} /> Retur Barang
+                    </button>
+
+                    {(selectedSaleDetail.paymentStatus === 'PARTIAL' || selectedSaleDetail.paymentStatus === 'UNPAID' || (selectedSaleDetail.remainingAmount && selectedSaleDetail.remainingAmount > 0)) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPaymentSale(selectedSaleDetail);
+                          setSelectedSaleDetail(null);
+                        }}
+                        style={{
+                          background: '#059669', border: 'none', borderRadius: '10px',
+                          padding: '9px 16px', fontSize: '13px', fontWeight: 800, color: '#ffffff',
+                          display: 'inline-flex', alignItems: 'center', gap: '6px', cursor: 'pointer',
+                          boxShadow: '0 2px 4px rgba(5, 150, 105, 0.25)'
+                        }}
+                      >
+                        <CreditCard size={14} /> Bayar Cicilan
+                      </button>
+                    )}
+                  </>
+                )}
+
                 <button
                   type="button"
                   onClick={() => {
@@ -2363,7 +2733,7 @@ const Reports: React.FC = () => {
                     display: 'inline-flex', alignItems: 'center', gap: '6px', cursor: 'pointer'
                   }}
                 >
-                  <Printer size={15} /> Cetak Struk / Invoice
+                  <Printer size={14} /> Cetak Struk
                 </button>
               </div>
             </div>
@@ -2379,6 +2749,50 @@ const Reports: React.FC = () => {
           sale={reprint.sale}
           options={reprint.options}
           onClose={() => setReprint(null)}
+        />
+      )}
+
+      {/* =====================================================================
+          EDIT INVOICE MODAL
+          ===================================================================== */}
+      {editingInvoiceSale && (
+        <EditInvoiceModal
+          sale={editingInvoiceSale}
+          onClose={() => setEditingInvoiceSale(null)}
+          onSuccess={() => fetchSales()}
+        />
+      )}
+
+      {/* =====================================================================
+          SALES RETURN MODAL
+          ===================================================================== */}
+      {returnSale && (
+        <SalesReturnModal
+          sale={returnSale}
+          onClose={() => setReturnSale(null)}
+          onSuccess={() => fetchSales()}
+        />
+      )}
+
+      {/* =====================================================================
+          INSTALLMENT PAYMENT MODAL
+          ===================================================================== */}
+      {paymentSale && (
+        <InstallmentPaymentModal
+          sale={paymentSale}
+          onClose={() => setPaymentSale(null)}
+          onSuccess={() => fetchSales()}
+        />
+      )}
+
+      {/* =====================================================================
+          VOID TRANSACTION MODAL
+          ===================================================================== */}
+      {voidSaleTarget && (
+        <VoidTransactionModal
+          sale={voidSaleTarget}
+          onClose={() => setVoidSaleTarget(null)}
+          onSuccess={() => fetchSales()}
         />
       )}
 

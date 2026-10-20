@@ -133,6 +133,7 @@ model Product {
   transactionItems     TransactionItem[]
   stockTransactionItems StockTransactionItem[]
   variants             ProductVariant[]
+  salesReturnItems     SalesReturnItem[]
 
   @@map("products")
 }
@@ -167,9 +168,16 @@ model Transaction {
   customer_id    String?
   customer_name  String?
   created_at     DateTime @default(now())
+  status         String   @default("COMPLETED") // COMPLETED, VOID
+  payment_status String   @default("PAID") // PAID, PARTIAL, UNPAID
+  paid_amount    Float    @default(0)
+  due_date       DateTime?
+  notes          String?
 
-  tenant Tenant            @relation(fields: [tenant_id], references: [id])
-  items  TransactionItem[]
+  tenant   Tenant               @relation(fields: [tenant_id], references: [id])
+  items    TransactionItem[]
+  payments TransactionPayment[]
+  returns  SalesReturn[]
 
   @@map("transactions")
 }
@@ -230,3 +238,55 @@ model StockTransactionItem {
 
   @@map("stock_transaction_items")
 }
+
+model TransactionPayment {
+  id             String   @id @default(uuid())
+  tenant_id      String
+  transaction_id String
+  amount         Float
+  payment_method String   @default("TUNAI")
+  payment_date   DateTime @default(now())
+  cashier_id     String?
+  cashier_name   String?
+  note           String?
+
+  transaction Transaction @relation(fields: [transaction_id], references: [id], onDelete: Cascade)
+
+  @@map("transaction_payments")
+}
+
+model SalesReturn {
+  id             String   @id @default(uuid())
+  tenant_id      String
+  transaction_id String
+  return_number  String
+  total_refund   Float
+  refund_method  String   @default("CASH") // CASH, POTONG_PIUTANG
+  reason         String?
+  created_at     DateTime @default(now())
+  employee_id    String?
+  employee_name  String?
+
+  transaction Transaction       @relation(fields: [transaction_id], references: [id], onDelete: Cascade)
+  items       SalesReturnItem[]
+
+  @@map("sales_returns")
+}
+
+model SalesReturnItem {
+  id              String  @id @default(uuid())
+  sales_return_id String
+  product_id      String
+  variant_id      String?
+  variant_name    String?
+  quantity        Float
+  refund_price    Float
+  subtotal        Float
+  return_to_stock Boolean @default(true) // true = stok fisik bertambah lagi, false = rusak/afkir
+
+  salesReturn SalesReturn @relation(fields: [sales_return_id], references: [id], onDelete: Cascade)
+  product     Product     @relation(fields: [product_id], references: [id])
+
+  @@map("sales_return_items")
+}
+

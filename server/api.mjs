@@ -701,14 +701,26 @@ app.get('/api/saas/transactions', async (req, res) => {
   try {
     const transactions = await prisma.transaction.findMany({
       where: { tenant_id: req.tenantId },
-      include: { items: { include: { product: true } } },
+      include: { 
+        items: { include: { product: true } },
+        payments: { orderBy: { payment_date: 'asc' } },
+        returns: { include: { items: { include: { product: true } } }, orderBy: { created_at: 'desc' } }
+      },
       orderBy: { created_at: 'desc' }
     });
 
-    const result = transactions.map(t => ({
-      ...t,
-      cashier_name: t.cashier_name || t.cashier_id
-    }));
+    const result = transactions.map(t => {
+      const isPaid = t.payment_status === 'PAID';
+      const paidAmt = (t.paid_amount == null || t.paid_amount === 0) && isPaid ? t.total_amount : Number(t.paid_amount || 0);
+      return {
+        ...t,
+        cashier_name: t.cashier_name || t.cashier_id,
+        status: t.status || 'COMPLETED',
+        payment_status: t.payment_status || 'PAID',
+        paid_amount: paidAmt,
+        remaining_amount: Math.max(0, Number(t.total_amount) - paidAmt)
+      };
+    });
 
     res.json(result);
   } catch (err) {
@@ -718,12 +730,27 @@ app.get('/api/saas/transactions', async (req, res) => {
 
 app.get('/api/saas/transactions/:id', async (req, res) => {
   try {
-    const transaction = await prisma.transaction.findUnique({
-      where: { id: req.params.id, tenant_id: req.tenantId },
-      include: { items: { include: { product: true } } }
+    const transaction = await prisma.transaction.findFirst({
+      where: { 
+        OR: [{ id: req.params.id }, { receipt_number: req.params.id }],
+        tenant_id: req.tenantId 
+      },
+      include: { 
+        items: { include: { product: true } },
+        payments: { orderBy: { payment_date: 'asc' } },
+        returns: { include: { items: { include: { product: true } } }, orderBy: { created_at: 'desc' } }
+      }
     });
     if (!transaction) return res.status(404).json({ error: "Not found" });
-    res.json(transaction);
+    const isPaid = transaction.payment_status === 'PAID';
+    const paidAmt = (transaction.paid_amount == null || transaction.paid_amount === 0) && isPaid ? transaction.total_amount : Number(transaction.paid_amount || 0);
+    res.json({
+      ...transaction,
+      status: transaction.status || 'COMPLETED',
+      payment_status: transaction.payment_status || 'PAID',
+      paid_amount: paidAmt,
+      remaining_amount: Math.max(0, Number(transaction.total_amount) - paidAmt)
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -732,7 +759,20 @@ app.get('/api/saas/transactions/:id', async (req, res) => {
 app.post('/api/saas/transactions', async (req, res) => {
   try {
     const data = req.body;
-    const { receipt_number, total_amount, payment_method, cashier_id, cashier_name, items, customer_id, customer_name } = data;
+    const { 
+      receipt_number, 
+      total_amount, 
+      payment_method, 
+      cashier_id, 
+      cashier_name, 
+      items, 
+      customer_id, 
+      customer_name,
+      payment_status,
+      paid_amount,
+      due_date,
+      notes
+    } = data;
     
     if (!receipt_number) throw new ValidationError('Nomor struk wajib diisi.');
     if (!Array.isArray(items) || items.length === 0) throw new ValidationError('Keranjang kosong.');
@@ -746,6 +786,16 @@ app.post('/api/saas/transactions', async (req, res) => {
     const validCount = await prisma.product.count({ where: { id: { in: productIds }, tenant_id: req.tenantId } });
     if (validCount !== productIds.length) throw new ValidationError('Ada produk di keranjang yang tidak ditemukan. Muat ulang halaman lalu coba lagi.');
 
+    // Status pembayaran (PAID, PARTIAL, UNPAID)
+    const isTempo = payment_method === 'TEMPO' || payment_method === 'CICILAN';
+    const effPaidAmount = paid_amount != null ? Number(paid_amount) : (isTempo ? 0 : Number(total_amount));
+    let effPaymentStatus = payment_status;
+    if (!effPaymentStatus) {
+      if (effPaidAmount >= Number(total_amount)) effPaymentStatus = 'PAID';
+      else if (effPaidAmount > 0) effPaymentStatus = 'PARTIAL';
+      else effPaymentStatus = 'UNPAID';
+    }
+
     const transaction = await prisma.$transaction(async (tx) => {
       // 1. Buat Header Transaksi
       const newTx = await tx.transaction.create({
@@ -757,9 +807,29 @@ app.post('/api/saas/transactions', async (req, res) => {
           total_amount: Number(total_amount),
           payment_method,
           customer_id: customer_id || null,
-          customer_name: customer_name || null
+          customer_name: customer_name || null,
+          status: 'COMPLETED',
+          payment_status: effPaymentStatus,
+          paid_amount: effPaidAmount,
+          due_date: due_date ? new Date(due_date) : null,
+          notes: notes || null
         }
       });
+
+      // Jika ada uang yang sudah dibayar (tunai/DP), catat di riwayat pembayaran
+      if (effPaidAmount > 0) {
+        await tx.transactionPayment.create({
+          data: {
+            tenant_id: req.tenantId,
+            transaction_id: newTx.id,
+            amount: effPaidAmount,
+            payment_method: payment_method || 'TUNAI',
+            cashier_id: cashier_id || 'cashier-1',
+            cashier_name: cashier_name || 'Kasir',
+            note: effPaymentStatus === 'PAID' ? 'Pembayaran Lunas Saat Transaksi' : 'Uang Muka (DP) Transaksi'
+          }
+        });
+      }
 
       // 2. Masukkan Item Transaksi & Mutasi Stok (Atomic)
       const stockMutation = await tx.stockTransaction.create({
@@ -769,7 +839,7 @@ app.post('/api/saas/transactions', async (req, res) => {
           document_no: receipt_number,
           employee_id: cashier_id || 'cashier-1',
           total_value: Number(total_amount),
-          note: 'Penjualan Kasir',
+          note: isTempo ? 'Penjualan Tempo / Grosir' : 'Penjualan Kasir',
           customer_id: customer_id || null,
           customer_name: customer_name || null
         }
@@ -851,9 +921,9 @@ app.post('/api/saas/transactions', async (req, res) => {
 
     notifyTenant(req.tenantId, 'transactions');
     notifyTenant(req.tenantId, 'sales');
-    notifyTenant(req.tenantId, 'products'); // Because stock changed
-    notifyTenant(req.tenantId, 'stock-transactions'); // Mutasi stok otomatis ter-update
-    notifyTenant(req.tenantId, 'customers'); // Pelanggan orders re-sync otomatis
+    notifyTenant(req.tenantId, 'products');
+    notifyTenant(req.tenantId, 'stock-transactions');
+    notifyTenant(req.tenantId, 'customers');
 
     // Explicit notification for incoming sale & stock mutation
     const io = getIo();
@@ -870,7 +940,7 @@ app.post('/api/saas/transactions', async (req, res) => {
         type: 'OUT',
         documentNo: receipt_number,
         totalValue: Number(total_amount),
-        note: 'Penjualan Kasir'
+        note: isTempo ? 'Penjualan Tempo / Grosir' : 'Penjualan Kasir'
       });
       io.to(req.tenantId).emit('customer_orders_updated', {
         customerId: customer_id || null,
@@ -882,6 +952,484 @@ app.post('/api/saas/transactions', async (req, res) => {
     res.json(transaction);
   } catch (err) {
     sendError(res, err);
+  }
+});
+
+// ==========================================
+// EDIT TRANSAKSI / INVOICE SELESAI
+// Mengoreksi data transaksi, customer, metode bayar, & item dengan penyesuaian stok otomatis
+// ==========================================
+app.put('/api/saas/transactions/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { 
+      customer_id, 
+      customer_name, 
+      payment_method, 
+      payment_status, 
+      paid_amount, 
+      due_date, 
+      notes, 
+      items 
+    } = req.body;
+
+    const existingTx = await prisma.transaction.findFirst({
+      where: { 
+        OR: [{ id }, { receipt_number: id }],
+        tenant_id: req.tenantId 
+      },
+      include: { items: true, payments: true }
+    });
+
+    if (!existingTx) return res.status(404).json({ error: 'Transaksi tidak ditemukan.' });
+    if (existingTx.status === 'VOID') return res.status(400).json({ error: 'Transaksi yang sudah VOID tidak dapat diedit.' });
+
+    const updatedTx = await prisma.$transaction(async (tx) => {
+      let newTotalAmount = existingTx.total_amount;
+
+      // Jika items dikirim untuk diupdate
+      if (Array.isArray(items) && items.length > 0) {
+        // Map item lama berdasarkan product_id + variant_id
+        const oldItemsMap = new Map();
+        for (const it of existingTx.items) {
+          const key = `${it.product_id}_${it.variant_id || 'none'}`;
+          oldItemsMap.set(key, (oldItemsMap.get(key) || 0) + Number(it.quantity));
+        }
+
+        // Map item baru
+        const newItemsMap = new Map();
+        let calcTotal = 0;
+        for (const it of items) {
+          const key = `${it.product_id || it.productId}_${it.variant_id || it.variantId || 'none'}`;
+          const qty = round3(it.quantity || it.qty || 1);
+          newItemsMap.set(key, (newItemsMap.get(key) || 0) + qty);
+          const price = Number(it.price || it.price_at_time || 0);
+          calcTotal += (price * qty);
+        }
+        newTotalAmount = calcTotal;
+
+        // Hitung selisih stok untuk setiap produk/varian
+        const allKeys = new Set([...oldItemsMap.keys(), ...newItemsMap.keys()]);
+        for (const key of allKeys) {
+          const [productId, variantIdStr] = key.split('_');
+          const variantId = variantIdStr === 'none' ? null : variantIdStr;
+          const oldQty = oldItemsMap.get(key) || 0;
+          const newQty = newItemsMap.get(key) || 0;
+          const diff = newQty - oldQty; // jika > 0 maka stok berkurang, jika < 0 maka stok bertambah
+
+          if (diff !== 0) {
+            if (variantId) {
+              await tx.productVariant.update({
+                where: { id: variantId },
+                data: { stock: { decrement: round3(diff) } }
+              });
+            }
+            await tx.product.update({
+              where: { id: productId, tenant_id: req.tenantId },
+              data: { stock: { decrement: round3(diff) } }
+            });
+          }
+        }
+
+        // Catat mutasi penyesuaian stok koreksi invoice
+        const adj = await tx.stockTransaction.create({
+          data: {
+            tenant_id: req.tenantId,
+            type: 'ADJUSTMENT',
+            document_no: existingTx.receipt_number,
+            employee_id: existingTx.cashier_id,
+            total_value: newTotalAmount,
+            note: `Koreksi / Edit Invoice ${existingTx.receipt_number}`,
+            customer_id: customer_id !== undefined ? customer_id : existingTx.customer_id,
+            customer_name: customer_name !== undefined ? customer_name : existingTx.customer_name
+          }
+        });
+
+        // Hapus item lama dan masukkan item baru
+        await tx.transactionItem.deleteMany({ where: { transaction_id: existingTx.id } });
+        for (const item of items) {
+          const pId = item.product_id || item.productId;
+          const vId = item.variant_id || item.variantId || null;
+          const vName = item.variant_name || item.variantName || null;
+          const qty = round3(item.quantity || item.qty);
+          const price = Number(item.price || item.price_at_time || 0);
+          const subtotal = Number(item.subtotal || price * qty);
+          const origPrice = item.original_price != null ? Number(item.original_price) : (item.originalPrice != null ? Number(item.originalPrice) : price);
+          const isSpecial = Boolean(item.is_custom_price || item.isCustomPrice);
+          const note = item.custom_price_note || item.customPriceNote || (isSpecial ? 'Harga Khusus' : null);
+
+          await tx.transactionItem.create({
+            data: {
+              transaction_id: existingTx.id,
+              product_id: pId,
+              quantity: qty,
+              price_at_time: price,
+              subtotal,
+              variant_id: vId,
+              variant_name: vName,
+              original_price: origPrice,
+              is_custom_price: isSpecial,
+              custom_price_note: note
+            }
+          });
+
+          await tx.stockTransactionItem.create({
+            data: {
+              stock_transaction_id: adj.id,
+              product_id: pId,
+              qty: qty,
+              purchase_price: price,
+              subtotal,
+              variant_id: vId,
+              variant_name: vName
+            }
+          });
+        }
+      }
+
+      // Update Header Transaksi
+      let finalPaid = paid_amount !== undefined ? Number(paid_amount) : existingTx.paid_amount;
+      let finalStatus = payment_status || existingTx.payment_status;
+      if (finalStatus === 'PAID') {
+        finalPaid = newTotalAmount;
+      } else if (finalPaid >= newTotalAmount) {
+        finalStatus = 'PAID';
+      }
+
+      const txUpdated = await tx.transaction.update({
+        where: { id: existingTx.id },
+        data: {
+          customer_id: customer_id !== undefined ? customer_id : existingTx.customer_id,
+          customer_name: customer_name !== undefined ? customer_name : existingTx.customer_name,
+          payment_method: payment_method || existingTx.payment_method,
+          payment_status: finalStatus,
+          paid_amount: finalPaid,
+          due_date: due_date !== undefined ? (due_date ? new Date(due_date) : null) : existingTx.due_date,
+          notes: notes !== undefined ? notes : existingTx.notes,
+          total_amount: newTotalAmount
+        },
+        include: {
+          items: { include: { product: true } },
+          payments: { orderBy: { payment_date: 'asc' } },
+          returns: { include: { items: { include: { product: true } } } }
+        }
+      });
+
+      return txUpdated;
+    });
+
+    notifyTenant(req.tenantId, 'transactions');
+    notifyTenant(req.tenantId, 'sales');
+    notifyTenant(req.tenantId, 'products');
+    notifyTenant(req.tenantId, 'stock-transactions');
+    notifyTenant(req.tenantId, 'customers');
+
+    res.json(updatedTx);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// CATAT PEMBAYARAN CICILAN / PELUNASAN (GROSIR / TEMPO)
+// ==========================================
+app.post('/api/saas/transactions/:id/payments', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { amount, payment_method, cashier_id, cashier_name, note } = req.body;
+    const payAmt = Number(amount);
+    if (!Number.isFinite(payAmt) || payAmt <= 0) {
+      throw new ValidationError('Nominal pembayaran cicilan harus lebih dari 0.');
+    }
+
+    const txRecord = await prisma.transaction.findFirst({
+      where: {
+        OR: [{ id }, { receipt_number: id }],
+        tenant_id: req.tenantId
+      }
+    });
+    if (!txRecord) return res.status(404).json({ error: 'Transaksi tidak ditemukan.' });
+
+    const result = await prisma.$transaction(async (tx) => {
+      const payment = await tx.transactionPayment.create({
+        data: {
+          tenant_id: req.tenantId,
+          transaction_id: txRecord.id,
+          amount: payAmt,
+          payment_method: payment_method || 'TUNAI',
+          cashier_id: cashier_id || 'cashier-1',
+          cashier_name: cashier_name || 'Kasir',
+          note: note || 'Pembayaran Cicilan'
+        }
+      });
+
+      const newPaidAmount = round3(Number(txRecord.paid_amount || 0) + payAmt);
+      const isLunas = newPaidAmount >= txRecord.total_amount;
+      const newStatus = isLunas ? 'PAID' : 'PARTIAL';
+
+      const updated = await tx.transaction.update({
+        where: { id: txRecord.id },
+        data: {
+          paid_amount: newPaidAmount,
+          payment_status: newStatus
+        },
+        include: {
+          items: { include: { product: true } },
+          payments: { orderBy: { payment_date: 'asc' } },
+          returns: { include: { items: { include: { product: true } } } }
+        }
+      });
+
+      return { payment, transaction: updated };
+    });
+
+    notifyTenant(req.tenantId, 'transactions');
+    notifyTenant(req.tenantId, 'sales');
+    notifyTenant(req.tenantId, 'customers');
+
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// RETUR PENJUALAN / PENGEMBALIAN BARANG
+// Mengembalikan stok fisik ke master produk & mencatat refund kas / potong piutang
+// ==========================================
+app.post('/api/saas/transactions/:id/returns', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { items, refund_method, reason, employee_id, employee_name } = req.body;
+    if (!Array.isArray(items) || items.length === 0) {
+      throw new ValidationError('Pilih minimal 1 item yang akan diretur.');
+    }
+
+    const txRecord = await prisma.transaction.findFirst({
+      where: {
+        OR: [{ id }, { receipt_number: id }],
+        tenant_id: req.tenantId
+      },
+      include: { items: true }
+    });
+    if (!txRecord) return res.status(404).json({ error: 'Transaksi tidak ditemukan.' });
+
+    const returnNumber = 'RET-' + Date.now();
+
+    const returnResult = await prisma.$transaction(async (tx) => {
+      let totalRefund = 0;
+      for (const it of items) {
+        const qty = round3(it.quantity || it.qty || 1);
+        const price = Number(it.refund_price || it.price || 0);
+        totalRefund += (qty * price);
+      }
+
+      // Buat Master Retur
+      const salesReturn = await tx.salesReturn.create({
+        data: {
+          tenant_id: req.tenantId,
+          transaction_id: txRecord.id,
+          return_number: returnNumber,
+          total_refund: totalRefund,
+          refund_method: refund_method || 'CASH',
+          reason: reason || 'Retur Barang',
+          employee_id: employee_id || 'cashier-1',
+          employee_name: employee_name || 'Kasir'
+        }
+      });
+
+      // Proses per item retur
+      for (const it of items) {
+        const pId = it.product_id || it.productId;
+        const vId = it.variant_id || it.variantId || null;
+        const vName = it.variant_name || it.variantName || null;
+        const qty = round3(it.quantity || it.qty || 1);
+        const price = Number(it.refund_price || it.price || 0);
+        const returnToStock = it.return_to_stock !== false;
+
+        await tx.salesReturnItem.create({
+          data: {
+            sales_return_id: salesReturn.id,
+            product_id: pId,
+            variant_id: vId,
+            variant_name: vName,
+            quantity: qty,
+            refund_price: price,
+            subtotal: qty * price,
+            return_to_stock: returnToStock
+          }
+        });
+
+        // Kembalikan ke stok jika kondisi layak jual (return_to_stock = true)
+        if (returnToStock) {
+          if (vId) {
+            await tx.productVariant.update({
+              where: { id: vId },
+              data: { stock: { increment: qty } }
+            });
+          }
+          await tx.product.update({
+            where: { id: pId, tenant_id: req.tenantId },
+            data: { stock: { increment: qty } }
+          });
+
+          // Catat mutasi stok IN
+          const st = await tx.stockTransaction.create({
+            data: {
+              tenant_id: req.tenantId,
+              type: 'IN',
+              document_no: returnNumber,
+              employee_id: employee_id || 'cashier-1',
+              total_value: qty * price,
+              note: `Retur Penjualan Nota ${txRecord.receipt_number}: ${reason || 'Barang Kembali ke Stok'}`,
+              customer_id: txRecord.customer_id,
+              customer_name: txRecord.customer_name
+            }
+          });
+
+          await tx.stockTransactionItem.create({
+            data: {
+              stock_transaction_id: st.id,
+              product_id: pId,
+              qty: qty,
+              purchase_price: price,
+              subtotal: qty * price,
+              variant_id: vId,
+              variant_name: vName
+            }
+          });
+        }
+      }
+
+      // Jika potong piutang (untuk penjualan tempo / belum lunas)
+      let updatedTx = txRecord;
+      if (refund_method === 'POTONG_PIUTANG') {
+        const newTotal = Math.max(0, round3(txRecord.total_amount - totalRefund));
+        const newStatus = (txRecord.paid_amount >= newTotal) ? 'PAID' : txRecord.payment_status;
+        updatedTx = await tx.transaction.update({
+          where: { id: txRecord.id },
+          data: {
+            total_amount: newTotal,
+            payment_status: newStatus
+          },
+          include: {
+            items: { include: { product: true } },
+            payments: { orderBy: { payment_date: 'asc' } },
+            returns: { include: { items: { include: { product: true } } } }
+          }
+        });
+      } else {
+        updatedTx = await tx.transaction.findUnique({
+          where: { id: txRecord.id },
+          include: {
+            items: { include: { product: true } },
+            payments: { orderBy: { payment_date: 'asc' } },
+            returns: { include: { items: { include: { product: true } } } }
+          }
+        });
+      }
+
+      return { returnRecord: salesReturn, transaction: updatedTx };
+    });
+
+    notifyTenant(req.tenantId, 'transactions');
+    notifyTenant(req.tenantId, 'sales');
+    notifyTenant(req.tenantId, 'products');
+    notifyTenant(req.tenantId, 'stock-transactions');
+    notifyTenant(req.tenantId, 'customers');
+
+    res.json(returnResult);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// BATALKAN / VOID TRANSAKSI
+// ==========================================
+app.post('/api/saas/transactions/:id/void', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason, employee_id, employee_name } = req.body;
+
+    const txRecord = await prisma.transaction.findFirst({
+      where: {
+        OR: [{ id }, { receipt_number: id }],
+        tenant_id: req.tenantId
+      },
+      include: { items: true }
+    });
+    if (!txRecord) return res.status(404).json({ error: 'Transaksi tidak ditemukan.' });
+    if (txRecord.status === 'VOID') return res.status(400).json({ error: 'Transaksi ini sudah dibatalkan sebelumnya.' });
+
+    const result = await prisma.$transaction(async (tx) => {
+      // Kembalikan semua stok barang
+      for (const it of txRecord.items) {
+        if (it.variant_id) {
+          await tx.productVariant.update({
+            where: { id: it.variant_id },
+            data: { stock: { increment: Number(it.quantity) } }
+          });
+        }
+        await tx.product.update({
+          where: { id: it.product_id, tenant_id: req.tenantId },
+          data: { stock: { increment: Number(it.quantity) } }
+        });
+      }
+
+      // Catat mutasi IN (Batal Penjualan)
+      const st = await tx.stockTransaction.create({
+        data: {
+          tenant_id: req.tenantId,
+          type: 'IN',
+          document_no: 'VOID-' + txRecord.receipt_number,
+          employee_id: employee_id || 'cashier-1',
+          total_value: txRecord.total_amount,
+          note: `Pembatalan (VOID) Transaksi ${txRecord.receipt_number}: ${reason || 'Salah Input Kasir'}`,
+          customer_id: txRecord.customer_id,
+          customer_name: txRecord.customer_name
+        }
+      });
+
+      for (const it of txRecord.items) {
+        await tx.stockTransactionItem.create({
+          data: {
+            stock_transaction_id: st.id,
+            product_id: it.product_id,
+            qty: it.quantity,
+            purchase_price: it.price_at_time,
+            subtotal: it.subtotal,
+            variant_id: it.variant_id,
+            variant_name: it.variant_name
+          }
+        });
+      }
+
+      const updated = await tx.transaction.update({
+        where: { id: txRecord.id },
+        data: {
+          status: 'VOID',
+          notes: (txRecord.notes ? txRecord.notes + ' | ' : '') + `DIBATALKAN (VOID): ${reason || 'Salah input kasir'}`
+        },
+        include: {
+          items: { include: { product: true } },
+          payments: true,
+          returns: true
+        }
+      });
+
+      return updated;
+    });
+
+    notifyTenant(req.tenantId, 'transactions');
+    notifyTenant(req.tenantId, 'sales');
+    notifyTenant(req.tenantId, 'products');
+    notifyTenant(req.tenantId, 'stock-transactions');
+    notifyTenant(req.tenantId, 'customers');
+
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

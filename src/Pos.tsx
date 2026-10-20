@@ -4,7 +4,8 @@ import {
   CreditCard, QrCode, Banknote, Ticket, Trash2, PauseCircle,
   LayoutGrid, Plus, Minus, X, LogOut, Camera, ChevronUp, Settings2,
   Grid, List, Tag, Edit3, Check,
-  AlertCircle, RefreshCw, ChevronDown, CheckCircle2, Layers
+  AlertCircle, RefreshCw, ChevronDown, CheckCircle2, Layers,
+  Clock
 } from 'lucide-react';
 import './index.css';
 import { useNavigate, Link } from 'react-router-dom';
@@ -133,6 +134,19 @@ function App() {
   const [tenderedStr, setTenderedStr] = useState('');
   const [holdListOpen, setHoldListOpen] = useState(false);
   const [orderCounter, setOrderCounter] = useState(52);
+
+  // Wholesale / Tempo State
+  const [tempoType, setTempoType] = useState<'ZERO_DP' | 'DP'>('ZERO_DP');
+  const [tempoDpStr, setTempoDpStr] = useState<string>('');
+  const [tempoDueDate, setTempoDueDate] = useState<string>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 7);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  });
+  const [tempoNotes, setTempoNotes] = useState<string>('Pelunasan saat barang sampai');
   
   // Weight Popup State
   const [weightPopupOpen, setWeightPopupOpen] = useState(false);
@@ -1717,7 +1731,7 @@ function App() {
               <span className="grand-total-value">{formatIDR(total)}</span>
             </div>
 
-            <div className="payment-methods">
+            <div className="payment-methods" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
               <button className={`method-btn ${paymentMethod === 'TUNAI' ? 'active' : ''}`} onClick={() => { setPaymentMethod('TUNAI'); setPaymentPopupOpen(true); }}>
                 <Banknote /> TUNAI
               </button>
@@ -1729,6 +1743,9 @@ function App() {
               </button>
               <button className={`method-btn ${paymentMethod === 'KUPON' ? 'active' : ''}`} onClick={() => { setPaymentMethod('KUPON'); setPaymentPopupOpen(true); }}>
                 <Ticket /> KUPON
+              </button>
+              <button className={`method-btn ${paymentMethod === 'TEMPO' ? 'active' : ''}`} onClick={() => { setPaymentMethod('TEMPO'); setPaymentPopupOpen(true); }}>
+                <Clock /> TEMPO (GROSIR)
               </button>
             </div>
 
@@ -1779,52 +1796,227 @@ function App() {
       {/* PAYMENT MODAL POPUP */}
       {paymentPopupOpen && (
         <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
-          <div className="modal-content pay-modal" style={{ backgroundColor: 'white', borderRadius: '16px', padding: '32px', width: '500px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-              <h3 style={{ fontSize: '24px', fontWeight: 'bold', margin: 0 }}>Pembayaran</h3>
-              <button onClick={() => setPaymentPopupOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={28} color="#666" /></button>
-            </div>
-
-            <div style={{ backgroundColor: '#f9fafb', padding: '20px', borderRadius: '12px', marginBottom: '24px', textAlign: 'center' }}>
-              <div style={{ fontSize: '14px', color: '#666', marginBottom: '4px' }}>TOTAL TAGIHAN</div>
-              <div style={{ fontSize: '32px', fontWeight: 'bold', color: 'var(--primary)' }}>{formatIDR(total)}</div>
-            </div>
-
-            <div className="quick-cash" style={{ marginBottom: '16px' }}>
-              <button className="qcash-btn highlight" onClick={() => setTenderedStr(total.toString())}>UANG PAS</button>
-              <button className="qcash-btn" onClick={() => setTenderedStr('160000')}>160.000</button>
-              <button className="qcash-btn" onClick={() => setTenderedStr('170000')}>170.000</button>
-              <button className="qcash-btn" onClick={() => setTenderedStr('200000')}>200.000</button>
-            </div>
-
-            <div className="numpad-area" style={{ marginBottom: '24px' }}>
-              <div className="numpad">
-                {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(num => (
-                  <button key={num} className="num-btn" onClick={() => handleNumpad(num.toString())}>{num}</button>
-                ))}
-                <button className="num-btn red" onClick={() => handleNumpad('C')}>C</button>
-                <button className="num-btn" onClick={() => handleNumpad('0')}>0</button>
-                <button className="num-btn" onClick={() => handleNumpad('000')}>000</button>
-              </div>
-              <div className="amounts-display">
-                <div className="amount-box">
-                  <div className="amount-label text-muted">UANG DITERIMA</div>
-                  <div className="amount-value" style={{ fontSize: '20px' }}>{tendered ? formatIDR(tendered) : '-'}</div>
-                </div>
-                <div className={`amount-box ${change >= 0 && tendered > 0 ? 'green' : ''}`}>
-                  <div className="amount-label">KEMBALIAN</div>
-                  <div className="amount-value" style={{ fontSize: '20px' }}>{change >= 0 && tendered > 0 ? formatIDR(change) : '-'}</div>
+          <div className="modal-content pay-modal" style={{ backgroundColor: 'white', borderRadius: '16px', padding: '28px', width: '520px', maxWidth: '95vw', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <div>
+                <h3 style={{ fontSize: '22px', fontWeight: 'bold', margin: 0, color: '#0f172a' }}>
+                  {paymentMethod === 'TEMPO' ? 'Pembayaran Tempo / Grosir' : 'Pembayaran Kasir'}
+                </h3>
+                <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
+                  Metode: <strong style={{ color: paymentMethod === 'TEMPO' ? '#d97706' : '#2563eb' }}>{paymentMethod}</strong>
                 </div>
               </div>
+              <button onClick={() => setPaymentPopupOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={26} color="#666" /></button>
             </div>
+
+            <div style={{ backgroundColor: '#f9fafb', padding: '16px', borderRadius: '12px', marginBottom: '20px', textAlign: 'center' }}>
+              <div style={{ fontSize: '13px', color: '#666', marginBottom: '2px' }}>TOTAL TAGIHAN</div>
+              <div style={{ fontSize: '30px', fontWeight: 'bold', color: 'var(--primary)' }}>{formatIDR(total)}</div>
+            </div>
+
+            {/* JIKA PEMBAYARAN TEMPO / CICILAN GROSIR */}
+            {paymentMethod === 'TEMPO' ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '20px' }}>
+                {/* Customer indicator / Selector */}
+                <div style={{
+                  background: selectedCustomer ? '#ecfdf5' : '#fffbeb',
+                  border: selectedCustomer ? '1px solid #a7f3d0' : '1px solid #fde68a',
+                  borderRadius: '12px', padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                }}>
+                  <div>
+                    <div style={{ fontSize: '11px', color: selectedCustomer ? '#065f46' : '#92400e', fontWeight: 700 }}>
+                      {selectedCustomer ? 'Pelanggan Grosir Terpilih:' : '⚠️ Rekomendasi Kasir:'}
+                    </div>
+                    <div style={{ fontSize: '13px', fontWeight: 800, color: selectedCustomer ? '#065f46' : '#b45309' }}>
+                      {selectedCustomer ? `${selectedCustomer.name} (${selectedCustomer.phone || 'Tanpa No. HP'})` : 'Pilih Pelanggan agar piutang tercatat rapi'}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setCustomerSelectPopupOpen(true)}
+                    style={{
+                      background: '#ffffff', border: '1px solid #cbd5e1', padding: '5px 12px',
+                      borderRadius: '8px', fontSize: '11.5px', fontWeight: 700, color: '#334155', cursor: 'pointer'
+                    }}
+                  >
+                    {selectedCustomer ? 'Ganti' : 'Pilih Pelanggan'}
+                  </button>
+                </div>
+
+                {/* Skema DP vs 0 DP */}
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                    Skema Pembayaran Tempo:
+                  </label>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                    <button
+                      type="button"
+                      onClick={() => { setTempoType('ZERO_DP'); setTempoDpStr('0'); }}
+                      style={{
+                        padding: '10px', borderRadius: '10px', fontSize: '12px', fontWeight: 800,
+                        border: tempoType === 'ZERO_DP' ? '2px solid #2563eb' : '1px solid #cbd5e1',
+                        background: tempoType === 'ZERO_DP' ? '#eff6ff' : '#ffffff',
+                        color: tempoType === 'ZERO_DP' ? '#2563eb' : '#475569',
+                        cursor: 'pointer', textAlign: 'center'
+                      }}
+                    >
+                      📦 Bayar Saat Barang Tiba (DP Rp 0)
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => { setTempoType('DP'); setTempoDpStr(Math.round(total * 0.3).toString()); }}
+                      style={{
+                        padding: '10px', borderRadius: '10px', fontSize: '12px', fontWeight: 800,
+                        border: tempoType === 'DP' ? '2px solid #059669' : '1px solid #cbd5e1',
+                        background: tempoType === 'DP' ? '#ecfdf5' : '#ffffff',
+                        color: tempoType === 'DP' ? '#059669' : '#475569',
+                        cursor: 'pointer', textAlign: 'center'
+                      }}
+                    >
+                      💵 Uang Muka / DP Sebagian
+                    </button>
+                  </div>
+                </div>
+
+                {/* Input DP jika mode DP */}
+                {tempoType === 'DP' && (
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                      <label style={{ fontSize: '12px', fontWeight: 700, color: '#334155' }}>
+                        Nominal Uang Muka (DP Diterima Sekarang):
+                      </label>
+                      <div style={{ display: 'flex', gap: '4px' }}>
+                        {[10, 25, 50].map(pct => (
+                          <button
+                            key={pct}
+                            type="button"
+                            onClick={() => setTempoDpStr(Math.round(total * (pct / 100)).toString())}
+                            style={{
+                              background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '6px',
+                              padding: '2px 8px', fontSize: '11px', fontWeight: 700, color: '#475569', cursor: 'pointer'
+                            }}
+                          >
+                            {pct}%
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <input
+                      type="number"
+                      value={tempoDpStr}
+                      onChange={e => setTempoDpStr(e.target.value)}
+                      placeholder="Masukkan jumlah DP..."
+                      style={{
+                        width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1.5px solid #059669',
+                        fontSize: '16px', fontWeight: 800, color: '#0f172a'
+                      }}
+                    />
+                  </div>
+                )}
+
+                {/* Ringkasan Piutang */}
+                {(() => {
+                  const dpAmt = tempoType === 'ZERO_DP' ? 0 : (parseFloat(tempoDpStr) || 0);
+                  const remainingDebt = Math.max(0, total - dpAmt);
+                  return (
+                    <div style={{
+                      background: '#f8fafc', borderRadius: '12px', padding: '12px 16px',
+                      border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '6px'
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12.5px', color: '#64748b' }}>
+                        <span>Total Nilai Belanja:</span>
+                        <span style={{ fontWeight: 800, color: '#0f172a' }}>{formatIDR(total)}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12.5px', color: '#64748b' }}>
+                        <span>Uang Muka (DP) Sekarang:</span>
+                        <span style={{ fontWeight: 800, color: '#16a34a' }}>{formatIDR(dpAmt)}</span>
+                      </div>
+                      <div style={{
+                        display: 'flex', justifyContent: 'space-between', fontSize: '14px',
+                        borderTop: '1px solid #e2e8f0', paddingTop: '6px', marginTop: '2px'
+                      }}>
+                        <span style={{ fontWeight: 800, color: '#b91c1c' }}>Sisa Piutang Tempo:</span>
+                        <span style={{ fontWeight: 900, color: '#dc2626', fontSize: '16px' }}>{formatIDR(remainingDebt)}</span>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Jatuh Tempo & Catatan */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 700, color: '#475569', marginBottom: '4px' }}>
+                      Jatuh Tempo:
+                    </label>
+                    <input
+                      type="date"
+                      value={tempoDueDate}
+                      onChange={e => setTempoDueDate(e.target.value)}
+                      style={{ width: '100%', padding: '8px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '12px' }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 700, color: '#475569', marginBottom: '4px' }}>
+                      Catatan Pengiriman / Invoice:
+                    </label>
+                    <input
+                      type="text"
+                      value={tempoNotes}
+                      onChange={e => setTempoNotes(e.target.value)}
+                      placeholder="Mis: Pelunasan saat barang tiba..."
+                      style={{ width: '100%', padding: '8px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '12px' }}
+                    />
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* REGULAR CASH / QRIS / EDC NUMPAD */
+              <>
+                <div className="quick-cash" style={{ marginBottom: '16px' }}>
+                  <button className="qcash-btn highlight" onClick={() => setTenderedStr(total.toString())}>UANG PAS</button>
+                  <button className="qcash-btn" onClick={() => setTenderedStr('160000')}>160.000</button>
+                  <button className="qcash-btn" onClick={() => setTenderedStr('170000')}>170.000</button>
+                  <button className="qcash-btn" onClick={() => setTenderedStr('200000')}>200.000</button>
+                </div>
+
+                <div className="numpad-area" style={{ marginBottom: '24px' }}>
+                  <div className="numpad">
+                    {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(num => (
+                      <button key={num} className="num-btn" onClick={() => handleNumpad(num.toString())}>{num}</button>
+                    ))}
+                    <button className="num-btn red" onClick={() => handleNumpad('C')}>C</button>
+                    <button className="num-btn" onClick={() => handleNumpad('0')}>0</button>
+                    <button className="num-btn" onClick={() => handleNumpad('000')}>000</button>
+                  </div>
+                  <div className="amounts-display">
+                    <div className="amount-box">
+                      <div className="amount-label text-muted">UANG DITERIMA</div>
+                      <div className="amount-value" style={{ fontSize: '20px' }}>{tendered ? formatIDR(tendered) : '-'}</div>
+                    </div>
+                    <div className={`amount-box ${change >= 0 && tendered > 0 ? 'green' : ''}`}>
+                      <div className="amount-label">KEMBALIAN</div>
+                      <div className="amount-value" style={{ fontSize: '20px' }}>{change >= 0 && tendered > 0 ? formatIDR(change) : '-'}</div>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
 
             <button 
-              className={`checkout-btn ${tendered < total && paymentMethod === 'TUNAI' ? 'disabled' : ''}`}
-              disabled={tendered < total && paymentMethod === 'TUNAI'}
+              className={`checkout-btn ${(tendered < total && paymentMethod === 'TUNAI') || (paymentMethod === 'TEMPO' && tempoType === 'DP' && (parseFloat(tempoDpStr) || 0) <= 0) ? 'disabled' : ''}`}
+              disabled={(tendered < total && paymentMethod === 'TUNAI') || (paymentMethod === 'TEMPO' && tempoType === 'DP' && (parseFloat(tempoDpStr) || 0) <= 0)}
               onClick={async () => {
                 const retailCustomer = customers.find(c => (c.name || '').trim().toLowerCase() === 'retail');
                 const effectiveCustomer = selectedCustomer || retailCustomer;
                 const saleId = 'INV-' + Date.now();
+
+                const isTempo = paymentMethod === 'TEMPO';
+                const dpNum = isTempo ? (tempoType === 'ZERO_DP' ? 0 : (parseFloat(tempoDpStr) || 0)) : (tendered || total);
+                const effPaymentStatus = isTempo ? (dpNum >= total ? 'PAID' : (dpNum > 0 ? 'PARTIAL' : 'UNPAID')) : 'PAID';
+                const effPaidAmount = isTempo ? dpNum : total;
+                const effRemaining = isTempo ? Math.max(0, total - dpNum) : 0;
 
                 // Catat orderan ke data pelanggan jika ada pelanggan terpilih atau pesanan retail
                 if (effectiveCustomer) {
@@ -1849,7 +2041,7 @@ function App() {
                 }
 
                 // Add to Global Sales
-                const sale = {
+                const sale: SalesTransaction = {
                   id: saleId,
                   date: new Date().toISOString(),
                   total: total,
@@ -1857,9 +2049,14 @@ function App() {
                   tax: tax,
                   rounding: rounding,
                   paymentMethod: paymentMethod,
-                  tendered: tendered,
-                  change: change,
-                  customerId: effectiveCustomer?.id || null,
+                  paymentStatus: effPaymentStatus,
+                  paidAmount: effPaidAmount,
+                  remainingAmount: effRemaining,
+                  dueDate: isTempo ? tempoDueDate : undefined,
+                  notes: isTempo ? tempoNotes : undefined,
+                  tendered: isTempo ? dpNum : tendered,
+                  change: isTempo ? 0 : change,
+                  customerId: effectiveCustomer?.id || undefined,
                   customerName: effectiveCustomer?.name || (orderType === 'TAKEAWAY' ? 'Grosir' : 'Retail'),
                   employeeId: currentUser?.id,
                   employeeName: currentUser?.name,
@@ -1880,10 +2077,6 @@ function App() {
 
                 // Web Push "Uang Masuk" ke semua device yang mengaktifkan notifikasi
                 sendSaleNotification(sale, selectedCustomer?.name, currentUser?.name);
-
-                // Note: Stock deduction and mutation recording is now handled ATOMICALLY 
-                // in a single database transaction inside POST /api/saas/transactions!
-                // Ini mencegah terjadinya race condition.
 
                 // Tampilkan struk & buka dialog cetak
                 setReceipt({
@@ -1909,7 +2102,7 @@ function App() {
             >
               <div className="flex items-center gap-2" style={{ justifyContent: 'center', width: '100%' }}>
                 <Printer size={24} />
-                BAYAR & CETAK STRUK
+                {paymentMethod === 'TEMPO' ? 'PROSES TEMPO & CETAK STRUK' : 'BAYAR & CETAK STRUK'}
               </div>
             </button>
           </div>

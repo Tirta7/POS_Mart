@@ -10,6 +10,10 @@ interface SalesState {
   sales: SalesTransaction[];
   fetchSales: () => Promise<void>;
   addSale: (sale: SalesTransaction) => Promise<void>;
+  updateSale: (id: string, payload: any) => Promise<boolean>;
+  recordPayment: (id: string, payload: { amount: number; payment_method: string; cashier_id?: string; cashier_name?: string; note?: string }) => Promise<boolean>;
+  recordReturn: (id: string, payload: { items: any[]; refund_method: string; reason?: string; employee_id?: string; employee_name?: string }) => Promise<boolean>;
+  voidSale: (id: string, payload: { reason?: string; employee_id?: string; employee_name?: string }) => Promise<boolean>;
   clearSales: () => void;
 }
 
@@ -44,6 +48,14 @@ export const useSalesStore = create<SalesState>()(
                   customerName: t.customer_name || 'Umum (Guest)',
                   employeeId: t.cashier_id,
                   employeeName: localEmp?.name || t.cashier_name || t.cashier_id,
+                  status: t.status || 'COMPLETED',
+                  paymentStatus: t.payment_status || 'PAID',
+                  paidAmount: t.paid_amount != null ? Number(t.paid_amount) : Number(t.total_amount),
+                  remainingAmount: t.remaining_amount != null ? Number(t.remaining_amount) : Math.max(0, Number(t.total_amount) - (t.paid_amount || 0)),
+                  dueDate: t.due_date || undefined,
+                  notes: t.notes || undefined,
+                  payments: t.payments || [],
+                  returns: t.returns || [],
                   items: (t.items || []).map((i: any) => ({
                     productId: i.product_id,
                     variantId: i.variant_id || undefined,
@@ -103,6 +115,10 @@ export const useSalesStore = create<SalesState>()(
             receipt_number: sale.id,
             total_amount: sale.total,
             payment_method: sale.paymentMethod,
+            payment_status: sale.paymentStatus || (sale.paymentMethod === 'TEMPO' ? 'UNPAID' : 'PAID'),
+            paid_amount: sale.paidAmount != null ? sale.paidAmount : (sale.paymentMethod === 'TEMPO' ? 0 : sale.total),
+            due_date: sale.dueDate || null,
+            notes: sale.notes || null,
             cashier_id: sale.employeeId || 'cashier-1',
             cashier_name: sale.employeeName || 'Unknown',
             customer_id: sale.customerId || null,
@@ -141,6 +157,112 @@ export const useSalesStore = create<SalesState>()(
         } catch (error) {
           console.error("Gagal sinkronisasi transaksi ke server:", error);
           alert("Koneksi ke server gagal. Pastikan server online.");
+        }
+      },
+      updateSale: async (id, payload) => {
+        try {
+          const res = await fetch(`/api/saas/transactions/${id}`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-tenant-id': 'TID-DEMO-123'
+            },
+            body: JSON.stringify(payload)
+          });
+          if (res.ok) {
+            await get().fetchSales();
+            useInventoryStore.getState().fetchTransactions();
+            useInventoryStore.getState().fetchProducts();
+            useCustomerStore.getState().fetchCustomers();
+            return true;
+          } else {
+            const errData = await res.json().catch(() => ({}));
+            alert(`Gagal memperbarui transaksi: ${errData.error || 'Terjadi kesalahan'}`);
+            return false;
+          }
+        } catch (err: any) {
+          console.error("Gagal update invoice:", err);
+          alert(`Koneksi server gagal: ${err.message}`);
+          return false;
+        }
+      },
+      recordPayment: async (id, payload) => {
+        try {
+          const res = await fetch(`/api/saas/transactions/${id}/payments`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-tenant-id': 'TID-DEMO-123'
+            },
+            body: JSON.stringify(payload)
+          });
+          if (res.ok) {
+            await get().fetchSales();
+            useCustomerStore.getState().fetchCustomers();
+            return true;
+          } else {
+            const errData = await res.json().catch(() => ({}));
+            alert(`Gagal mencatat pembayaran: ${errData.error || 'Terjadi kesalahan'}`);
+            return false;
+          }
+        } catch (err: any) {
+          console.error("Gagal catat pembayaran:", err);
+          alert(`Koneksi server gagal: ${err.message}`);
+          return false;
+        }
+      },
+      recordReturn: async (id, payload) => {
+        try {
+          const res = await fetch(`/api/saas/transactions/${id}/returns`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-tenant-id': 'TID-DEMO-123'
+            },
+            body: JSON.stringify(payload)
+          });
+          if (res.ok) {
+            await get().fetchSales();
+            useInventoryStore.getState().fetchTransactions();
+            useInventoryStore.getState().fetchProducts();
+            useCustomerStore.getState().fetchCustomers();
+            return true;
+          } else {
+            const errData = await res.json().catch(() => ({}));
+            alert(`Gagal memproses retur: ${errData.error || 'Terjadi kesalahan'}`);
+            return false;
+          }
+        } catch (err: any) {
+          console.error("Gagal catat retur:", err);
+          alert(`Koneksi server gagal: ${err.message}`);
+          return false;
+        }
+      },
+      voidSale: async (id, payload) => {
+        try {
+          const res = await fetch(`/api/saas/transactions/${id}/void`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-tenant-id': 'TID-DEMO-123'
+            },
+            body: JSON.stringify(payload)
+          });
+          if (res.ok) {
+            await get().fetchSales();
+            useInventoryStore.getState().fetchTransactions();
+            useInventoryStore.getState().fetchProducts();
+            useCustomerStore.getState().fetchCustomers();
+            return true;
+          } else {
+            const errData = await res.json().catch(() => ({}));
+            alert(`Gagal membatalkan transaksi: ${errData.error || 'Terjadi kesalahan'}`);
+            return false;
+          }
+        } catch (err: any) {
+          console.error("Gagal void transaksi:", err);
+          alert(`Koneksi server gagal: ${err.message}`);
+          return false;
         }
       },
       clearSales: () => set({ sales: [] }),
