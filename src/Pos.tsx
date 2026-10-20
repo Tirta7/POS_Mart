@@ -160,6 +160,12 @@ function App() {
   // Variant Popup State (produk dengan varian: pilih varian dulu sebelum masuk keranjang)
   const [variantProduct, setVariantProduct] = useState<any>(null);
 
+  // Multi-tier Modal State (Dus, Lusin/Renceng/Slop, Eceran)
+  const [tierModalProduct, setTierModalProduct] = useState<{
+    product: any;
+    customQty: number;
+  } | null>(null);
+
   // Payment Popup State
   const [paymentPopupOpen, setPaymentPopupOpen] = useState(false);
 
@@ -455,6 +461,14 @@ function App() {
       availableStock: availableStock,  // actual available stock
       rawStock: p.stock,
       variants,
+      boxBarcode: p.boxBarcode || '',
+      boxCapacity: p.boxCapacity || 1,
+      boxPrice: p.boxPrice || 0,
+      midUnitName: p.midUnitName || '',
+      midBarcode: p.midBarcode || '',
+      midCapacity: p.midCapacity || 0,
+      midPrice: p.midPrice || 0,
+      retailBarcode: p.retailBarcode || '',
     };
   });
 
@@ -571,14 +585,15 @@ function App() {
 
       const newQty = Math.max(0.01, Math.round((targetItem.qty + delta) * 1000) / 1000);
       
-      // Total qty produk ini dari baris-baris LAIN di keranjang
-      const otherLinesQty = prev
-        .filter(i => sameLine(i, targetItem) && i.cartId !== cartId)
-        .reduce((sum, i) => sum + i.qty, 0);
+      // Total stok fisik produk ini yang terpakai di baris-baris LAIN di keranjang
+      const otherLinesBaseUnits = prev
+        .filter(i => i.id === targetItem.id && (i.variantId || null) === (targetItem.variantId || null) && i.cartId !== cartId)
+        .reduce((sum, i) => sum + (i.qty * (i.tierMultiplier || 1)), 0);
 
-      if (otherLinesQty + newQty > targetItem.availableStock) {
+      const thisMultiplier = targetItem.tierMultiplier || 1;
+      if (otherLinesBaseUnits + (newQty * thisMultiplier) > targetItem.availableStock) {
         sound.playScanError();
-        alert(`Stok tidak mencukupi! Total di keranjang (${Math.round((otherLinesQty + newQty) * 1000) / 1000}) melebihi stok tersedia (${targetItem.availableStock} ${targetItem.unit || 'Pcs'}).`);
+        alert(`Stok tidak mencukupi! Total di keranjang setara ${Math.round((otherLinesBaseUnits + (newQty * thisMultiplier)) * 1000) / 1000} ${targetItem.unit || 'Pcs'}, melebihi stok tersedia (${targetItem.availableStock} ${targetItem.unit || 'Pcs'}).`);
         return prev;
       }
 
@@ -633,11 +648,13 @@ function App() {
       if (!targetItem) return prev;
 
       const safeVal = Math.max(0, value);
-      const otherLinesQty = prev
-        .filter(i => sameLine(i, targetItem) && i.cartId !== cartId)
-        .reduce((sum, i) => sum + i.qty, 0);
+      const otherLinesBaseUnits = prev
+        .filter(i => i.id === targetItem.id && (i.variantId || null) === (targetItem.variantId || null) && i.cartId !== cartId)
+        .reduce((sum, i) => sum + (i.qty * (i.tierMultiplier || 1)), 0);
 
-      if (otherLinesQty + safeVal > targetItem.availableStock) {
+      const thisMultiplier = targetItem.tierMultiplier || 1;
+      if (otherLinesBaseUnits + (safeVal * thisMultiplier) > targetItem.availableStock) {
+        sound.playScanError();
         alert(`Stok tidak mencukupi! Hanya tersedia ${targetItem.availableStock} ${targetItem.unit || 'Pcs'}`);
         return prev;
       }
@@ -690,25 +707,105 @@ function App() {
     setCart(prev => prev.filter(item => item.cartId !== cartId));
   };
 
-  const sameLine = (a: any, b: any) => a.id === b.id && (a.variantId || null) === (b.variantId || null);
+  const sameLine = (a: any, b: any) =>
+    a.id === b.id &&
+    (a.variantId || null) === (b.variantId || null) &&
+    (a.tierType || 'RETAIL') === (b.tierType || 'RETAIL');
+
+  const addTierToCart = (product: any, tier: 'BOX' | 'MID' | 'RETAIL', customQty: number = 1) => {
+    let tierMultiplier = 1;
+    let tierUnit = product.unit || 'Pcs';
+    let tierPrice = product.price;
+    let tierBarcode = product.retailBarcode || product.barcode;
+
+    if (tier === 'BOX') {
+      tierMultiplier = product.boxCapacity && product.boxCapacity > 0 ? product.boxCapacity : 1;
+      tierUnit = 'Dus';
+      tierPrice = product.boxPrice && product.boxPrice > 0 ? product.boxPrice : (product.price * tierMultiplier);
+      tierBarcode = product.boxBarcode || product.barcode;
+    } else if (tier === 'MID') {
+      tierMultiplier = product.midCapacity && product.midCapacity > 0 ? product.midCapacity : 1;
+      tierUnit = product.midUnitName || 'Renceng';
+      tierPrice = product.midPrice && product.midPrice > 0 ? product.midPrice : (product.price * tierMultiplier);
+      tierBarcode = product.midBarcode || product.barcode;
+    } else {
+      // RETAIL
+      tierMultiplier = 1;
+      tierUnit = product.unit || 'Pcs';
+      tierPrice = product.price;
+      tierBarcode = product.retailBarcode || product.barcode;
+    }
+
+    setCart(prev => {
+      const otherLinesBaseUnits = prev
+        .filter(i => i.id === product.id && (i.variantId || null) === (product.variantId || null))
+        .reduce((sum, i) => sum + (i.qty * (i.tierMultiplier || 1)), 0);
+
+      if (otherLinesBaseUnits + (customQty * tierMultiplier) > product.availableStock) {
+        sound.playScanError();
+        alert(`Stok tidak mencukupi! Tersedia ${product.availableStock} ${product.unit || 'Pcs'}, di keranjang sudah terpakai setara ${otherLinesBaseUnits} ${product.unit || 'Pcs'}. Permintaan ini butuh ${(customQty * tierMultiplier)} ${product.unit || 'Pcs'}.`);
+        return prev;
+      }
+
+      const existingLine = prev.find(i =>
+        i.id === product.id &&
+        (i.variantId || null) === (product.variantId || null) &&
+        (i.tierType || 'RETAIL') === tier &&
+        !i.isCustomPrice &&
+        i.price === tierPrice
+      );
+
+      if (existingLine) {
+        const nextQty = Math.round((existingLine.qty + customQty) * 1000) / 1000;
+        return prev.map(i => i.cartId === existingLine.cartId ? { ...i, qty: nextQty } : i);
+      }
+
+      const newCartId = Date.now().toString() + Math.random().toString(36).slice(2, 6);
+      return [
+        ...prev,
+        {
+          ...product,
+          cartId: newCartId,
+          qty: customQty,
+          price: tierPrice,
+          originalPrice: tierPrice,
+          barcode: tierBarcode,
+          tierType: tier,
+          tierUnit: tierUnit,
+          tierMultiplier: tierMultiplier,
+          wholesalePrice: 0,
+          minWholesaleQty: 0,
+          isCustomPrice: false,
+          customPriceNote: ''
+        }
+      ];
+    });
+
+    sound.playScanSuccess();
+    setToastNotice({
+      type: 'success',
+      message: `${customQty > 1 ? `${customQty}x ` : ''}${product.name} [${tierUnit.toUpperCase()}] masuk keranjang`
+    });
+  };
 
   const addToCart = (product: any, customQty?: number) => {
     const qtyToAdd = customQty !== undefined ? customQty : 1;
     let promptCandidate: WholesalePromptData | null = null;
     
     setCart(prev => {
-      // 1. Validasi total stok produk di keranjang (menjumlahkan seluruh baris dengan produk & varian yang sama)
-      const currentTotalInCart = prev
-        .filter(i => sameLine(i, product))
-        .reduce((sum, i) => sum + i.qty, 0);
+      // 1. Validasi total stok fisik produk di keranjang (menjumlahkan seluruh baris dengan produk & varian yang sama)
+      const currentBaseInCart = prev
+        .filter(i => i.id === product.id && (i.variantId || null) === (product.variantId || null))
+        .reduce((sum, i) => sum + (i.qty * (i.tierMultiplier || 1)), 0);
 
-      if (currentTotalInCart + qtyToAdd > product.availableStock) {
+      const multiplier = product.tierMultiplier || 1;
+      if (currentBaseInCart + (qtyToAdd * multiplier) > product.availableStock) {
         sound.playScanError();
         alert(`Stok tidak mencukupi! Hanya tersedia ${product.availableStock} ${product.unit || 'Pcs'}`);
         return prev;
       }
 
-      // 2. Cari baris yang SAMA: produk sama, varian sama, HARGA NORMAL (bukan harga khusus manual), dan harga sama
+      // 2. Cari baris yang SAMA: produk sama, varian sama, tier sama, HARGA NORMAL (bukan harga khusus manual), dan harga sama
       const existsNormalLine = prev.find(i => 
         sameLine(i, product) && !i.isCustomPrice && i.price === product.price
       );
@@ -781,7 +878,10 @@ function App() {
           wholesalePrice: product.wholesalePrice || 0,
           minWholesaleQty: product.minWholesaleQty || 0,
           isCustomPrice: false,
-          customPriceNote: ''
+          customPriceNote: '',
+          tierType: product.tierType || 'RETAIL',
+          tierUnit: product.tierUnit || product.unit || 'Pcs',
+          tierMultiplier: product.tierMultiplier || 1
         }
       ];
     });
@@ -804,12 +904,25 @@ function App() {
   };
 
   const handleProductClick = (product: any, customQty: number = 1) => {
-    // Produk bervarian: tampilkan popup pilih varian dulu
+    // 1. Produk bervarian: tampilkan popup pilih varian dulu
     if (product.variants && product.variants.length > 0) {
       setPendingVariantQty(customQty);
       setVariantProduct(product);
       return;
     }
+
+    // 2. Produk multi-tier (Dus / Renceng / Eceran): tampilkan dialog 3 pilihan harga
+    const hasTier = Boolean(
+      (product.boxPrice && product.boxPrice > 0) ||
+      (product.boxCapacity && product.boxCapacity > 1) ||
+      (product.midPrice && product.midPrice > 0)
+    );
+
+    if (hasTier) {
+      setTierModalProduct({ product, customQty });
+      return;
+    }
+
     proceedAdd(product, customQty);
     sound.playScanSuccess();
   };
@@ -863,6 +976,25 @@ function App() {
     }
 
     const q = code.toLowerCase();
+
+    // 0. MULTI-TIER BARCODES: Auto-deteksi barcode Dus, Kemasan Menengah (Renceng/Lusin), atau Eceran
+    const matchedBoxProduct = PRODUCTS.find(p => p.boxBarcode && p.boxBarcode.toLowerCase() === q);
+    if (matchedBoxProduct) {
+      addTierToCart(matchedBoxProduct, 'BOX', multiplier);
+      return;
+    }
+
+    const matchedMidProduct = PRODUCTS.find(p => p.midBarcode && p.midBarcode.toLowerCase() === q);
+    if (matchedMidProduct) {
+      addTierToCart(matchedMidProduct, 'MID', multiplier);
+      return;
+    }
+
+    const matchedRetailProduct = PRODUCTS.find(p => p.retailBarcode && p.retailBarcode.toLowerCase() === q);
+    if (matchedRetailProduct) {
+      addTierToCart(matchedRetailProduct, 'RETAIL', multiplier);
+      return;
+    }
 
     // 1. PRIORITAS UTAMA: Cari apakah barcode yang di-scan cocok dengan BARCODE KHUSUS VARIAN
     let matchedProduct: any = null;
@@ -947,6 +1079,19 @@ function App() {
           alert(`Stok produk "${matchedProduct.name}" habis!`);
           return;
         }
+
+        const hasTier = Boolean(
+          (matchedProduct.boxPrice && matchedProduct.boxPrice > 0) ||
+          (matchedProduct.boxCapacity && matchedProduct.boxCapacity > 1) ||
+          (matchedProduct.midPrice && matchedProduct.midPrice > 0)
+        );
+
+        if (hasTier) {
+          setTierModalProduct({ product: matchedProduct, customQty: multiplier });
+          sound.playScanSuccess();
+          return;
+        }
+
         proceedAdd(matchedProduct, multiplier);
         sound.playScanSuccess();
         setToastNotice({
@@ -1892,6 +2037,21 @@ function App() {
                         {item.variantName}
                       </span>
                     )}
+                    {item.tierType === 'BOX' && (
+                      <span style={{ marginLeft: '6px', fontSize: '10.5px', fontWeight: 800, backgroundColor: '#fef3c7', color: '#92400e', border: '1px solid #fde68a', padding: '1px 7px', borderRadius: '4px' }}>
+                        DUS ({item.tierMultiplier} pcs)
+                      </span>
+                    )}
+                    {item.tierType === 'MID' && (
+                      <span style={{ marginLeft: '6px', fontSize: '10.5px', fontWeight: 800, backgroundColor: '#e0f2fe', color: '#0369a1', border: '1px solid #bae6fd', padding: '1px 7px', borderRadius: '4px' }}>
+                        {(item.tierUnit || 'MID').toUpperCase()} ({item.tierMultiplier} pcs)
+                      </span>
+                    )}
+                    {item.tierType === 'RETAIL' && (
+                      <span style={{ marginLeft: '6px', fontSize: '10.5px', fontWeight: 700, backgroundColor: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0', padding: '1px 7px', borderRadius: '4px' }}>
+                        ECER
+                      </span>
+                    )}
                   </div>
 
                   {/* Harga satuan & Tombol Ubah Harga Manual */}
@@ -1987,8 +2147,8 @@ function App() {
                     />
                     <button className="qty-btn" onClick={() => updateQty(item.cartId, 1)}><Plus size={14}/></button>
                   </div>
-                  <span style={{ fontSize: '11px', color: '#888', width: '28px', textAlign: 'left', marginLeft: '4px' }}>
-                    {item.unit}
+                  <span style={{ fontSize: '11px', color: '#888', minWidth: '28px', width: 'auto', textAlign: 'left', marginLeft: '4px' }}>
+                    {item.tierUnit || item.unit}
                   </span>
                   <button className="remove-btn" onClick={() => removeRow(item.cartId)} style={{ marginLeft: 'auto' }}><X size={16}/></button>
                 </div>
@@ -2321,7 +2481,10 @@ function App() {
                       subtotal: Math.round(item.price * item.qty),
                       originalPrice: item.originalPrice != null ? item.originalPrice : item.price,
                       isCustomPrice: Boolean(item.isCustomPrice),
-                      customPriceNote: item.customPriceNote || (item.isCustomPrice ? 'Harga Khusus' : '')
+                      customPriceNote: item.customPriceNote || (item.isCustomPrice ? 'Harga Khusus' : ''),
+                      tierType: item.tierType,
+                      tierUnit: item.tierUnit,
+                      tierMultiplier: item.tierMultiplier || 1
                     }))
                   };
                   addOrderToCustomer(effectiveCustomer.id, order);
@@ -2357,7 +2520,10 @@ function App() {
                     subtotal: Math.round(item.price * item.qty),
                     originalPrice: item.originalPrice != null ? item.originalPrice : item.price,
                     isCustomPrice: Boolean(item.isCustomPrice),
-                    customPriceNote: item.customPriceNote || (item.isCustomPrice ? 'Harga Khusus' : '')
+                    customPriceNote: item.customPriceNote || (item.isCustomPrice ? 'Harga Khusus' : ''),
+                    tierType: item.tierType,
+                    tierUnit: item.tierUnit,
+                    tierMultiplier: item.tierMultiplier || 1
                   }))
                 };
                 await addSale(sale);
@@ -2615,6 +2781,309 @@ function App() {
           </div>
         </div>
       )}
+
+      {/* 3-TIER PACKAGING SELECTION MODAL (DUS, RENCENG/LUSIN/SLOP, ECERAN) */}
+      {tierModalProduct && (() => {
+        const p = tierModalProduct.product;
+        const q = tierModalProduct.customQty || 1;
+        const boxCap = p.boxCapacity && p.boxCapacity > 0 ? p.boxCapacity : 1;
+        const boxP = p.boxPrice && p.boxPrice > 0 ? p.boxPrice : (p.price * boxCap);
+        const boxStock = Math.floor(p.availableStock / boxCap);
+
+        const hasMid = Boolean(p.midPrice && p.midPrice > 0) || Boolean(p.midCapacity && p.midCapacity > 1);
+        const midCap = p.midCapacity && p.midCapacity > 0 ? p.midCapacity : 1;
+        const midP = p.midPrice && p.midPrice > 0 ? p.midPrice : (p.price * midCap);
+        const midStock = Math.floor(p.availableStock / midCap);
+        const midUnit = p.midUnitName || 'Renceng/Lusin';
+
+        const retailP = p.price;
+        const retailStock = p.availableStock;
+        const retailUnit = p.unit || 'Pcs';
+
+        return (
+          <div className="modal-overlay" onClick={() => setTierModalProduct(null)} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
+            <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ backgroundColor: '#ffffff', borderRadius: '20px', padding: '24px', width: '640px', maxWidth: '95vw', maxHeight: '92vh', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.3)', border: '1px solid #e2e8f0' }}>
+              
+              {/* Header Modal */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ background: '#eff6ff', color: '#1d4ed8', padding: '3px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 800 }}>
+                      PILIH LEVEL KEMASAN
+                    </span>
+                    <span style={{ fontSize: '12px', color: '#64748b' }}>
+                      (Kuantitas: {q}x)
+                    </span>
+                  </div>
+                  <h3 style={{ fontSize: '18px', fontWeight: 800, margin: '6px 0 2px 0', color: '#0f172a' }}>
+                    {p.name}
+                  </h3>
+                  <div style={{ fontSize: '12px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span>Stok Fisik Tersedia: <strong style={{ color: p.availableStock <= 0 ? '#dc2626' : '#16a34a' }}>{p.availableStock} {retailUnit}</strong></span>
+                    <span>•</span>
+                    <span>Setara <strong>{boxStock} Dus</strong></span>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setTierModalProduct(null)} 
+                  aria-label="Tutup" 
+                  style={{ background: '#f1f5f9', border: 'none', borderRadius: '50%', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#475569', transition: 'all 0.15s ease' }}
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* 3 Opsi Kartu Kemasan */}
+              <div style={{ display: 'grid', gridTemplateColumns: hasMid ? 'repeat(3, 1fr)' : 'repeat(2, 1fr)', gap: '14px', margin: '8px 0 16px 0' }}>
+                
+                {/* 1. KEMASAN DUS / KARTON */}
+                <div 
+                  onClick={() => {
+                    if (boxStock <= 0) {
+                      sound.playScanError();
+                      alert('Stok fisik tidak mencukupi untuk 1 Dus!');
+                      return;
+                    }
+                    addTierToCart(p, 'BOX', q);
+                    setTierModalProduct(null);
+                  }}
+                  style={{
+                    border: '2px solid #fbbf24',
+                    background: 'linear-gradient(180deg, #fffdf5 0%, #fffbeb 100%)',
+                    borderRadius: '16px',
+                    padding: '16px 14px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    cursor: boxStock > 0 ? 'pointer' : 'not-allowed',
+                    opacity: boxStock > 0 ? 1 : 0.5,
+                    position: 'relative',
+                    transition: 'all 0.18s ease',
+                    boxShadow: '0 4px 12px rgba(251, 191, 36, 0.12)'
+                  }}
+                  onMouseOver={(e) => { if (boxStock > 0) e.currentTarget.style.transform = 'translateY(-2px)'; }}
+                  onMouseOut={(e) => { e.currentTarget.style.transform = 'none'; }}
+                >
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', background: '#fef3c7', color: '#92400e', padding: '2px 8px', borderRadius: '6px', fontSize: '10.5px', fontWeight: 800, width: 'fit-content', marginBottom: '8px' }}>
+                    <Package size={12} />
+                    DUS / KARTON
+                  </div>
+                  <div style={{ fontSize: '13px', fontWeight: 700, color: '#1e293b' }}>
+                    Kemasan Dus
+                  </div>
+                  <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                    Isi: <strong>{boxCap} {retailUnit}</strong>
+                  </div>
+                  
+                  <div style={{ margin: '14px 0 12px 0' }}>
+                    <div style={{ fontSize: '10.5px', color: '#92400e', fontWeight: 700 }}>Harga Jual / Dus:</div>
+                    <div style={{ fontSize: '16px', fontWeight: 900, color: '#b45309' }}>
+                      {formatIDR(boxP)}
+                    </div>
+                    <div style={{ fontSize: '10px', color: '#78350f', marginTop: '1px' }}>
+                      @{formatIDR(Math.round(boxP / boxCap))}/{retailUnit}
+                    </div>
+                  </div>
+
+                  <div style={{ marginTop: 'auto', paddingTop: '8px', borderTop: '1px dashed #fde68a', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '11px', fontWeight: 700, color: boxStock > 0 ? '#16a34a' : '#dc2626' }}>
+                      Tersedia: {boxStock} Dus
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    style={{
+                      marginTop: '10px',
+                      background: '#d97706',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '8px',
+                      padding: '8px 10px',
+                      fontWeight: 800,
+                      fontSize: '12px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '4px'
+                    }}
+                  >
+                    <Check size={14} /> Beli Dus
+                  </button>
+                </div>
+
+                {/* 2. KEMASAN MENENGAH (RENCENG / LUSIN / SLOP) */}
+                {hasMid && (
+                  <div 
+                    onClick={() => {
+                      if (midStock <= 0) {
+                        sound.playScanError();
+                        alert(`Stok fisik tidak mencukupi untuk 1 ${midUnit}!`);
+                        return;
+                      }
+                      addTierToCart(p, 'MID', q);
+                      setTierModalProduct(null);
+                    }}
+                    style={{
+                      border: '2px solid #38bdf8',
+                      background: 'linear-gradient(180deg, #f0f9ff 0%, #e0f2fe 100%)',
+                      borderRadius: '16px',
+                      padding: '16px 14px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      cursor: midStock > 0 ? 'pointer' : 'not-allowed',
+                      opacity: midStock > 0 ? 1 : 0.5,
+                      position: 'relative',
+                      transition: 'all 0.18s ease',
+                      boxShadow: '0 4px 12px rgba(56, 189, 248, 0.12)'
+                    }}
+                    onMouseOver={(e) => { if (midStock > 0) e.currentTarget.style.transform = 'translateY(-2px)'; }}
+                    onMouseOut={(e) => { e.currentTarget.style.transform = 'none'; }}
+                  >
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', background: '#bae6fd', color: '#0369a1', padding: '2px 8px', borderRadius: '6px', fontSize: '10.5px', fontWeight: 800, width: 'fit-content', marginBottom: '8px' }}>
+                      <Layers size={12} />
+                      {midUnit.toUpperCase()}
+                    </div>
+                    <div style={{ fontSize: '13px', fontWeight: 700, color: '#1e293b' }}>
+                      Kemasan Menengah
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                      Isi: <strong>{midCap} {retailUnit}</strong>
+                    </div>
+
+                    <div style={{ margin: '14px 0 12px 0' }}>
+                      <div style={{ fontSize: '10.5px', color: '#0369a1', fontWeight: 700 }}>Harga Jual /{midUnit}:</div>
+                      <div style={{ fontSize: '16px', fontWeight: 900, color: '#0284c7' }}>
+                        {formatIDR(midP)}
+                      </div>
+                      <div style={{ fontSize: '10px', color: '#075985', marginTop: '1px' }}>
+                        @{formatIDR(Math.round(midP / midCap))}/{retailUnit}
+                      </div>
+                    </div>
+
+                    <div style={{ marginTop: 'auto', paddingTop: '8px', borderTop: '1px dashed #bae6fd', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '11px', fontWeight: 700, color: midStock > 0 ? '#16a34a' : '#dc2626' }}>
+                        Tersedia: {midStock} {midUnit}
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      style={{
+                        marginTop: '10px',
+                        background: '#0284c7',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '8px',
+                        padding: '8px 10px',
+                        fontWeight: 800,
+                        fontSize: '12px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '4px'
+                      }}
+                    >
+                      <Check size={14} /> Beli {midUnit}
+                    </button>
+                  </div>
+                )}
+
+                {/* 3. KEMASAN ECERAN / SATUAN */}
+                <div 
+                  onClick={() => {
+                    if (retailStock <= 0) {
+                      sound.playScanError();
+                      alert('Stok fisik produk habis!');
+                      return;
+                    }
+                    addTierToCart(p, 'RETAIL', q);
+                    setTierModalProduct(null);
+                  }}
+                  style={{
+                    border: '2px solid #cbd5e1',
+                    background: 'linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)',
+                    borderRadius: '16px',
+                    padding: '16px 14px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    cursor: retailStock > 0 ? 'pointer' : 'not-allowed',
+                    opacity: retailStock > 0 ? 1 : 0.5,
+                    position: 'relative',
+                    transition: 'all 0.18s ease',
+                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)'
+                  }}
+                  onMouseOver={(e) => { if (retailStock > 0) e.currentTarget.style.transform = 'translateY(-2px)'; }}
+                  onMouseOut={(e) => { e.currentTarget.style.transform = 'none'; }}
+                >
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', background: '#f1f5f9', color: '#475569', padding: '2px 8px', borderRadius: '6px', fontSize: '10.5px', fontWeight: 800, width: 'fit-content', marginBottom: '8px' }}>
+                    <ShoppingBag size={12} />
+                    ECERAN
+                  </div>
+                  <div style={{ fontSize: '13px', fontWeight: 700, color: '#1e293b' }}>
+                    Satuan Ecer / Loose
+                  </div>
+                  <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                    Isi: <strong>1 {retailUnit}</strong>
+                  </div>
+
+                  <div style={{ margin: '14px 0 12px 0' }}>
+                    <div style={{ fontSize: '10.5px', color: '#475569', fontWeight: 700 }}>Harga Jual / Ecer:</div>
+                    <div style={{ fontSize: '16px', fontWeight: 900, color: '#0f172a' }}>
+                      {formatIDR(retailP)}
+                    </div>
+                    <div style={{ fontSize: '10px', color: '#64748b', marginTop: '1px' }}>
+                      Satuan eceran biasa
+                    </div>
+                  </div>
+
+                  <div style={{ marginTop: 'auto', paddingTop: '8px', borderTop: '1px dashed #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '11px', fontWeight: 700, color: retailStock > 0 ? '#16a34a' : '#dc2626' }}>
+                      Tersedia: {retailStock} {retailUnit}
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    style={{
+                      marginTop: '10px',
+                      background: '#475569',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '8px',
+                      padding: '8px 10px',
+                      fontWeight: 800,
+                      fontSize: '12px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '4px'
+                    }}
+                  >
+                    <Check size={14} /> Beli Eceran
+                  </button>
+                </div>
+
+              </div>
+
+              {/* Barcode Info Footer */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11.5px', color: '#64748b', background: '#f8fafc', padding: '10px 14px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                <div>
+                  💡 <em>Tips: Scan langsung barcode kemasan untuk input otomatis tanpa dialog ini.</em>
+                </div>
+                {p.boxBarcode && (
+                  <div style={{ fontFamily: 'monospace', fontWeight: 700, color: '#b45309' }}>
+                    Dus: {p.boxBarcode}
+                  </div>
+                )}
+              </div>
+
+            </div>
+          </div>
+        );
+      })()}
       {/* HOLD ORDERS LIST PANEL */}
       {holdListOpen && (
         <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-end', zIndex: 9999, padding: '0' }}>

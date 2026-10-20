@@ -16,8 +16,18 @@ export interface Product {
   minWholesaleQty?: number; // Minimum qty pembelian agar dapat harga grosir
   image?: string;
   isPending?: boolean; // Flag to indicate if the product is a draft in Goods Receipt
-  variants?: ProductVariant[]; // Varian (mis. warna). Jika ada, stok produk = total stok varian
+  variants?: ProductVariant[]; // Varian (opsional)
   isActive?: boolean; // false = disembunyikan dari Kasir POS
+
+  // Multi-tier Packaging & Pricing (Dus / Renceng / Eceran)
+  boxBarcode?: string;       // Barcode kemasan Dus / Karton luar
+  boxCapacity?: number;      // Isi per 1 Dus dalam satuan eceran (misal 40 pcs)
+  boxPrice?: number;         // Harga jual per 1 Dus
+  midUnitName?: string;      // Nama kemasan menengah (Renceng, Lusin, Slop, Pack)
+  midBarcode?: string;       // Barcode kemasan menengah
+  midCapacity?: number;      // Isi per 1 Renceng/Lusin dalam satuan eceran (misal 10 pcs)
+  midPrice?: number;         // Harga jual per 1 Renceng/Lusin
+  retailBarcode?: string;    // Barcode kemasan eceran / bungkus satuan
 }
 
 /** Varian produk. Harga kosong/0 = ikut harga produk induk. */
@@ -115,6 +125,9 @@ export interface CustomerOrder {
     originalPrice?: number;
     isCustomPrice?: boolean;
     customPriceNote?: string;
+    tierType?: 'BOX' | 'MID' | 'RETAIL';
+    tierUnit?: string;
+    tierMultiplier?: number;
   }[];
 }
 
@@ -176,6 +189,9 @@ export interface SalesTransaction {
     originalPrice?: number;
     isCustomPrice?: boolean;
     customPriceNote?: string;
+    tierType?: 'BOX' | 'MID' | 'RETAIL';
+    tierUnit?: string;
+    tierMultiplier?: number;
   }[];
 }
 

@@ -73,14 +73,15 @@ export const buildReceiptHtml = (sale: SalesTransaction, opts: ReceiptOptions): 
   const itemsHtml = sale.items
     .map((i, idx) => {
       const p = products.find(x => x.id === i.productId);
-      const unit = p?.unit || 'Pcs';
+      const unit = i.tierUnit || p?.unit || 'Pcs';
+      const tierBadge = i.tierType === 'BOX' ? ' [DUS]' : (i.tierType === 'MID' ? ` [${(i.tierUnit || 'MID').toUpperCase()}]` : '');
       const isCustom = Boolean(i.isCustomPrice || (i.originalPrice && i.originalPrice !== i.price));
       const customLabel = i.customPriceNote ? `* Special: ${esc(i.customPriceNote)}` : '* Special Price';
       const origNote = (isCustom && i.originalPrice) ? ` (Normal: ${idr(i.originalPrice)})` : '';
       return `
       <div class="item">
-        <div class="item-name"><span class="item-num">${idx + 1}.</span> ${esc(i.name)}</div>
-        ${i.variantName ? `<div class="item-sub">Varian: ${esc(i.variantName)}</div>` : ''}
+        <div class="item-name"><span class="item-num">${idx + 1}.</span> ${esc(i.name)}${tierBadge}</div>
+        ${i.variantName && !i.variantName.startsWith('[') ? `<div class="item-sub">Varian: ${esc(i.variantName)}</div>` : ''}
         ${p?.sku ? `<div class="item-sub">SKU: ${esc(p.sku)}</div>` : ''}
         ${isCustom ? `<div class="item-sub item-custom">${customLabel}${origNote}</div>` : ''}
         <div class="item-row">

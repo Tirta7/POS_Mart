@@ -66,7 +66,10 @@ export const useSalesStore = create<SalesState>()(
                     subtotal: i.subtotal,
                     originalPrice: i.original_price != null ? Number(i.original_price) : undefined,
                     isCustomPrice: Boolean(i.is_custom_price),
-                    customPriceNote: i.custom_price_note || undefined
+                    customPriceNote: i.custom_price_note || undefined,
+                    tierType: i.tier_type || undefined,
+                    tierUnit: i.tier_unit || undefined,
+                    tierMultiplier: i.tier_multiplier || 1
                   }))
                 };
               });
@@ -101,7 +104,10 @@ export const useSalesStore = create<SalesState>()(
                 subtotal: item.subtotal,
                 originalPrice: item.originalPrice,
                 isCustomPrice: item.isCustomPrice,
-                customPriceNote: item.customPriceNote
+                customPriceNote: item.customPriceNote,
+                tierType: item.tierType,
+                tierUnit: item.tierUnit,
+                tierMultiplier: item.tierMultiplier || 1
               }))
             });
           }
@@ -132,7 +138,10 @@ export const useSalesStore = create<SalesState>()(
               subtotal: item.subtotal,
               original_price: item.originalPrice != null ? item.originalPrice : item.price,
               is_custom_price: Boolean(item.isCustomPrice),
-              custom_price_note: item.customPriceNote || (item.isCustomPrice ? 'Harga Khusus' : null)
+              custom_price_note: item.customPriceNote || (item.isCustomPrice ? 'Harga Khusus' : null),
+              tier_type: item.tierType || null,
+              tier_unit: item.tierUnit || null,
+              tier_multiplier: item.tierMultiplier || 1
             }))
           };
 

@@ -6,7 +6,7 @@ import { useDraftStore } from '../../store/useDraftStore';
 import { 
   Plus, Save, CheckCircle, PackageCheck, Edit2, Trash2, X, ArrowDownToLine, 
   Camera, Search, FileText, AlertTriangle, Printer, LayoutGrid, Package, 
-  Eye, EyeOff, RefreshCw, Download, DollarSign, TrendingUp, Copy, Check 
+  Eye, EyeOff, RefreshCw, Download, DollarSign, TrendingUp, Copy, Check, Tag 
 } from 'lucide-react';
 import BarcodeScannerCamera from '../../components/BarcodeScannerCamera';
 import BarcodeLabelModal from '../../components/BarcodeLabelModal';
@@ -151,11 +151,26 @@ const StockManagement: React.FC = () => {
   const [purchasePrice, setPurchasePrice] = useState<number | string>('');
   const [sellingPrice, setSellingPrice] = useState<number | string>('');
   const [wholesalePrice, setWholesalePrice] = useState<number | string>('');
-  const [minWholesaleQty, setMinWholesaleQty] = useState<number | string>('');
+  const [_minWholesaleQty, setMinWholesaleQty] = useState<number | string>('');
   const [minStock, setMinStock] = useState<number | string>('');
   const [image, setImage] = useState('');
   const [variants, setVariants] = useState<VariantDraft[]>([]);
   const [newCategory, setNewCategory] = useState('');
+
+  // Multi-tier Packaging & Pricing (Dus / Renceng / Eceran)
+  const [boxBarcode, setBoxBarcode] = useState('');
+  const [boxCapacity, setBoxCapacity] = useState<number | string>(40);
+  const [boxPrice, setBoxPrice] = useState<number | string>('');
+  const [boxQty, setBoxQty] = useState<number | string>('');
+  
+  const [hasMidTier, setHasMidTier] = useState(false);
+  const [midUnitName, setMidUnitName] = useState('Renceng');
+  const [midBarcode, setMidBarcode] = useState('');
+  const [midCapacity, setMidCapacity] = useState<number | string>(10);
+  const [midPrice, setMidPrice] = useState<number | string>('');
+
+  const [retailBarcode, setRetailBarcode] = useState('');
+  const [scannerTarget, setScannerTarget] = useState<'box' | 'retail' | 'mid' | 'search'>('box');
   
   const [cameraScannerOpen, setCameraScannerOpen] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -222,6 +237,17 @@ const StockManagement: React.FC = () => {
     setMinStock('');
     setImage('');
     setVariants([]);
+    setBoxBarcode('');
+    setBoxCapacity(40);
+    setBoxPrice('');
+    setBoxQty('');
+    setHasMidTier(false);
+    setMidUnitName('Renceng');
+    setMidBarcode('');
+    setMidCapacity(10);
+    setMidPrice('');
+    setRetailBarcode('');
+    setScannerTarget('box');
     setIsFormOpen(false);
   };
 
@@ -307,94 +333,98 @@ const StockManagement: React.FC = () => {
             'Varian dihapus via Edit Master Data');
         }
 
-        // c. Simpan master data. Stok TIDAK dikirim: perubahan stok dicatat lewat mutasi (atomic di server)
-        const { stock: _stock, variants: _ov, ...baseFields } = original;
-        await updateProduct(editingId, {
-          ...baseFields,
-          id: finalId, // Izinkan update ID/Barcode
-          barcode: finalBarcode,
+        // c. Simpan master data multi-tier
+        const finalBoxCap = Math.max(1, Number(boxCapacity) || 40);
+        const finalBoxPrice = Number(boxPrice) > 0 ? Number(boxPrice) : (Number(wholesalePrice) > 0 ? Number(wholesalePrice) : (Number(sellingPrice) * finalBoxCap));
+        const finalMidPrice = hasMidTier ? (Number(midPrice) || 0) : 0;
+        const finalMidCap = hasMidTier ? Math.max(1, Number(midCapacity) || 10) : 0;
+        const finalBoxBarcode = boxBarcode.trim() || finalBarcode;
+        const finalRetailBarcode = retailBarcode.trim();
+
+        await updateProduct(original.id, {
+          ...original,
+          id: finalId,
+          barcode: finalBoxBarcode,
           sku: finalSku,
           name,
           category,
           unit,
           purchasePrice: baseCost,
           sellingPrice: Number(sellingPrice),
-          wholesalePrice: Number(wholesalePrice),
-          minWholesaleQty: Number(minWholesaleQty) || 0,
+          wholesalePrice: finalBoxPrice,
+          minWholesaleQty: finalBoxCap,
           minStock: Number(minStock),
           image: image || original.image,
-          variants: namedVariants.map((v, idx) => {
-            const old = origVariants.find(o => o.id === v.id);
-            return {
-              id: v.id,
-              name: v.name.trim(),
-              barcode: v.barcode ? v.barcode.trim() : (old?.barcode || (finalBarcode ? `${finalBarcode}-${idx + 1}` : undefined)),
-              sku: v.sku ? v.sku.trim() : (old?.sku || (finalSku ? `${finalSku}-${idx + 1}` : undefined)),
-              image: v.image ? v.image.trim() : (old?.image || undefined),
-              stock: old ? old.stock : 0, // varian baru mulai 0, diisi lewat mutasi di bawah
-              purchasePrice: old?.purchasePrice,
-              sellingPrice: Number(v.sellingPrice) > 0 ? Number(v.sellingPrice) : undefined,
-              wholesalePrice: Number(v.wholesalePrice) > 0 ? Number(v.wholesalePrice) : undefined,
-              minWholesaleQty: Number(v.minWholesaleQty) > 0 ? Number(v.minWholesaleQty) : undefined,
-            };
-          })
+          boxBarcode: finalBoxBarcode,
+          boxCapacity: finalBoxCap,
+          boxPrice: finalBoxPrice,
+          midUnitName: hasMidTier ? midUnitName : undefined,
+          midBarcode: hasMidTier ? midBarcode.trim() : undefined,
+          midCapacity: finalMidCap,
+          midPrice: finalMidPrice,
+          retailBarcode: finalRetailBarcode || undefined,
+          variants: []
         } as any);
 
-        // d. Mutasi stok: jika qty diubah lewat Edit, catat sebagai penyesuaian (selisih)
-        const lines: MutationLine[] = hasVariants
-          ? namedVariants.map(v => {
-              const oldStock = origVariants.find(o => o.id === v.id)?.stock ?? 0;
-              return { productId: original.id, variantId: v.id, variantName: v.name.trim(), qty: (Number(v.qty) || 0) - oldStock, purchasePrice: baseCost, name, unit };
-            })
-          : [{ productId: original.id, qty: totalQty - (origVariants.length > 0 ? 0 : original.stock), purchasePrice: baseCost, name, unit }];
-        await recordStockMutation('ADJUSTMENT', docNo, lines, `Koreksi stok via Edit Master Data (${original.stock} → ${totalQty})`);
-        setEditingId(null); // Keluar dari mode edit setelah berhasil simpan
+        // Mutasi stok jika ada selisih
+        const diffQty = totalQty - original.stock;
+        if (diffQty !== 0) {
+          const lines: MutationLine[] = [{ productId: original.id, qty: diffQty, purchasePrice: baseCost, name, unit }];
+          await recordStockMutation('ADJUSTMENT', docNo, lines, `Koreksi stok via Edit Master Data (${original.stock} → ${totalQty} ${unit})`);
+        }
+        setEditingId(null);
       }
     } else {
       // Cek duplikat: di stok, di sesi ini, dan di draf lain yang belum diposting
       const pendingItems = [...draftItems];
       const isDuplicate =
-        products.some(p => p.id === finalId || p.barcode === finalBarcode) ||
+        products.some(p => p.id === finalId || p.barcode === finalBarcode || (boxBarcode && p.boxBarcode === boxBarcode)) ||
         pendingItems.some(i => i.id === finalId || i.barcode === finalBarcode);
       if (isDuplicate) {
         alert(`Peringatan: Barcode/ID ${finalId} sudah terdaftar (di stok atau di draf)! Tidak boleh ada duplikat.`);
         return;
       }
 
+      const finalBoxCap = Math.max(1, Number(boxCapacity) || 40);
+      const finalBoxPrice = Number(boxPrice) > 0 ? Number(boxPrice) : (Number(wholesalePrice) > 0 ? Number(wholesalePrice) : (Number(sellingPrice) * finalBoxCap));
+      const finalMidPrice = hasMidTier ? (Number(midPrice) || 0) : 0;
+      const finalMidCap = hasMidTier ? Math.max(1, Number(midCapacity) || 10) : 0;
+      const finalBoxBarcode = boxBarcode.trim() || finalBarcode;
+      const finalRetailBarcode = retailBarcode.trim();
+
       // Masuk ke Draf (BELUM masuk stok / Kasir POS sampai di-Posting)
       const newItem = {
         pending: true,
         id: finalId,
-        barcode: finalBarcode,
-        sku: finalSku, name, category, unit,
+        barcode: finalBoxBarcode,
+        sku: finalSku, 
+        name, 
+        category, 
+        unit,
         location: 'Gudang Utama',
         qty: totalQty,
         purchasePrice: Number(purchasePrice),
         sellingPrice: Number(sellingPrice),
-        wholesalePrice: Number(wholesalePrice),
-        minWholesaleQty: Number(minWholesaleQty) || 0,
+        wholesalePrice: finalBoxPrice,
+        minWholesaleQty: finalBoxCap,
         minStock: Number(minStock),
         image: image ? getProductImage(image) : '',
-        variants: hasVariants
-          ? namedVariants.map((v, idx) => ({
-              id: v.id,
-              name: v.name.trim(),
-              barcode: v.barcode ? v.barcode.trim() : (finalBarcode ? `${finalBarcode}-${idx + 1}` : undefined),
-              sku: v.sku ? v.sku.trim() : (finalSku ? `${finalSku}-${idx + 1}` : undefined),
-              image: v.image ? v.image.trim() : undefined,
-              qty: Number(v.qty) || 0,
-              sellingPrice: Number(v.sellingPrice) || 0,
-              wholesalePrice: Number(v.wholesalePrice) || 0,
-              minWholesaleQty: Number(v.minWholesaleQty) || 0,
-            }))
-          : undefined,
+        boxBarcode: finalBoxBarcode,
+        boxCapacity: finalBoxCap,
+        boxPrice: finalBoxPrice,
+        midUnitName: hasMidTier ? midUnitName : undefined,
+        midBarcode: hasMidTier ? midBarcode.trim() : undefined,
+        midCapacity: finalMidCap,
+        midPrice: finalMidPrice,
+        retailBarcode: finalRetailBarcode || undefined,
+        variants: []
       };
       const nextItems = [...draftItems, newItem];
       
       // Update global draft
       saveDrafts([{ grNumber: 'GLOBAL-DRAFT', savedAt: new Date().toISOString(), draftId: 'DRAFT-GLOBAL', items: nextItems }]);
       
-      setDraftToast(`"${name}"${hasVariants ? ` (${namedVariants.length} varian)` : ''} ditambahkan ke Draf. Belum tampil di Kasir POS sebelum diposting.`);
+      setDraftToast(`"${name}" (${totalQty} ${unit}${boxQty ? ` / ${boxQty} Dus` : ''}) ditambahkan ke Draf. Belum tampil di Kasir POS sebelum diposting.`);
       setTimeout(() => setDraftToast(null), 4500);
 
       // Barang tanpa barcode pabrikan -> langsung tawarkan cetak label stiker
@@ -402,11 +432,11 @@ const StockManagement: React.FC = () => {
         setLabelCopies(Math.max(1, Math.ceil(totalQty)));
         setLabelProduct({
           id: finalId,
-          barcode: finalBarcode,
+          barcode: finalBoxBarcode,
           sku: finalSku,
           name,
           sellingPrice: Number(sellingPrice),
-          variants: newItem.variants
+          variants: []
         });
       }
     }
@@ -620,7 +650,17 @@ const StockManagement: React.FC = () => {
 
   const handleEditClick = (p: any) => {
     setEditingId(p.id);
-    setProductId(p.barcode || p.id || '');
+    setProductId(p.boxBarcode || p.barcode || p.id || '');
+    setBoxBarcode(p.boxBarcode || p.barcode || p.id || '');
+    setRetailBarcode(p.retailBarcode || '');
+    setBoxCapacity(p.boxCapacity || 40);
+    setBoxPrice(p.boxPrice || p.wholesalePrice || '');
+    setBoxQty(p.boxCapacity && Number(p.boxCapacity) > 0 ? Math.floor(Number(p.stock) / Number(p.boxCapacity)) : '');
+    setHasMidTier(Boolean(p.midPrice && Number(p.midPrice) > 0));
+    setMidUnitName(p.midUnitName || 'Renceng');
+    setMidBarcode(p.midBarcode || '');
+    setMidCapacity(p.midCapacity || 10);
+    setMidPrice(p.midPrice || '');
     setSku(p.sku);
     setName(p.name);
     setCategory(p.category);
@@ -628,21 +668,11 @@ const StockManagement: React.FC = () => {
     setUnit(p.unit || 'Pcs');
     setPurchasePrice(p.purchasePrice);
     setSellingPrice(p.sellingPrice);
-    setWholesalePrice(p.wholesalePrice || 0);
-    setMinWholesaleQty(p.minWholesaleQty || '');
+    setWholesalePrice(p.boxPrice || p.wholesalePrice || 0);
+    setMinWholesaleQty(p.boxCapacity || p.minWholesaleQty || '');
     setMinStock(p.minStock || 0);
     setImage(p.image || '');
-    setVariants((p.variants || []).map((v: any) => ({
-      id: v.id,
-      name: v.name,
-      barcode: v.barcode || '',
-      sku: v.sku || '',
-      image: v.image || '',
-      qty: v.stock,
-      sellingPrice: v.sellingPrice ?? '',
-      wholesalePrice: v.wholesalePrice ?? '',
-      minWholesaleQty: v.minWholesaleQty ?? '',
-    })));
+    setVariants([]);
     setIsFormOpen(true); // Buka popup
   };
 
@@ -739,6 +769,14 @@ const StockManagement: React.FC = () => {
     wholesalePrice: si.wholesalePrice,
     minStock: si.minStock,
     image: si.image,
+    boxBarcode: si.boxBarcode || si.barcode,
+    boxCapacity: si.boxCapacity || 40,
+    boxPrice: si.boxPrice || si.wholesalePrice,
+    midUnitName: si.midUnitName || 'Renceng',
+    midBarcode: si.midBarcode || '',
+    midCapacity: si.midCapacity || 10,
+    midPrice: si.midPrice || 0,
+    retailBarcode: si.retailBarcode || '',
     variants: (si.variants || []).map((v: any) => ({
       id: v.id,
       name: v.name,
@@ -2174,21 +2212,26 @@ const StockManagement: React.FC = () => {
         <BarcodeScannerCamera 
           onScan={(decodedText) => {
             const scannedCode = decodedText.trim();
-            setProductId(scannedCode);
-
-            // Jika drawer form sedang terbuka:
             if (isFormOpen) {
               setCameraScannerOpen(false);
-              if (editingId) {
-                const isDuplicate = products.some(p => p.id !== editingId && (p.id === scannedCode || p.barcode === scannedCode));
-                if (isDuplicate) {
-                  alert(`Peringatan: Barcode "${scannedCode}" sudah digunakan oleh produk lain!`);
-                }
+              if (scannerTarget === 'retail') {
+                setRetailBarcode(scannedCode);
+              } else if (scannerTarget === 'mid') {
+                setMidBarcode(scannedCode);
               } else {
-                const foundProduct = products.find(p => p.id === scannedCode || p.barcode === scannedCode);
-                if (foundProduct) {
-                  if (confirm(`Barcode "${scannedCode}" sudah terdaftar sebagai "${foundProduct.name}". Buka data produk ini untuk diedit?`)) {
-                    handleEditClick(foundProduct);
+                setBoxBarcode(scannedCode);
+                setProductId(scannedCode);
+                if (editingId) {
+                  const isDuplicate = products.some(p => p.id !== editingId && (p.id === scannedCode || p.barcode === scannedCode || p.boxBarcode === scannedCode));
+                  if (isDuplicate) {
+                    alert(`Peringatan: Barcode "${scannedCode}" sudah digunakan oleh produk lain!`);
+                  }
+                } else {
+                  const foundProduct = products.find(p => p.id === scannedCode || p.barcode === scannedCode || p.boxBarcode === scannedCode || p.retailBarcode === scannedCode);
+                  if (foundProduct) {
+                    if (confirm(`Barcode "${scannedCode}" sudah terdaftar sebagai "${foundProduct.name}". Buka data produk ini untuk diedit?`)) {
+                      handleEditClick(foundProduct);
+                    }
                   }
                 }
               }
@@ -2196,7 +2239,7 @@ const StockManagement: React.FC = () => {
             }
 
             // Jika drawer form TIDAK terbuka (scan langsung dari tombol scan navbar/header):
-            const foundProduct = products.find(p => p.id === scannedCode || p.barcode === scannedCode);
+            const foundProduct = products.find(p => p.id === scannedCode || p.barcode === scannedCode || p.boxBarcode === scannedCode || p.retailBarcode === scannedCode || p.midBarcode === scannedCode);
             if (foundProduct) {
               openRestockModal(foundProduct);
               setProductId('');
@@ -2206,6 +2249,7 @@ const StockManagement: React.FC = () => {
               setCameraScannerOpen(false);
               resetForm();
               setProductId(scannedCode);
+              setBoxBarcode(scannedCode);
               setSku(scannedCode);
               setIsFormOpen(true);
               return null;
@@ -2245,51 +2289,124 @@ const StockManagement: React.FC = () => {
             </div>
 
             <form onSubmit={handleSubmit} className="ios-sheet-body">
-              {/* SECTION: INFORMASI PRODUK */}
+              {/* SECTION: INFORMASI DUS & IDENTITAS PRODUK */}
               <div className="ios-section-header">
-                <span>INFORMASI PRODUK</span>
+                <span>INFORMASI DUS &amp; IDENTITAS PRODUK</span>
                 <span className="ios-req">* Wajib diisi</span>
               </div>
               <div className="ios-group">
+                {/* 1. Barcode Dus / Karton */}
                 <div className="ios-row-vert">
                   <div className="ios-label-row">
-                    <label>ID Produk / Barcode</label>
-                    <span className="ios-hint">Ketik atau Pindai</span>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Package size={14} color="#7c3aed" /> Barcode Dus / Karton Luar
+                    </label>
+                    <span className="ios-hint">Scan kemasan kardus</span>
                   </div>
                   <div className="ios-input-wrap">
                     <input
-                      type="text" value={productId}
-                      onChange={(e) => setProductId(e.target.value)}
+                      type="text" 
+                      value={boxBarcode || productId}
+                      onChange={(e) => { setBoxBarcode(e.target.value); setProductId(e.target.value); }}
                       onKeyDown={handleIdKeyDown}
                       className="ios-input-gray"
-                      placeholder="899..."
+                      placeholder="899... (Barcode Kardus Luar)"
                       autoFocus={!(typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches)}
                     />
-                    {productId && (
-                      <button type="button" className="ios-inside-btn" onClick={() => setProductId('')}>
+                    {(boxBarcode || productId) && (
+                      <button type="button" className="ios-inside-btn" onClick={() => { setBoxBarcode(''); setProductId(''); }}>
                         <X size={14} color="#9ca3af" />
                       </button>
                     )}
-                    <button type="button" className="ios-btn-pindai" onClick={() => setCameraScannerOpen(true)}>
+                    <button 
+                      type="button" 
+                      className="ios-btn-pindai" 
+                      onClick={() => { setScannerTarget('box'); setCameraScannerOpen(true); }}
+                    >
                       <Camera size={14} /> Pindai
                     </button>
                     {!editingId && (
-                      <button type="button" className="ios-btn-zap" onClick={() => setProductId(generateInternalBarcode(products))}>
+                      <button 
+                        type="button" 
+                        className="ios-btn-zap" 
+                        title="Buat barcode internal otomatis"
+                        onClick={() => {
+                          const autoCode = generateInternalBarcode(products);
+                          setBoxBarcode(autoCode);
+                          setProductId(autoCode);
+                        }}
+                      >
                         ⚡
                       </button>
                     )}
                   </div>
                 </div>
 
-                <div className="ios-row-vert">
-                  <div className="ios-label-row"><label>Nama Produk &amp; Varian</label></div>
-                  <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="ios-input-gray" required />
+                {/* 2. Barcode Satuan Eceran / Bungkus */}
+                <div className="ios-row-vert" style={{ background: '#faf5ff' }}>
+                  <div className="ios-label-row">
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#6d28d9' }}>
+                      <Tag size={14} color="#7c3aed" /> Barcode Eceran / Bungkus Satuan
+                    </label>
+                    <span className="ios-hint" style={{ color: '#7c3aed', fontWeight: 600 }}>Scan bungkus satuan di dalam dus</span>
+                  </div>
+                  <div className="ios-input-wrap">
+                    <input
+                      type="text" 
+                      value={retailBarcode}
+                      onChange={(e) => setRetailBarcode(e.target.value)}
+                      className="ios-input-gray"
+                      placeholder="899... (Barcode Bungkus di Dalam Dus)"
+                      style={{ background: '#ffffff', borderColor: retailBarcode ? '#c4b5fd' : '#e2e8f0' }}
+                    />
+                    {retailBarcode && (
+                      <button type="button" className="ios-inside-btn" onClick={() => setRetailBarcode('')}>
+                        <X size={14} color="#9ca3af" />
+                      </button>
+                    )}
+                    <button 
+                      type="button" 
+                      className="ios-btn-pindai" 
+                      onClick={() => { setScannerTarget('retail'); setCameraScannerOpen(true); }}
+                      style={{ background: '#ede9fe', color: '#6d28d9', borderColor: '#ddd6fe' }}
+                    >
+                      <Camera size={14} /> Pindai
+                    </button>
+                    {!editingId && !retailBarcode && (
+                      <button 
+                        type="button" 
+                        className="ios-btn-zap" 
+                        title="Buat barcode eceran otomatis turunan dari dus"
+                        style={{ background: '#f3e8ff', color: '#7c3aed' }}
+                        onClick={() => {
+                          const base = boxBarcode.trim() || productId.trim() || '899';
+                          setRetailBarcode(`${base}-1`);
+                        }}
+                      >
+                        ⚡
+                      </button>
+                    )}
+                  </div>
                 </div>
 
+                {/* 3. Nama Produk & Merek */}
+                <div className="ios-row-vert">
+                  <div className="ios-label-row"><label>Nama Dus / Produk</label></div>
+                  <input 
+                    type="text" 
+                    value={name} 
+                    onChange={(e) => setName(e.target.value)} 
+                    className="ios-input-gray" 
+                    placeholder="Contoh: Indomie Kuah Soto Banjar Limau Kuit 75g"
+                    required 
+                  />
+                </div>
+
+                {/* 4. SKU & Kategori */}
                 <div className="ios-row-split">
                   <div className="ios-col">
                     <div className="ios-label-row">
-                      <label>SKU Internal Toko</label>
+                      <label>SKU Toko</label>
                       <span className="ios-sublabel" style={{ color: '#16a34a', fontSize: '11px', fontWeight: 600 }}>
                         {sku.trim() ? 'Kustom' : 'Otomatis'}
                       </span>
@@ -2300,7 +2417,7 @@ const StockManagement: React.FC = () => {
                         value={sku}
                         onChange={(e) => setSku(e.target.value)}
                         className="ios-input-gray"
-                        placeholder={name.trim() ? generateAutoSKU(name, productId) : 'Otomatis dari nama & barcode'}
+                        placeholder={name.trim() ? generateAutoSKU(name, boxBarcode || productId) : 'Otomatis'}
                         style={{ paddingRight: sku ? '28px' : '8px' }}
                       />
                       {sku && (
@@ -2327,115 +2444,226 @@ const StockManagement: React.FC = () => {
                 </div>
               </div>
 
-              {/* SECTION: VARIAN PRODUK (OPSIONAL) */}
+              {/* SECTION: PENGATURAN ISI DUS & STOK FISIK */}
               <div className="ios-section-header" style={{ marginTop: '20px' }}>
-                <span>VARIAN (OPSIONAL)</span>
-                <span className="ios-hint-gray">Warna / rasa / ukuran</span>
-              </div>
-              <VariantEditor
-                variants={variants}
-                onChange={setVariants}
-                parentBarcode={productId}
-                qtyLabel={editingId ? 'Stok' : 'Qty'}
-                hint={editingId
-                  ? 'Ubah stok varian akan dicatat otomatis sebagai Penyesuaian di Mutasi Stok. Harga varian dikosongkan = ikut harga produk di bawah.'
-                  : 'Satu produk, banyak varian dengan harga sama? Cukup ketik nama varian dipisah koma lalu isi qty tiap varian. Harga varian dikosongkan = ikut harga produk di bawah.'}
-              />
-
-              <div style={{ marginTop: '8px', padding: '10px 12px', background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: '10px', fontSize: '11.5px', color: '#5b21b6', lineHeight: 1.45 }}>
-                📦 <strong>Tips Jual Barang Karton &amp; Eceran (cth: Indomie):</strong> Anda bisa input 2 varian di atas: <strong>"Satuan (Pcs)"</strong> (scan barcode bungkus) dan <strong>"1 Karton (Dus isi 40)"</strong> (scan barcode kardus luar dengan harga 1 dus). Atau jika stok dihitung per Pcs, cukup atur <strong>Minimum Grosir</strong> di bawah agar kasir otomatis menawarkan harga grosir/karton saat beli banyak.
-              </div>
-
-              {/* SECTION: MANAJEMEN STOK & SATUAN */}
-              <div className="ios-section-header" style={{ marginTop: '20px' }}>
-                <span>MANAJEMEN STOK &amp; SATUAN</span>
-                <span className="ios-hint-gray">Gudang Utama (POS 01)</span>
+                <span>PENGATURAN ISI DUS &amp; STOK FISIK</span>
+                <span className="ios-hint-gray">Konversi Dus ke Eceran</span>
               </div>
               <div className="ios-group">
-                {variants.some(v => v.name.trim()) ? (
-                  <div className="ios-row-horiz">
-                    <div>
-                      <label>Total Stok (Otomatis)</label>
-                      <div className="ios-sublabel">Jumlah dari seluruh varian di atas</div>
-                    </div>
-                    <div style={{ fontSize: '20px', fontWeight: 800, color: '#065f46' }}>{sumVariantQty(variants)}</div>
-                  </div>
-                ) : (
+                {/* Isi 1 Dus & Satuan Eceran */}
                 <div className="ios-row-horiz">
                   <div>
-                    <label>Jumlah Masuk (Stok Awal)</label>
-                    <div className="ios-sublabel">Kuantitas fisik yang diterima</div>
+                    <label>Isi Produk per 1 Dus / Karton</label>
+                    <div className="ios-sublabel">Jumlah satuan terkecil dalam 1 kardus</div>
                   </div>
-                  <div className="ios-stepper">
-                    <button type="button" onClick={() => setQty(Math.max(0, Number(qty) - 1))}>-</button>
-                    <input type="number" step="any" inputMode="decimal" value={qty} onChange={(e) => setQty(e.target.value === '' ? '' : Number(e.target.value))} required />
-                    <button type="button" onClick={() => setQty(Number(qty) + 1)}>+</button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <input
+                      type="number"
+                      min={1}
+                      value={boxCapacity}
+                      onChange={(e) => {
+                        const cap = Math.max(1, Number(e.target.value) || 1);
+                        setBoxCapacity(cap);
+                        if (boxQty) {
+                          setQty(Number(boxQty) * cap);
+                        }
+                      }}
+                      className="ios-input-gray ios-input-small"
+                      style={{ width: '65px', textAlign: 'center', fontWeight: 800, color: '#7c3aed', background: '#f5f3ff', borderColor: '#ddd6fe' }}
+                      placeholder="40"
+                      required
+                    />
+                    <span style={{ fontSize: '13px', fontWeight: 700, color: '#64748b' }}>{unit}</span>
                   </div>
                 </div>
-                )}
-                
+
+                {/* Pilihan Satuan Eceran */}
                 <div className="ios-row-vert" style={{ padding: '12px 16px' }}>
-                  <label style={{ marginBottom: '8px', display: 'block', fontSize: '13px', fontWeight: 600 }}>Satuan Unit</label>
+                  <label style={{ marginBottom: '8px', display: 'block', fontSize: '13px', fontWeight: 600 }}>Satuan Eceran (Terkecil)</label>
                   <div className="ios-segmented">
-                    {['Pcs', 'Box', 'Kg', 'Liter'].map(u => (
+                    {['Pcs', 'Bungkus', 'Sachet', 'Batang'].map(u => (
                       <button type="button" key={u} className={unit === u ? 'active' : ''} onClick={() => setUnit(u)}>{u}</button>
                     ))}
                   </div>
-                  {/* Satuan lain (Gram, Pack, Lusin, Dus) */}
                   <select
-                    value={['Pcs', 'Box', 'Kg', 'Liter'].indexOf(unit) === -1 ? unit : ''}
+                    value={['Pcs', 'Bungkus', 'Sachet', 'Batang'].indexOf(unit) === -1 ? unit : ''}
                     onChange={(e) => { if (e.target.value) setUnit(e.target.value); }}
                     className="ios-input-gray"
                     style={{ marginTop: '8px' }}
                   >
-                    <option value="">Satuan lain...</option>
-                    <option value="Gram">Gram</option>
+                    <option value="">Pilih satuan lain...</option>
+                    <option value="Botol">Botol</option>
+                    <option value="Kaleng">Kaleng</option>
+                    <option value="Box">Box</option>
                     <option value="Pack">Pack</option>
                     <option value="Lusin">Lusin</option>
-                    <option value="Dus">Dus</option>
+                    <option value="Kg">Kg</option>
                   </select>
-                  {['kg', 'gram', 'liter'].includes(unit.toLowerCase()) && (
-                    <div style={{ marginTop: '8px', fontSize: '11px', color: '#92400e', background: '#fef3c7', padding: '6px 10px', borderRadius: '8px', lineHeight: 1.4 }}>
-                      Barang timbangan: qty boleh desimal (mis. 2,5). <strong>Harga beli, jual &amp; grosir diisi per {unit}</strong>. Di kasir, klik produk lalu masukkan berat.
-                    </div>
-                  )}
                 </div>
 
+                {/* Input Jumlah Dus Masuk & Kalkulasi Total Stok */}
+                <div className="ios-row-horiz" style={{ background: '#f8fafc' }}>
+                  <div>
+                    <label>Jumlah Dus yang Diterima (Masuk)</label>
+                    <div className="ios-sublabel">Berapa dus kardus fisik masuk</div>
+                  </div>
+                  <div className="ios-stepper">
+                    <button 
+                      type="button" 
+                      onClick={() => {
+                        const next = Math.max(0, (Number(boxQty) || 0) - 1);
+                        setBoxQty(next);
+                        setQty(next * (Number(boxCapacity) || 40));
+                      }}
+                    >
+                      -
+                    </button>
+                    <input 
+                      type="number" 
+                      step="any" 
+                      inputMode="decimal" 
+                      value={boxQty} 
+                      placeholder="0"
+                      onChange={(e) => {
+                        const val = e.target.value === '' ? '' : Number(e.target.value);
+                        setBoxQty(val);
+                        if (val !== '') {
+                          setQty(Number(val) * (Number(boxCapacity) || 40));
+                        }
+                      }} 
+                    />
+                    <button 
+                      type="button" 
+                      onClick={() => {
+                        const next = (Number(boxQty) || 0) + 1;
+                        setBoxQty(next);
+                        setQty(next * (Number(boxCapacity) || 40));
+                      }}
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+
+                {/* Total Stok Fisik Satuan */}
+                <div className="ios-row-horiz">
+                  <div>
+                    <label style={{ color: '#065f46' }}>Total Stok Fisik ({unit})</label>
+                    <div className="ios-sublabel">
+                      {boxQty && Number(boxQty) > 0 
+                        ? `${boxQty} Dus × ${boxCapacity} ${unit}`
+                        : 'Kuantitas fisik satuan dihitung per ' + unit}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <input 
+                      type="number" 
+                      step="any" 
+                      inputMode="decimal" 
+                      value={qty} 
+                      onChange={(e) => setQty(e.target.value === '' ? '' : Number(e.target.value))} 
+                      className="ios-input-gray ios-input-small"
+                      style={{ width: '80px', textAlign: 'right', fontWeight: 800, fontSize: '16px', color: '#065f46', background: '#ecfdf5', borderColor: '#a7f3d0' }}
+                      required 
+                    />
+                    <span style={{ fontSize: '13px', fontWeight: 700, color: '#065f46' }}>{unit}</span>
+                  </div>
+                </div>
+
+                {/* Peringatan Stok Tipis */}
                 <div className="ios-row-horiz">
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <div>
-                      <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>Peringatan Stok Tipis (Min) <AlertTriangle size={14} color="#f59e0b" /></label>
-                      <div className="ios-sublabel">Peringatan saat stok di bawah nilai ini</div>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        Peringatan Stok Tipis (Min) <AlertTriangle size={14} color="#f59e0b" />
+                      </label>
+                      <div className="ios-sublabel">Alert saat stok di bawah nilai ini (dalam satuan {unit})</div>
                     </div>
                   </div>
                   <input type="number" step="any" inputMode="decimal" value={minStock} onChange={(e) => setMinStock(e.target.value === '' ? '' : Number(e.target.value))} className="ios-input-gray ios-input-small" style={{ width: '60px', textAlign: 'center' }} placeholder="0" />
                 </div>
-
-                <div className="ios-row-horiz" style={{ borderTop: '1px solid #f1f5f9' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <div>
-                      <label style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#1d4ed8' }}>
-                        Minimum Grosir (Qty) 🏷️
-                      </label>
-                      <div className="ios-sublabel">Kasir otomatis tawarkan Harga Grosir jika beli ≥ jumlah ini (cth: 12 pcs / 40 dus)</div>
-                    </div>
-                  </div>
-                  <input
-                    type="number"
-                    step="any"
-                    inputMode="decimal"
-                    value={minWholesaleQty}
-                    onChange={(e) => setMinWholesaleQty(e.target.value === '' ? '' : Number(e.target.value))}
-                    className="ios-input-gray ios-input-small"
-                    style={{ width: '60px', textAlign: 'center', fontWeight: 700, color: '#1d4ed8', background: '#eff6ff', borderColor: '#bfdbfe' }}
-                    placeholder="12"
-                  />
-                </div>
               </div>
 
-              {/* SECTION: STRUKTUR HARGA */}
+              {/* OPSI KEMASAN MENENGAH (RENCENG / LUSIN / SLOP) */}
               <div className="ios-section-header" style={{ marginTop: '20px' }}>
-                <span>STRUKTUR HARGA (IDR)</span>
+                <span>KEMASAN MENENGAH (RENCENG / LUSIN / SLOP)</span>
+                <label style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 700, color: '#6d28d9', cursor: 'pointer' }}>
+                  <input 
+                    type="checkbox" 
+                    checked={hasMidTier} 
+                    onChange={(e) => setHasMidTier(e.target.checked)} 
+                  />
+                  Aktifkan Satuan Menengah
+                </label>
+              </div>
+              {hasMidTier && (
+                <div className="ios-group" style={{ border: '1px solid #ddd6fe', background: '#faf5ff' }}>
+                  <div className="ios-row-split">
+                    <div className="ios-col">
+                      <label style={{ fontSize: '12.5px', fontWeight: 700, color: '#5b21b6', marginBottom: '6px' }}>Nama Satuan</label>
+                      <select 
+                        value={midUnitName} 
+                        onChange={(e) => setMidUnitName(e.target.value)}
+                        className="ios-input-gray"
+                        style={{ background: '#ffffff' }}
+                      >
+                        <option value="Renceng">Renceng</option>
+                        <option value="Lusin">Lusin (12 Pcs)</option>
+                        <option value="Slop">Slop (10 Bungkus)</option>
+                        <option value="Pack">Pack</option>
+                      </select>
+                    </div>
+                    <div className="ios-col">
+                      <label style={{ fontSize: '12.5px', fontWeight: 700, color: '#5b21b6', marginBottom: '6px' }}>Isi per {midUnitName}</label>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <input 
+                          type="number" 
+                          min={1}
+                          value={midCapacity} 
+                          onChange={(e) => setMidCapacity(Number(e.target.value) || 1)}
+                          className="ios-input-gray"
+                          style={{ background: '#ffffff', textAlign: 'center', fontWeight: 800 }}
+                        />
+                        <span style={{ fontSize: '12px', fontWeight: 700, color: '#6d28d9' }}>{unit}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="ios-row-vert" style={{ borderTop: '1px solid #ede9fe' }}>
+                    <div className="ios-label-row">
+                      <label style={{ fontSize: '12.5px', fontWeight: 700, color: '#5b21b6' }}>Barcode {midUnitName} (Opsional)</label>
+                      <span className="ios-hint">Scan kemasan {midUnitName}</span>
+                    </div>
+                    <div className="ios-input-wrap">
+                      <input 
+                        type="text" 
+                        value={midBarcode} 
+                        onChange={(e) => setMidBarcode(e.target.value)}
+                        className="ios-input-gray"
+                        placeholder={`Barcode khusus kemasan ${midUnitName}...`}
+                        style={{ background: '#ffffff' }}
+                      />
+                      {midBarcode && (
+                        <button type="button" className="ios-inside-btn" onClick={() => setMidBarcode('')}>
+                          <X size={14} color="#9ca3af" />
+                        </button>
+                      )}
+                      <button 
+                        type="button" 
+                        className="ios-btn-pindai"
+                        onClick={() => { setScannerTarget('mid'); setCameraScannerOpen(true); }}
+                        style={{ background: '#ffffff' }}
+                      >
+                        <Camera size={14} /> Pindai
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* SECTION: STRUKTUR 3 TINGKAT HARGA */}
+              <div className="ios-section-header" style={{ marginTop: '20px' }}>
+                <span>STRUKTUR 3 TINGKAT HARGA (IDR)</span>
                 {(() => {
                   const m = (Number(sellingPrice) - Number(purchasePrice));
                   const pct = Number(sellingPrice) > 0 ? (m / Number(sellingPrice)) * 100 : 0;
@@ -2443,44 +2671,80 @@ const StockManagement: React.FC = () => {
                   const bg = pct >= 0 ? '#dcfce7' : '#fee2e2';
                   return (
                     <span style={{ backgroundColor: bg, color, padding: '2px 8px', borderRadius: '999px', fontSize: '11px', fontWeight: 700 }}>
-                      Margin: {pct > 0 ? '+' : ''}{pct.toFixed(1)}%
+                      Margin Eceran: {pct > 0 ? '+' : ''}{pct.toFixed(1)}%
                     </span>
                   );
                 })()}
               </div>
               <div className="ios-group">
+                {/* Harga Modal (Beli) */}
                 <div className="ios-row-horiz">
                   <div>
-                    <label>Harga Modal (Beli)</label>
-                    <div className="ios-sublabel">Biaya pokok per item</div>
+                    <label>Harga Modal (Beli) per {unit}</label>
+                    <div className="ios-sublabel">Biaya pokok dasar eceran</div>
                   </div>
                   <div className="ios-input-prefix">
                     <span>Rp</span>
-                    <input type="number" inputMode="numeric" value={purchasePrice} onChange={(e) => setPurchasePrice(e.target.value === '' ? '' : Number(e.target.value))} className="ios-input-gray" style={{ textAlign: 'right', width: '100px', fontWeight: 700 }} />
+                    <input type="number" inputMode="numeric" value={purchasePrice} onChange={(e) => setPurchasePrice(e.target.value === '' ? '' : Number(e.target.value))} className="ios-input-gray" style={{ textAlign: 'right', width: '110px', fontWeight: 700 }} />
                   </div>
                 </div>
                 
-                <div className="ios-row-horiz">
+                {/* 1. Harga Jual Eceran */}
+                <div className="ios-row-horiz" style={{ background: '#fff7f7' }}>
                   <div>
-                    <label style={{ color: 'var(--primary)' }}>Harga Jual (Kasir)</label>
-                    <div className="ios-sublabel">Harga eceran reguler</div>
+                    <label style={{ color: 'var(--primary)', fontWeight: 800 }}>1. Harga Jual Eceran (per {unit})</label>
+                    <div className="ios-sublabel">Harga standar kasir saat beli satuan/eceran</div>
                   </div>
                   <div className="ios-input-prefix is-red">
                     <span>Rp</span>
-                    <input type="number" inputMode="numeric" value={sellingPrice} onChange={(e) => setSellingPrice(e.target.value === '' ? '' : Number(e.target.value))} className="ios-input-gray" style={{ textAlign: 'right', width: '100px', color: 'var(--primary)', fontWeight: 700 }} required />
+                    <input type="number" inputMode="numeric" value={sellingPrice} onChange={(e) => setSellingPrice(e.target.value === '' ? '' : Number(e.target.value))} className="ios-input-gray" style={{ textAlign: 'right', width: '110px', color: 'var(--primary)', fontWeight: 800 }} required />
                   </div>
                 </div>
 
-                <div className="ios-row-horiz">
+                {/* 2. Harga Jual Dus / Karton */}
+                <div className="ios-row-horiz" style={{ background: '#f5f3ff' }}>
                   <div>
-                    <label>Harga Grosir</label>
-                    <div className="ios-sublabel">Opsional</div>
+                    <label style={{ color: '#6d28d9', fontWeight: 800 }}>2. Harga Jual Dus / Karton</label>
+                    <div className="ios-sublabel">Harga 1 Dus utuh (isi {boxCapacity} {unit})</div>
                   </div>
-                  <div className="ios-input-prefix">
-                    <span>Rp</span>
-                    <input type="number" inputMode="numeric" value={wholesalePrice} onChange={(e) => setWholesalePrice(e.target.value === '' ? '' : Number(e.target.value))} className="ios-input-gray" style={{ textAlign: 'right', width: '100px', fontWeight: 700 }} />
+                  <div className="ios-input-prefix" style={{ background: '#ede9fe' }}>
+                    <span style={{ color: '#6d28d9' }}>Rp</span>
+                    <input 
+                      type="number" 
+                      inputMode="numeric" 
+                      value={boxPrice} 
+                      onChange={(e) => {
+                        setBoxPrice(e.target.value === '' ? '' : Number(e.target.value));
+                        setWholesalePrice(e.target.value === '' ? '' : Number(e.target.value));
+                      }} 
+                      placeholder={sellingPrice && boxCapacity ? String(Number(sellingPrice) * Number(boxCapacity)) : ''}
+                      className="ios-input-gray" 
+                      style={{ textAlign: 'right', width: '110px', fontWeight: 800, color: '#6d28d9' }} 
+                    />
                   </div>
                 </div>
+
+                {/* 3. Harga Jual Satuan Menengah (Renceng/Lusin) jika aktif */}
+                {hasMidTier && (
+                  <div className="ios-row-horiz" style={{ background: '#eff6ff' }}>
+                    <div>
+                      <label style={{ color: '#1d4ed8', fontWeight: 800 }}>3. Harga Jual {midUnitName}</label>
+                      <div className="ios-sublabel">Harga 1 {midUnitName} (isi {midCapacity} {unit})</div>
+                    </div>
+                    <div className="ios-input-prefix" style={{ background: '#dbeafe' }}>
+                      <span style={{ color: '#1d4ed8' }}>Rp</span>
+                      <input 
+                        type="number" 
+                        inputMode="numeric" 
+                        value={midPrice} 
+                        onChange={(e) => setMidPrice(e.target.value === '' ? '' : Number(e.target.value))} 
+                        placeholder={sellingPrice && midCapacity ? String(Number(sellingPrice) * Number(midCapacity)) : ''}
+                        className="ios-input-gray" 
+                        style={{ textAlign: 'right', width: '110px', fontWeight: 800, color: '#1d4ed8' }} 
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* SECTION: GAMBAR PRODUK */}

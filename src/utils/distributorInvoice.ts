@@ -130,7 +130,8 @@ export const buildDistributorInvoiceHtml = (sale: SalesTransaction, opts: Distri
   const itemsHtml = sale.items
     .map((item, idx) => {
       const p = products.find(x => x.id === item.productId);
-      const unit = p?.unit || 'Pcs';
+      const unit = item.tierUnit || p?.unit || 'Pcs';
+      const tierBadge = item.tierType === 'BOX' ? ' [DUS]' : (item.tierType === 'MID' ? ` [${(item.tierUnit || 'MID').toUpperCase()}]` : '');
       const isCustom = Boolean(item.isCustomPrice || (item.originalPrice && item.originalPrice !== item.price));
       const discountPerItem = isCustom && item.originalPrice && item.originalPrice > item.price
         ? item.originalPrice - item.price
@@ -141,8 +142,8 @@ export const buildDistributorInvoiceHtml = (sale: SalesTransaction, opts: Distri
           <td class="text-center">${idx + 1}</td>
           <td class="font-mono text-muted text-center">${esc(p?.sku || '-')}</td>
           <td>
-            <div class="product-name font-bold">${esc(item.name)}</div>
-            ${item.variantName ? `<div class="sub-text text-primary">Varian: ${esc(item.variantName)}</div>` : ''}
+            <div class="product-name font-bold">${esc(item.name)}${tierBadge}</div>
+            ${item.variantName && !item.variantName.startsWith('[') ? `<div class="sub-text text-primary">Varian: ${esc(item.variantName)}</div>` : ''}
             ${item.customPriceNote ? `<div class="sub-text text-warning font-semibold">* Catatan: ${esc(item.customPriceNote)}</div>` : ''}
           </td>
           <td class="text-center font-bold">${num(item.qty)}</td>

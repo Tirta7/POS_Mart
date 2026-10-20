@@ -294,7 +294,15 @@ app.post('/api/saas/products', async (req, res) => {
           stock: incomingVariants.length > 0 ? 0 : round3(data.stock),
           min_stock: Number(data.minStock || 0),
           unit: data.unit ? String(data.unit) : 'Pcs',
-          image_url: data.image
+          image_url: data.image,
+          box_barcode: data.boxBarcode || data.barcode || null,
+          box_capacity: optNum(data.boxCapacity) || 1,
+          box_price: optNum(data.boxPrice) || Number(data.wholesalePrice || 0),
+          mid_unit_name: data.midUnitName || null,
+          mid_barcode: data.midBarcode || null,
+          mid_capacity: optNum(data.midCapacity) || 0,
+          mid_price: optNum(data.midPrice) || 0,
+          retail_barcode: data.retailBarcode || null
         }
       });
       if (incomingVariants.length > 0) {
@@ -346,6 +354,14 @@ app.put('/api/saas/products/:id', async (req, res) => {
     if (data.minStock !== undefined) updateData.min_stock = Number(data.minStock);
     if (data.unit !== undefined && data.unit) updateData.unit = String(data.unit);
     if (data.image !== undefined) updateData.image_url = data.image;
+    if (data.boxBarcode !== undefined) updateData.box_barcode = data.boxBarcode;
+    if (data.boxCapacity !== undefined) updateData.box_capacity = optNum(data.boxCapacity);
+    if (data.boxPrice !== undefined) updateData.box_price = optNum(data.boxPrice);
+    if (data.midUnitName !== undefined) updateData.mid_unit_name = data.midUnitName;
+    if (data.midBarcode !== undefined) updateData.mid_barcode = data.midBarcode;
+    if (data.midCapacity !== undefined) updateData.mid_capacity = optNum(data.midCapacity);
+    if (data.midPrice !== undefined) updateData.mid_price = optNum(data.midPrice);
+    if (data.retailBarcode !== undefined) updateData.retail_barcode = data.retailBarcode;
 
     const product = await prisma.$transaction(async (tx) => {
       await tx.product.update({
@@ -867,6 +883,8 @@ app.post('/api/saas/transactions', async (req, res) => {
           variantName = variant.name;
         }
 
+        const stockDeduct = round3(item.stock_qty || (item.quantity * (Number(item.tier_multiplier || item.tierMultiplier) || 1)));
+
         // Record di Nota
         await tx.transactionItem.create({
           data: {
@@ -876,10 +894,13 @@ app.post('/api/saas/transactions', async (req, res) => {
             price_at_time: item.price,
             subtotal: item.subtotal,
             variant_id: variantId,
-            variant_name: variantName,
+            variant_name: variantName || (item.tier_unit ? `[${item.tier_unit}]` : null),
             original_price: item.original_price != null ? Number(item.original_price) : (item.originalPrice != null ? Number(item.originalPrice) : item.price),
             is_custom_price: Boolean(item.is_custom_price || item.isCustomPrice),
-            custom_price_note: item.custom_price_note || item.customPriceNote || (Boolean(item.is_custom_price || item.isCustomPrice) ? 'Harga Khusus' : null)
+            custom_price_note: item.custom_price_note || item.customPriceNote || (Boolean(item.is_custom_price || item.isCustomPrice) ? 'Harga Khusus' : null),
+            tier_type: item.tier_type || item.tierType || null,
+            tier_unit: item.tier_unit || item.tierUnit || null,
+            tier_multiplier: optNum(item.tier_multiplier || item.tierMultiplier) || 1
           }
         });
 
@@ -888,11 +909,11 @@ app.post('/api/saas/transactions', async (req, res) => {
           data: {
             stock_transaction_id: stockMutation.id,
             product_id: item.product_id,
-            qty: round3(item.quantity),
+            qty: stockDeduct,
             purchase_price: item.price,
             subtotal: item.subtotal,
             variant_id: variantId,
-            variant_name: variantName
+            variant_name: variantName || (item.tier_unit ? `[${item.tier_unit}]` : null)
           }
         });
 
@@ -901,7 +922,7 @@ app.post('/api/saas/transactions', async (req, res) => {
         if (variantId) {
           const uv = await tx.productVariant.update({
             where: { id: variantId },
-            data: { stock: { decrement: round3(item.quantity) } }
+            data: { stock: { decrement: stockDeduct } }
           });
           variantStockAfter = uv.stock;
         }
@@ -909,7 +930,7 @@ app.post('/api/saas/transactions', async (req, res) => {
         // Kurangi stok produk (total) secara ATOMIC (Mencegah Race Condition)
         const updatedProduct = await tx.product.update({
           where: { id: item.product_id, tenant_id: req.tenantId },
-          data: { stock: { decrement: round3(item.quantity) } }
+          data: { stock: { decrement: stockDeduct } }
         });
 
         // Notify if stock is depleted

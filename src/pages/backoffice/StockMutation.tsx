@@ -636,7 +636,9 @@ const StockMutation: React.FC = () => {
                           const isFirst = idx === 0;
                           const unit = item.unit || product?.unit || 'Pcs';
                           const unitPrice = item.purchasePrice || (item.qty ? Math.abs((item.subtotal || 0) / item.qty) : 0);
-                          const prodName = getProductName(item.productId, item.productName) + (item.variantName ? ` - ${item.variantName}` : '');
+                          const rawProdName = getProductName(item.productId, item.productName);
+                          const isTierTag = Boolean(item.variantName && item.variantName.startsWith('[') && item.variantName.endsWith(']'));
+                          const prodName = rawProdName + (!isTierTag && item.variantName ? ` - ${item.variantName}` : '');
                           const prodSku = getProductSku(item.productId);
 
                           return (
@@ -700,8 +702,21 @@ const StockMutation: React.FC = () => {
 
                               {/* Produk & SKU */}
                               <td style={{ padding: '12px 16px' }}>
-                                <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '13px' }}>
-                                  {prodName}
+                                <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                  <span>{prodName}</span>
+                                  {isTierTag && (
+                                    <span style={{
+                                      fontSize: '10.5px',
+                                      fontWeight: 800,
+                                      padding: '1px 7px',
+                                      borderRadius: '4px',
+                                      background: item.variantName?.toLowerCase().includes('dus') ? '#fef3c7' : '#e0f2fe',
+                                      color: item.variantName?.toLowerCase().includes('dus') ? '#92400e' : '#0369a1',
+                                      border: item.variantName?.toLowerCase().includes('dus') ? '1px solid #fde68a' : '1px solid #bae6fd'
+                                    }}>
+                                      {item.variantName}
+                                    </span>
+                                  )}
                                 </div>
                                 <div style={{ fontSize: '11px', color: '#94a3b8', fontFamily: 'monospace', marginTop: '2px' }}>
                                   SKU: {prodSku}

@@ -126,6 +126,14 @@ model Product {
   min_stock      Float   @default(0)
   unit           String  @default("Pcs") // satuan jual (Pcs, Kg, Gram, Liter, ...). Harga selalu per satuan ini.
   image_url      String?
+  box_barcode    String?
+  box_capacity   Float?  @default(1)
+  box_price      Float?  @default(0)
+  mid_unit_name  String?
+  mid_barcode    String?
+  mid_capacity   Float?  @default(0)
+  mid_price      Float?  @default(0)
+  retail_barcode String?
   is_active      Boolean @default(true) // false = disembunyikan dari Kasir POS (mis. stok habis mendadak)
   deleted_at     DateTime? // soft delete: produk yang sudah punya riwayat tidak dihapus fisik agar laporan/invoice/mutasi tetap utuh
 
@@ -200,6 +208,9 @@ model TransactionItem {
   original_price    Float?
   is_custom_price   Boolean? @default(false)
   custom_price_note String?
+  tier_type         String?
+  tier_unit         String?
+  tier_multiplier   Float?   @default(1)
 
   transaction Transaction @relation(fields: [transaction_id], references: [id])
   product     Product     @relation(fields: [product_id], references: [id])

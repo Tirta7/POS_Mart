@@ -148,16 +148,22 @@ const Reports: React.FC = () => {
         return acc;
       }, 0);
 
-      const hasWholesale = (sale.items || []).some(it => it.customPriceNote?.toLowerCase().includes('grosir'));
-      const wholesaleCount = (sale.items || []).filter(it => it.customPriceNote?.toLowerCase().includes('grosir')).length;
+      const isWholesaleItem = (it: any) =>
+        it.tierType === 'BOX' ||
+        it.tierType === 'MID' ||
+        it.customPriceNote?.toLowerCase().includes('grosir') ||
+        (it.tierUnit && (it.tierUnit.toLowerCase().includes('dus') || it.tierUnit.toLowerCase().includes('renceng') || it.tierUnit.toLowerCase().includes('lusin')));
+
+      const hasWholesale = (sale.items || []).some(isWholesaleItem);
+      const wholesaleCount = (sale.items || []).filter(isWholesaleItem).length;
       const totalWholesaleSavings = (sale.items || []).reduce((acc, it) => {
-        if (it.customPriceNote?.toLowerCase().includes('grosir') && it.originalPrice && it.originalPrice > it.price) {
+        if (isWholesaleItem(it) && it.originalPrice && it.originalPrice > it.price) {
           return acc + ((it.originalPrice - it.price) * (it.qty || 1));
         }
         return acc;
       }, 0);
       const totalWholesaleAmount = (sale.items || []).reduce((acc, it) => {
-        if (it.customPriceNote?.toLowerCase().includes('grosir')) {
+        if (isWholesaleItem(it)) {
           return acc + ((it.price || 0) * (it.qty || 1));
         }
         return acc;
@@ -2497,10 +2503,25 @@ const Reports: React.FC = () => {
                           }}>
                             {/* Nama Produk */}
                             <td style={{ padding: '12px 14px' }}>
-                              <div style={{ fontWeight: 700, color: '#0f172a' }}>
-                                {it.name}
+                              <div style={{ fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                <span>{it.name}</span>
+                                {it.tierType === 'BOX' && (
+                                  <span style={{ fontSize: '10.5px', fontWeight: 800, background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a', padding: '1px 6px', borderRadius: '4px' }}>
+                                    DUS ({it.tierMultiplier || 1} pcs)
+                                  </span>
+                                )}
+                                {it.tierType === 'MID' && (
+                                  <span style={{ fontSize: '10.5px', fontWeight: 800, background: '#e0f2fe', color: '#0369a1', border: '1px solid #bae6fd', padding: '1px 6px', borderRadius: '4px' }}>
+                                    {(it.tierUnit || 'MID').toUpperCase()} ({it.tierMultiplier || 1} pcs)
+                                  </span>
+                                )}
+                                {it.tierType === 'RETAIL' && (
+                                  <span style={{ fontSize: '10px', fontWeight: 700, background: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0', padding: '1px 6px', borderRadius: '4px' }}>
+                                    ECER
+                                  </span>
+                                )}
                               </div>
-                              {it.variantName && (
+                              {it.variantName && !it.variantName.startsWith('[') && (
                                 <div style={{ fontSize: '11px', color: '#64748b' }}>
                                   Varian: {it.variantName}
                                 </div>
@@ -2518,7 +2539,12 @@ const Reports: React.FC = () => {
 
                             {/* Qty */}
                             <td style={{ padding: '12px 14px', textAlign: 'center', fontWeight: 800, color: '#0f172a' }}>
-                              {it.qty}
+                              {it.qty} <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>{it.tierUnit || 'Pcs'}</span>
+                              {it.tierMultiplier && it.tierMultiplier > 1 && (
+                                <div style={{ fontSize: '10px', color: '#94a3b8', fontWeight: 500 }}>
+                                  ({it.qty * it.tierMultiplier} pcs)
+                                </div>
+                              )}
                             </td>
 
                             {/* Skema Harga */}
