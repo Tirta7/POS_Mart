@@ -397,8 +397,13 @@ const StockManagement: React.FC = () => {
   const toggleSelect = (id: string) =>
     setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
 
-  const openReviewSingle = (item: any) => { setReviewMode('single'); setReviewItems([item]); };
+  const openReviewSingle = (item: any) => { 
+    setShowDraftModal(false);
+    setReviewMode('single'); 
+    setReviewItems([item]); 
+  };
   const openReviewSelected = () => {
+    setShowDraftModal(false);
     setReviewMode('multi');
     setReviewItems(draftItems.filter(i => selectedIds.includes(i.id)));
   };
@@ -414,7 +419,16 @@ const StockManagement: React.FC = () => {
       minStock: Number(updated.minStock || 0),
       purchasePrice: Number(updated.purchasePrice || 0),
       sellingPrice: Number(updated.sellingPrice),
-      wholesalePrice: Number(updated.wholesalePrice || 0),
+      wholesalePrice: Number(updated.wholesalePrice || updated.boxPrice || 0),
+      minWholesaleQty: Number(updated.boxCapacity || updated.minWholesaleQty || 0),
+      boxBarcode: updated.boxBarcode || undefined,
+      boxCapacity: Number(updated.boxCapacity) || 1,
+      boxPrice: Number(updated.boxPrice) || Number(updated.wholesalePrice) || 0,
+      midUnitName: updated.midUnitName || undefined,
+      midBarcode: updated.midBarcode || undefined,
+      midCapacity: Number(updated.midCapacity) || 0,
+      midPrice: Number(updated.midPrice) || 0,
+      retailBarcode: updated.retailBarcode || undefined,
       image: updated.image || undefined,
       variants: updated.variants && updated.variants.length > 0 ? updated.variants : undefined,
     };
@@ -2404,13 +2418,30 @@ const StockManagement: React.FC = () => {
                         : <Package size={20} color="#9ca3af" />}
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 800, fontSize: '14px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.name}</div>
-                      <div style={{ fontSize: '12px', color: '#6b7280' }}>
-                        {item.sku} &bull; {item.qty} {item.unit} &bull; Rp {(Number(item.purchasePrice || 0) * Number(item.qty || 0)).toLocaleString('id-ID')}
+                      <div style={{ fontWeight: 800, fontSize: '14px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#0f172a' }}>{item.name}</div>
+                      <div style={{ fontSize: '12px', color: '#475569', display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center', marginTop: '2px' }}>
+                        <span>SKU: {item.sku || '-'}</span>
+                        <span>&bull;</span>
+                        <strong style={{ color: '#0f172a' }}>{item.qty} {item.unit}</strong>
+                        <span>&bull;</span>
+                        <span style={{ color: '#b91c1c', fontWeight: 700 }}>Rp {(Number(item.purchasePrice || 0) * Number(item.qty || 0)).toLocaleString('id-ID')}</span>
                       </div>
-                      <div style={{ fontSize: '11px', color: '#9ca3af' }}>
-                        {item.grNumber}{item.grNumber === grNumber && <span style={{ marginLeft: '6px', color: 'var(--primary)', fontWeight: 700 }}>SESI AKTIF</span>} &bull; {new Date(item.savedAt).toLocaleString('id-ID')}
-                        {!item.pending && <span style={{ marginLeft: '6px', color: '#92400e', fontWeight: 700 }}>Sudah masuk stok</span>}
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center', marginTop: '4px' }}>
+                        {item.boxCapacity && Number(item.boxCapacity) > 1 && (
+                          <span style={{ fontSize: '9.5px', fontWeight: 700, color: '#92400e', background: '#fef3c7', border: '1px solid #fde68a', padding: '0 5px', borderRadius: '4px' }}>
+                            📦 1 Dus = {item.boxCapacity} {item.unit}
+                          </span>
+                        )}
+                        {item.midCapacity && Number(item.midCapacity) > 1 && item.midUnitName && (
+                          <span style={{ fontSize: '9.5px', fontWeight: 700, color: '#0369a1', background: '#e0f2fe', border: '1px solid #bae6fd', padding: '0 5px', borderRadius: '4px' }}>
+                            🗂️ 1 {item.midUnitName} = {item.midCapacity} {item.unit}
+                          </span>
+                        )}
+                        {item.grNumber && (
+                          <span style={{ fontSize: '9.5px', color: '#64748b' }}>
+                            Dok: {item.grNumber} &bull; {new Date(item.savedAt).toLocaleDateString('id-ID')}
+                          </span>
+                        )}
                       </div>
                     </div>
                     <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
@@ -2438,6 +2469,10 @@ const StockManagement: React.FC = () => {
           categories={categories}
           onSaveItem={handleSaveDraftItem}
           onClose={() => setReviewItems(null)}
+          onOpenDraftList={() => {
+            setReviewItems(null);
+            setShowDraftModal(true);
+          }}
           onRemoveItem={(id) => {
             const next = reviewItems.filter(i => i.id !== id);
             setSelectedIds(prev => prev.filter(x => x !== id));

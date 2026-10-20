@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
-import { CheckCircle, X, Package, AlertTriangle, Trash2, Edit2, Save, Camera } from 'lucide-react';
+import { 
+  CheckCircle, X, Package, Trash2, Edit2, Save, Camera, ArrowLeft 
+} from 'lucide-react';
 import VariantEditor, { sumVariantQty, findDuplicateVariant } from './VariantEditor';
 import type { VariantDraft } from '../types';
 import { compressImageFile } from '../utils/defaultProductImage';
@@ -33,6 +35,16 @@ export interface ReviewItem {
   pending?: boolean;
   grNumber?: string;
   variants?: ReviewVariant[];
+
+  // 3-Tier Packaging & Pricing
+  boxBarcode?: string;
+  boxCapacity?: number;
+  boxPrice?: number;
+  midUnitName?: string;
+  midBarcode?: string;
+  midCapacity?: number;
+  midPrice?: number;
+  retailBarcode?: string;
 }
 
 interface Props {
@@ -40,6 +52,7 @@ interface Props {
   mode: 'single' | 'multi';
   categories: string[];
   onClose: () => void;
+  onOpenDraftList?: () => void;
   onRemoveItem: (id: string) => void;
   /** Simpan perubahan satu item draf (ID/barcode tidak bisa diubah) */
   onSaveItem: (item: ReviewItem) => void;
@@ -49,12 +62,19 @@ interface Props {
 
 const idr = (n: number) => 'Rp ' + Number(n || 0).toLocaleString('id-ID');
 
-const UNITS = ['Pcs', 'Kg', 'Gram', 'Liter', 'Pack', 'Dus'];
+const UNITS = ['Pcs', 'Kg', 'Gram', 'Liter', 'Botol', 'Bungkus', 'Sachet', 'Pack', 'Dus', 'Sak', 'Kaleng'];
+const PRESET_MID_UNITS = ['Sak', 'Karung', 'Bal', 'Slop', 'Pack', 'Lusin', 'Renceng', 'Karton', 'Ikat'];
 
-const inputStyle: React.CSSProperties = { backgroundColor: 'white', height: '30px', fontSize: '12px', padding: '4px 8px' };
-const labelStyle: React.CSSProperties = { fontSize: '9px', fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', marginBottom: '2px', display: 'block' };
-
-const DraftReviewDrawer: React.FC<Props> = ({ items, mode, categories, onClose, onRemoveItem, onSaveItem, onPost }) => {
+const DraftReviewDrawer: React.FC<Props> = ({ 
+  items, 
+  mode, 
+  categories, 
+  onClose, 
+  onOpenDraftList,
+  onRemoveItem, 
+  onSaveItem, 
+  onPost 
+}) => {
   const [closing, setClosing] = useState(false);
   const [posted, setPosted] = useState<{ ref: string; count: number; value: number } | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -67,17 +87,40 @@ const DraftReviewDrawer: React.FC<Props> = ({ items, mode, categories, onClose, 
 
   const startEdit = (item: ReviewItem) => {
     setEditingId(item.id);
+    const boxCap = item.boxCapacity && item.boxCapacity > 0 ? item.boxCapacity : 1;
+    const boxP = item.boxPrice && Number(item.boxPrice) > 0 ? item.boxPrice : (item.wholesalePrice || (item.sellingPrice * boxCap));
+    const isMidActive = Boolean(
+      (item.midPrice && Number(item.midPrice) > 0 && item.midCapacity && Number(item.midCapacity) > 1) ||
+      (item.midUnitName && item.midCapacity && Number(item.midCapacity) > 1 && (Number(item.midPrice) > 0 || item.midBarcode))
+    );
+    const fallbackMidUnit = item.unit?.toLowerCase() === 'kg' || item.category?.toUpperCase()?.includes('BERAS')
+      ? 'Sak'
+      : (item.category?.toUpperCase()?.includes('ROKOK') ? 'Slop' : 'Pack');
+
     setForm({
       name: item.name,
       sku: item.sku,
       category: item.category,
-      unit: item.unit,
+      unit: item.unit || 'Pcs',
       qty: item.qty,
       minStock: item.minStock ?? 0,
-      minWholesaleQty: item.minWholesaleQty ?? 0,
       purchasePrice: item.purchasePrice,
       sellingPrice: item.sellingPrice,
-      wholesalePrice: item.wholesalePrice ?? 0,
+      
+      // Kemasan Dus / Karton
+      boxBarcode: item.boxBarcode || '',
+      boxCapacity: boxCap,
+      boxPrice: boxP,
+      
+      // Kemasan Menengah
+      hasMidTier: isMidActive,
+      midUnitName: item.midUnitName || fallbackMidUnit,
+      midBarcode: item.midBarcode || '',
+      midCapacity: item.midCapacity && Number(item.midCapacity) > 0 ? item.midCapacity : (item.unit?.toLowerCase() === 'kg' ? 5 : 10),
+      midPrice: item.midPrice || '',
+
+      // Eceran
+      retailBarcode: item.retailBarcode || '',
       image: item.image || '',
       variants: (item.variants || []).map(v => ({
         id: v.id,
@@ -109,6 +152,14 @@ const DraftReviewDrawer: React.FC<Props> = ({ items, mode, categories, onClose, 
       alert(`Nama varian "${dup}" ganda.`);
       return;
     }
+
+    const finalBoxCap = Math.max(1, Number(form.boxCapacity) || 1);
+    const finalBoxPrice = Number(form.boxPrice) > 0 ? Number(form.boxPrice) : (Number(form.sellingPrice) * finalBoxCap);
+    const finalMidCap = form.hasMidTier ? Math.max(1, Number(form.midCapacity) || 1) : 0;
+    const finalMidPrice = form.hasMidTier ? (Number(form.midPrice) || 0) : 0;
+    const finalMidUnit = form.hasMidTier && form.midUnitName?.trim() ? form.midUnitName.trim() : undefined;
+    const finalMidBarcode = form.hasMidTier && form.midBarcode?.trim() ? form.midBarcode.trim() : undefined;
+
     onSaveItem({
       ...item,
       name: String(form.name).trim(),
@@ -117,10 +168,18 @@ const DraftReviewDrawer: React.FC<Props> = ({ items, mode, categories, onClose, 
       unit: form.unit,
       qty,
       minStock: Number(form.minStock || 0),
-      minWholesaleQty: Number(form.minWholesaleQty || 0),
       purchasePrice: Number(form.purchasePrice || 0),
       sellingPrice: Number(form.sellingPrice),
-      wholesalePrice: Number(form.wholesalePrice || 0),
+      wholesalePrice: finalBoxPrice,
+      minWholesaleQty: finalBoxCap,
+      boxBarcode: form.boxBarcode?.trim() || undefined,
+      boxCapacity: finalBoxCap,
+      boxPrice: finalBoxPrice,
+      midUnitName: finalMidUnit,
+      midBarcode: finalMidBarcode,
+      midCapacity: finalMidCap,
+      midPrice: finalMidPrice,
+      retailBarcode: form.retailBarcode?.trim() || undefined,
       image: form.image,
       variants: hasVariants
         ? named.map((v, idx) => ({
@@ -151,37 +210,58 @@ const DraftReviewDrawer: React.FC<Props> = ({ items, mode, categories, onClose, 
 
   return (
     <div style={{
-      position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.15)', backdropFilter: 'blur(1px)',
+      position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.55)', backdropFilter: 'blur(3px)',
       display: 'flex', justifyContent: 'flex-end', zIndex: 10002,
       animation: `${closing ? 'fadeOut' : 'fadeIn'} 0.25s ease forwards`
     }}>
       <div style={{
-        backgroundColor: 'white', width: '100%', maxWidth: '460px', height: '100%',
-        boxShadow: '-12px 0 40px rgba(0,0,0,0.25)', display: 'flex', flexDirection: 'column',
+        backgroundColor: '#f8fafc', width: '100%', maxWidth: '580px', height: '100%',
+        boxShadow: '-16px 0 45px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column',
         animation: `${closing ? 'slideOutRight' : 'slideInRight'} 0.3s cubic-bezier(0.22,1,0.36,1) forwards`
       }}>
         {/* Header */}
         <div style={{
-          background: 'linear-gradient(135deg, #1a0505 0%, #2d0a08 50%, #1a0505 100%)',
+          background: '#ffffff',
           padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          borderBottom: '1px solid rgba(218,41,28,0.3)', flexShrink: 0
+          borderBottom: '1px solid #e2e8f0', flexShrink: 0
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{ width: '34px', height: '34px', borderRadius: '10px', background: 'linear-gradient(135deg, #da291c, #b91c1c)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px rgba(218,41,28,0.4)' }}>
-              <Package size={17} color="white" />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
+            {mode === 'multi' && onOpenDraftList && (
+              <button
+                type="button"
+                onClick={() => { close(); onOpenDraftList(); }}
+                title="Kembali ke Daftar Draf"
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '4px',
+                  background: '#f1f5f9', border: '1px solid #e2e8f0',
+                  color: '#475569', fontSize: '11.5px', fontWeight: 700,
+                  padding: '6px 10px', borderRadius: '8px', cursor: 'pointer',
+                  transition: 'all 0.15s'
+                }}
+              >
+                <ArrowLeft size={14} /> Draf
+              </button>
+            )}
+            <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: '#fee2e2', border: '1px solid #fecaca', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <Package size={18} color="#dc2626" />
             </div>
-            <div>
-              <div style={{ color: 'white', fontWeight: 800, fontSize: '15px' }}>
-                {mode === 'single' ? 'Detail Item Draf' : `Review Penerimaan (${items.length} Item)`}
+            <div style={{ minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ color: '#0f172a', fontWeight: 800, fontSize: '15px' }}>
+                  {mode === 'single' ? 'Detail Item Draf' : 'Review Penerimaan (GR)'}
+                </span>
+                <span style={{ fontSize: '10.5px', fontWeight: 800, color: '#1d4ed8', background: '#eff6ff', border: '1px solid #dbeafe', padding: '1px 7px', borderRadius: '999px' }}>
+                  {items.length} Item
+                </span>
               </div>
-              <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: '11px' }}>
-                {mode === 'single' ? (items[0]?.grNumber ? `Ref: ${items[0].grNumber}` : 'Belum masuk stok / POS') : 'Periksa & edit dulu sebelum Konfirmasi & Posting'}
+              <div style={{ color: '#64748b', fontSize: '11px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {mode === 'single' ? (items[0]?.grNumber ? `Dokumen: ${items[0].grNumber}` : 'Draf belum masuk stok / POS') : 'Periksa kemasan & harga sebelum posting ke stok toko'}
               </div>
             </div>
           </div>
           <button
             type="button" onClick={close}
-            style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '8px', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'rgba(255,255,255,0.7)' }}
+            style={{ background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: '8px', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#64748b', flexShrink: 0 }}
           >
             <X size={16} />
           </button>
@@ -198,22 +278,22 @@ const DraftReviewDrawer: React.FC<Props> = ({ items, mode, categories, onClose, 
             <div style={{ fontSize: '13px', color: '#9ca3af', marginBottom: '8px' }}>
               {posted.count} produk &bull; {idr(posted.value)} &bull; {new Date().toLocaleString('id-ID')}
             </div>
-            <div style={{ fontSize: '13px', color: '#065f46', marginBottom: '24px' }}>Stok sudah bertambah dan produk tampil di Kasir POS.</div>
+            <div style={{ fontSize: '13px', color: '#065f46', marginBottom: '24px' }}>Stok fisik bertambah dan produk aktif di Kasir POS.</div>
             <button className="bo-btn bo-btn-primary" onClick={close}>Selesai</button>
           </div>
         ) : (
           <>
-            <div style={{ flex: 1, overflowY: 'auto', padding: '14px 16px', backgroundColor: '#fafafa', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {mode === 'multi' && (
-                <div style={{ display: 'flex', gap: '8px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
                   {[
-                    { label: 'Item', value: items.length + ' produk', color: '#1e40af', bg: '#eff6ff' },
-                    { label: 'Total Qty', value: totalQty + ' unit', color: '#065f46', bg: '#ecfdf5' },
-                    { label: 'Nilai Beli', value: idr(totalValue), color: '#92400e', bg: '#fffbeb' },
+                    { label: 'Total Produk', value: items.length + ' item', color: '#0f172a', bg: '#ffffff', border: '#e2e8f0' },
+                    { label: 'Total Fisik', value: totalQty.toLocaleString('id-ID') + ' unit', color: '#047857', bg: '#ecfdf5', border: '#a7f3d0' },
+                    { label: 'Nilai Modal GR', value: idr(totalValue), color: '#b91c1c', bg: '#fff1f2', border: '#fecdd3' },
                   ].map(c => (
-                    <div key={c.label} style={{ flex: 1, padding: '7px 6px', backgroundColor: c.bg, borderRadius: '8px', textAlign: 'center' }}>
-                      <div style={{ fontSize: '9px', color: '#6b7280', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{c.label}</div>
-                      <div style={{ fontSize: '13px', fontWeight: 800, color: c.color }}>{c.value}</div>
+                    <div key={c.label} style={{ padding: '8px 10px', backgroundColor: c.bg, border: `1px solid ${c.border}`, borderRadius: '10px' }}>
+                      <div style={{ fontSize: '9.5px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px' }}>{c.label}</div>
+                      <div style={{ fontSize: '13px', fontWeight: 800, color: c.color, marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.value}</div>
                     </div>
                   ))}
                 </div>
@@ -225,11 +305,34 @@ const DraftReviewDrawer: React.FC<Props> = ({ items, mode, categories, onClose, 
                 const marginColor = margin < 0 ? '#ef4444' : margin < 15 ? '#f59e0b' : '#10b981';
                 const isEditing = editingId === item.id;
 
+                const boxCap = Number(item.boxCapacity) || 1;
+                const boxPriceVal = Number(item.boxPrice) > 0 ? Number(item.boxPrice) : (boxCap > 1 ? Number(item.sellingPrice) * boxCap : 0);
+                const midCap = Number(item.midCapacity) || 0;
+                const midUnit = (item.midUnitName || '').trim();
+                const midPriceVal = Number(item.midPrice) || 0;
+                const hasMid = Boolean(midCap > 1 && midUnit && (midPriceVal > 0 || item.midBarcode));
+
+                const dusBarcode = item.boxBarcode || item.barcode || item.id;
+                const retailBarcode = item.retailBarcode || '';
+                const midBarcode = item.midBarcode || '';
+
                 return (
-                  <div key={item.id} style={{ background: 'white', border: '1px solid ' + (isEditing ? 'var(--primary)' : '#e5e7eb'), borderRadius: '10px', padding: '10px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {/* Baris atas: foto + info + aksi */}
-                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                      <div style={{ width: '46px', height: '46px', flexShrink: 0, borderRadius: '8px', overflow: 'hidden', background: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <div 
+                    key={item.id} 
+                    style={{ 
+                      background: 'white', 
+                      border: isEditing ? '1.5px solid #da291c' : '1px solid #e2e8f0', 
+                      borderRadius: '12px', 
+                      padding: '14px', 
+                      display: 'flex', 
+                      flexDirection: 'column', 
+                      gap: '10px',
+                      boxShadow: isEditing ? '0 8px 24px rgba(218,41,28,0.08)' : '0 1px 3px rgba(0,0,0,0.02)'
+                    }}
+                  >
+                    {/* Header Item: Foto + Judul + Barcode + Badges + Aksi */}
+                    <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+                      <div style={{ width: '48px', height: '48px', flexShrink: 0, borderRadius: '10px', overflow: 'hidden', background: '#f8fafc', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         {item.image ? (
                           <img
                             src={item.image} alt={item.name}
@@ -237,28 +340,65 @@ const DraftReviewDrawer: React.FC<Props> = ({ items, mode, categories, onClose, 
                             onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
                           />
                         ) : (
-                          <Package size={20} color="#9ca3af" />
+                          <Package size={22} color="#94a3b8" />
                         )}
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 800, fontSize: '13px', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.name}</div>
-                        <div style={{ fontSize: '11px', color: '#6b7280', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {item.sku} &bull; <span style={{ fontFamily: 'monospace' }}>{item.barcode || item.id}</span>
+                        <div style={{ fontWeight: 800, fontSize: '13.5px', color: '#0f172a', lineHeight: 1.3 }}>{item.name}</div>
+                        
+                        {/* Barcode & SKU Row */}
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center', marginTop: '4px' }}>
+                          <span style={{ fontSize: '10.5px', color: '#64748b', fontWeight: 600 }}>SKU: {item.sku || '-'}</span>
+                          {dusBarcode && (
+                            <span style={{ fontFamily: 'monospace', background: '#fffbeb', color: '#92400e', border: '1px solid #fde68a', padding: '0 4px', borderRadius: '4px', fontSize: '9.5px', fontWeight: 700 }}>
+                              [DUS] {dusBarcode}
+                            </span>
+                          )}
+                          {retailBarcode && retailBarcode !== dusBarcode && (
+                            <span style={{ fontFamily: 'monospace', background: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0', padding: '0 4px', borderRadius: '4px', fontSize: '9.5px', fontWeight: 600 }}>
+                              [ECER] {retailBarcode}
+                            </span>
+                          )}
+                          {hasMid && midBarcode && (
+                            <span style={{ fontFamily: 'monospace', background: '#f0f9ff', color: '#0369a1', border: '1px solid #bae6fd', padding: '0 4px', borderRadius: '4px', fontSize: '9.5px', fontWeight: 700 }}>
+                              [{midUnit.toUpperCase()}] {midBarcode}
+                            </span>
+                          )}
                         </div>
-                        <div style={{ marginTop: '2px', display: 'flex', gap: '4px', alignItems: 'center' }}>
-                          <span className="bo-badge bo-badge-gray" style={{ fontSize: '10px', padding: '1px 6px' }}>{item.category}</span>
-                          {!item.pending && <span className="bo-badge" style={{ background: '#fef3c7', color: '#92400e', fontSize: '10px', padding: '1px 6px' }}>Sudah masuk stok</span>}
+
+                        {/* Specification & Category Badges */}
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center', marginTop: '5px' }}>
+                          <span style={{ fontSize: '10px', fontWeight: 600, background: '#f1f5f9', color: '#475569', padding: '1px 6px', borderRadius: '4px' }}>
+                            {item.category}
+                          </span>
+                          {boxCap > 1 && (
+                            <span style={{ fontSize: '10px', fontWeight: 700, background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a', padding: '1px 5px', borderRadius: '4px' }}>
+                              📦 1 Dus = {boxCap} {item.unit}
+                            </span>
+                          )}
+                          {hasMid && (
+                            <span style={{ fontSize: '10px', fontWeight: 700, background: '#e0f2fe', color: '#0369a1', border: '1px solid #bae6fd', padding: '1px 5px', borderRadius: '4px' }}>
+                              🗂️ 1 {midUnit} = {midCap} {item.unit}
+                            </span>
+                          )}
+                          {!item.pending && (
+                            <span style={{ fontSize: '10px', fontWeight: 700, background: '#ecfdf5', color: '#065f46', border: '1px solid #a7f3d0', padding: '1px 5px', borderRadius: '4px' }}>
+                              Sudah masuk stok
+                            </span>
+                          )}
                         </div>
+
+                        {/* Varian jika ada */}
                         {item.variants && item.variants.length > 0 && (
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '4px' }}>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '6px' }}>
                             {item.variants.map((v, vIdx) => {
                               const vCode = v.barcode || (item.barcode ? `${item.barcode}-${vIdx + 1}` : '');
                               return (
-                                <span key={v.id || vIdx} style={{ fontSize: '10px', fontWeight: 700, background: '#ede9fe', color: '#5b21b6', padding: '1px 7px', borderRadius: '6px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                <span key={v.id || vIdx} style={{ fontSize: '10px', fontWeight: 700, background: '#ede9fe', color: '#5b21b6', padding: '1px 6px', borderRadius: '5px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                                   <span>{v.name}: {v.qty}</span>
                                   {vCode && (
-                                    <span style={{ fontFamily: 'monospace', fontSize: '9.5px', background: '#fff', color: '#4338ca', padding: '0 4px', borderRadius: '3px', border: '1px solid #c4b5fd' }}>
-                                      ||| {vCode}
+                                    <span style={{ fontFamily: 'monospace', fontSize: '9px', background: '#fff', color: '#4338ca', padding: '0 3px', borderRadius: '3px', border: '1px solid #c4b5fd' }}>
+                                      {vCode}
                                     </span>
                                   )}
                                 </span>
@@ -267,92 +407,331 @@ const DraftReviewDrawer: React.FC<Props> = ({ items, mode, categories, onClose, 
                           </div>
                         )}
                       </div>
-                      <div style={{ display: 'flex', gap: '2px', flexShrink: 0 }}>
+
+                      {/* Aksi Baris */}
+                      <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
                         {item.pending && !isEditing && (
-                          <button type="button" className="bo-action-btn" title="Edit item (mis. salah harga)" onClick={() => startEdit(item)} style={{ color: '#2563eb' }}>
-                            <Edit2 size={15} />
+                          <button 
+                            type="button" 
+                            title="Edit Data Item" 
+                            onClick={() => startEdit(item)} 
+                            style={{ 
+                              display: 'inline-flex', alignItems: 'center', gap: '4px',
+                              background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1d4ed8', 
+                              padding: '5px 10px', borderRadius: '7px', fontSize: '11.5px', fontWeight: 700,
+                              cursor: 'pointer' 
+                            }}
+                          >
+                            <Edit2 size={13} /> Edit
                           </button>
                         )}
                         {mode === 'multi' && (
-                          <button type="button" className="bo-action-btn" title="Keluarkan dari daftar review" onClick={() => onRemoveItem(item.id)} style={{ color: '#9ca3af' }}>
-                            <Trash2 size={15} />
+                          <button 
+                            type="button" 
+                            title="Keluarkan dari daftar review" 
+                            onClick={() => onRemoveItem(item.id)} 
+                            style={{ 
+                              background: '#fef2f2', border: '1px solid #fecaca', color: '#ef4444', 
+                              padding: '5px 8px', borderRadius: '7px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center' 
+                            }}
+                          >
+                            <Trash2 size={14} />
                           </button>
                         )}
                       </div>
                     </div>
 
                     {isEditing ? (
-                      /* ===== FORM EDIT INLINE ===== */
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingTop: '4px', borderTop: '1px dashed #e5e7eb' }}>
-                        <div>
-                          <label style={labelStyle}>Nama Produk</label>
-                          <input className="bo-input" style={inputStyle} value={form.name} onChange={e => setF('name', e.target.value)} />
+                      /* ===== FORM EDIT INLINE TERSTRUKTUR & RAPI ===== */
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', paddingTop: '10px', borderTop: '1px dashed #fca5a5' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 800, color: '#da291c' }}>
+                          <Edit2 size={14} /> Edit Item Penerimaan &amp; Struktur Kemasan
                         </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                          <div>
+
+                        {/* 1. Nama & Kategori */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <label style={{ fontSize: '11px', fontWeight: 700, color: '#475569' }}>Nama Produk</label>
+                          <input 
+                            className="bo-input" 
+                            style={{ background: '#ffffff', height: '34px', fontSize: '13px', fontWeight: 600 }} 
+                            value={form.name} 
+                            onChange={e => setF('name', e.target.value)} 
+                            required
+                          />
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <label style={labelStyle}>SKU</label>
-                              <span style={{ fontSize: '9px', color: '#16a34a', fontWeight: 600 }}>{String(form.sku || '').trim() ? 'Kustom' : 'Otomatis'}</span>
+                              <label style={{ fontSize: '11px', fontWeight: 700, color: '#475569' }}>SKU</label>
+                              <span style={{ fontSize: '10px', color: '#16a34a', fontWeight: 700 }}>{String(form.sku || '').trim() ? 'Kustom' : 'Otomatis'}</span>
                             </div>
                             <input
                               className="bo-input"
-                              style={inputStyle}
+                              style={{ background: '#ffffff', height: '34px', fontSize: '12px' }}
                               value={form.sku}
                               onChange={e => setF('sku', e.target.value)}
                               placeholder={form.name ? generateAutoSKU(form.name, item.barcode || item.id) : 'Otomatis'}
                             />
                           </div>
-                          <div>
-                            <label style={labelStyle}>Kategori</label>
-                            <select className="bo-input" style={inputStyle} value={form.category} onChange={e => setF('category', e.target.value)}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <label style={{ fontSize: '11px', fontWeight: 700, color: '#475569' }}>Kategori</label>
+                            <select 
+                              className="bo-input" 
+                              style={{ background: '#ffffff', height: '34px', fontSize: '12px' }} 
+                              value={form.category} 
+                              onChange={e => setF('category', e.target.value)}
+                            >
                               {categories.map(c => <option key={c} value={c}>{c}</option>)}
                               {!categories.includes(form.category) && <option value={form.category}>{form.category}</option>}
                             </select>
                           </div>
                         </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
-                          <div>
-                            <label style={labelStyle}>Qty</label>
-                            {((form.variants || []) as VariantDraft[]).some(v => v.name.trim()) ? (
-                              <div className="bo-input" style={{ ...inputStyle, display: 'flex', alignItems: 'center', fontWeight: 800, color: '#065f46', background: '#ecfdf5' }}>{sumVariantQty(form.variants || [])}</div>
-                            ) : (
-                              <input type="number" min="0" step="any" className="bo-input" style={inputStyle} value={form.qty} onChange={e => setNum('qty', e.target.value)} />
-                            )}
+
+                        {/* 2. Kuantitas Fisik & Satuan Eceran */}
+                        <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '10px' }}>
+                          <div style={{ fontSize: '11px', fontWeight: 800, color: '#0f172a', marginBottom: '8px' }}>
+                            📦 STOK FISIK PENERIMAAN (GR)
                           </div>
-                          <div>
-                            <label style={labelStyle}>Satuan</label>
-                            <select className="bo-input" style={inputStyle} value={form.unit} onChange={e => setF('unit', e.target.value)}>
-                              {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
-                            </select>
-                          </div>
-                          <div>
-                            <label style={labelStyle}>Min Stok</label>
-                            <input type="number" min="0" className="bo-input" style={inputStyle} value={form.minStock} onChange={e => setNum('minStock', e.target.value)} />
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
+                            <div>
+                              <label style={{ fontSize: '10px', fontWeight: 700, color: '#64748b' }}>Qty Diterima</label>
+                              {((form.variants || []) as VariantDraft[]).some(v => v.name.trim()) ? (
+                                <div className="bo-input" style={{ height: '34px', display: 'flex', alignItems: 'center', fontWeight: 800, color: '#065f46', background: '#ecfdf5' }}>
+                                  {sumVariantQty(form.variants || [])}
+                                </div>
+                              ) : (
+                                <input 
+                                  type="number" 
+                                  min="0" 
+                                  step="any" 
+                                  className="bo-input" 
+                                  style={{ background: '#ffffff', height: '34px', fontSize: '13px', fontWeight: 800, textAlign: 'center' }} 
+                                  value={form.qty} 
+                                  onChange={e => setNum('qty', e.target.value)} 
+                                />
+                              )}
+                            </div>
+                            <div>
+                              <label style={{ fontSize: '10px', fontWeight: 700, color: '#64748b' }}>Satuan Eceran</label>
+                              <select 
+                                className="bo-input" 
+                                style={{ background: '#ffffff', height: '34px', fontSize: '12px' }} 
+                                value={form.unit} 
+                                onChange={e => setF('unit', e.target.value)}
+                              >
+                                {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                                {!UNITS.includes(form.unit) && <option value={form.unit}>{form.unit}</option>}
+                              </select>
+                            </div>
+                            <div>
+                              <label style={{ fontSize: '10px', fontWeight: 700, color: '#64748b' }}>Alert Min Stok</label>
+                              <input 
+                                type="number" 
+                                min="0" 
+                                className="bo-input" 
+                                style={{ background: '#ffffff', height: '34px', fontSize: '12px', textAlign: 'center' }} 
+                                value={form.minStock} 
+                                onChange={e => setNum('minStock', e.target.value)} 
+                              />
+                            </div>
                           </div>
                         </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '8px' }}>
-                          <div>
-                            <label style={labelStyle}>Harga Beli</label>
-                            <input type="number" min="0" className="bo-input" style={inputStyle} value={form.purchasePrice} onChange={e => setNum('purchasePrice', e.target.value)} />
+
+                        {/* 3. Kemasan Dus / Karton */}
+                        <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '10px', padding: '10px' }}>
+                          <div style={{ fontSize: '11px', fontWeight: 800, color: '#92400e', marginBottom: '8px' }}>
+                            📦 KEMASAN DUS / KARTON (GROSIR BESAR)
                           </div>
-                          <div>
-                            <label style={labelStyle}>Harga Jual</label>
-                            <input type="number" min="0" className="bo-input" style={inputStyle} value={form.sellingPrice} onChange={e => setNum('sellingPrice', e.target.value)} />
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                            <div>
+                              <label style={{ fontSize: '10px', fontWeight: 700, color: '#92400e' }}>Isi 1 Dus ({form.unit})</label>
+                              <input 
+                                type="number" 
+                                min="1" 
+                                className="bo-input" 
+                                style={{ background: '#ffffff', height: '34px', fontSize: '12px', fontWeight: 700, textAlign: 'center' }} 
+                                value={form.boxCapacity} 
+                                onChange={e => setNum('boxCapacity', e.target.value)} 
+                              />
+                            </div>
+                            <div>
+                              <label style={{ fontSize: '10px', fontWeight: 700, color: '#92400e' }}>Harga Jual 1 Dus (Rp)</label>
+                              <input 
+                                type="number" 
+                                min="0" 
+                                className="bo-input" 
+                                style={{ background: '#ffffff', height: '34px', fontSize: '12px', fontWeight: 800, color: '#92400e' }} 
+                                value={form.boxPrice} 
+                                onChange={e => setNum('boxPrice', e.target.value)} 
+                                placeholder={form.sellingPrice && form.boxCapacity ? String(Number(form.sellingPrice) * Number(form.boxCapacity)) : ''}
+                              />
+                            </div>
                           </div>
-                          <div>
-                            <label style={labelStyle}>Harga Grosir</label>
-                            <input type="number" min="0" className="bo-input" style={inputStyle} value={form.wholesalePrice} onChange={e => setNum('wholesalePrice', e.target.value)} />
-                          </div>
-                          <div>
-                            <label style={{ ...labelStyle, color: '#1d4ed8' }}>Min Grosir (Qty)</label>
-                            <input type="number" min="0" className="bo-input" style={{ ...inputStyle, background: '#eff6ff', color: '#1d4ed8', fontWeight: 700 }} value={form.minWholesaleQty} onChange={e => setNum('minWholesaleQty', e.target.value)} placeholder="12" />
+                          <div style={{ marginTop: '6px' }}>
+                            <label style={{ fontSize: '10px', fontWeight: 700, color: '#92400e' }}>Barcode Dus (Opsional)</label>
+                            <input 
+                              type="text" 
+                              className="bo-input" 
+                              style={{ background: '#ffffff', height: '32px', fontSize: '11.5px', fontFamily: 'monospace' }} 
+                              value={form.boxBarcode} 
+                              onChange={e => setF('boxBarcode', e.target.value)} 
+                              placeholder="Barcode di kardus luar..."
+                            />
                           </div>
                         </div>
+
+                        {/* 4. Kemasan Menengah (Sak, Slop, Pack, Lusin, Renceng) */}
+                        <div style={{ background: '#faf5ff', border: '1px solid #ddd6fe', borderRadius: '10px', padding: '10px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                            <span style={{ fontSize: '11px', fontWeight: 800, color: '#5b21b6' }}>
+                              🗂️ KEMASAN MENENGAH (SAK / SLOP / PACK / RENCENG)
+                            </span>
+                            <label style={{
+                              display: 'inline-flex', alignItems: 'center', gap: '4px',
+                              fontSize: '11px', fontWeight: 700,
+                              color: form.hasMidTier ? '#6d28d9' : '#64748b',
+                              background: form.hasMidTier ? '#ede9fe' : '#f1f5f9',
+                              border: `1px solid ${form.hasMidTier ? '#c4b5fd' : '#cbd5e1'}`,
+                              padding: '2px 8px', borderRadius: '999px', cursor: 'pointer'
+                            }}>
+                              <input 
+                                type="checkbox" 
+                                checked={form.hasMidTier} 
+                                onChange={e => {
+                                  const checked = e.target.checked;
+                                  setF('hasMidTier', checked);
+                                  if (checked && !form.midUnitName) {
+                                    setF('midUnitName', form.unit?.toLowerCase() === 'kg' ? 'Sak' : 'Pack');
+                                    setF('midCapacity', form.unit?.toLowerCase() === 'kg' ? 5 : 10);
+                                  }
+                                }}
+                                style={{ accentColor: '#7c3aed' }}
+                              />
+                              <span>{form.hasMidTier ? 'Aktif' : 'Nonaktif'}</span>
+                            </label>
+                          </div>
+
+                          {form.hasMidTier && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                                <div>
+                                  <label style={{ fontSize: '10px', fontWeight: 700, color: '#5b21b6' }}>Nama Satuan</label>
+                                  <select 
+                                    className="bo-input" 
+                                    style={{ background: '#ffffff', height: '34px', fontSize: '12px' }}
+                                    value={PRESET_MID_UNITS.includes(form.midUnitName) ? form.midUnitName : 'Lainnya'}
+                                    onChange={e => {
+                                      const val = e.target.value;
+                                      if (val === 'Lainnya') {
+                                        setF('midUnitName', '');
+                                      } else {
+                                        setF('midUnitName', val);
+                                      }
+                                    }}
+                                  >
+                                    <option value="Sak">Sak (Beras / Pakan)</option>
+                                    <option value="Karung">Karung (25-50 Kg)</option>
+                                    <option value="Bal">Bal (Gula/Garam)</option>
+                                    <option value="Slop">Slop (10 Bungkus Rokok)</option>
+                                    <option value="Pack">Pack</option>
+                                    <option value="Lusin">Lusin (12 Pcs)</option>
+                                    <option value="Renceng">Renceng (10-12 Sachet)</option>
+                                    <option value="Karton">Karton Kecil</option>
+                                    <option value="Ikat">Ikat</option>
+                                    <option value="Lainnya">Lainnya (Ketik Manual)...</option>
+                                  </select>
+                                  {!PRESET_MID_UNITS.includes(form.midUnitName) && (
+                                    <input 
+                                      type="text" 
+                                      className="bo-input" 
+                                      style={{ background: '#ffffff', height: '30px', fontSize: '11.5px', marginTop: '4px' }} 
+                                      placeholder="Nama satuan menengah..." 
+                                      value={form.midUnitName} 
+                                      onChange={e => setF('midUnitName', e.target.value)} 
+                                      autoFocus
+                                    />
+                                  )}
+                                </div>
+                                <div>
+                                  <label style={{ fontSize: '10px', fontWeight: 700, color: '#5b21b6' }}>Isi per {form.midUnitName || 'Kemasan'}</label>
+                                  <input 
+                                    type="number" 
+                                    min="1" 
+                                    className="bo-input" 
+                                    style={{ background: '#ffffff', height: '34px', fontSize: '12px', fontWeight: 800, textAlign: 'center' }} 
+                                    value={form.midCapacity} 
+                                    onChange={e => setNum('midCapacity', e.target.value)} 
+                                  />
+                                </div>
+                              </div>
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                                <div>
+                                  <label style={{ fontSize: '10px', fontWeight: 700, color: '#5b21b6' }}>Harga Jual {form.midUnitName || 'Kemasan'}</label>
+                                  <input 
+                                    type="number" 
+                                    min="0" 
+                                    className="bo-input" 
+                                    style={{ background: '#ffffff', height: '34px', fontSize: '12px', fontWeight: 800, color: '#1d4ed8' }} 
+                                    value={form.midPrice} 
+                                    onChange={e => setNum('midPrice', e.target.value)} 
+                                    placeholder={form.sellingPrice && form.midCapacity ? String(Number(form.sellingPrice) * Number(form.midCapacity)) : ''}
+                                  />
+                                </div>
+                                <div>
+                                  <label style={{ fontSize: '10px', fontWeight: 700, color: '#5b21b6' }}>Barcode {form.midUnitName || 'Kemasan'} (Opsional)</label>
+                                  <input 
+                                    type="text" 
+                                    className="bo-input" 
+                                    style={{ background: '#ffffff', height: '34px', fontSize: '11.5px', fontFamily: 'monospace' }} 
+                                    value={form.midBarcode} 
+                                    onChange={e => setF('midBarcode', e.target.value)} 
+                                    placeholder="Barcode khusus paket..."
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* 5. Harga Modal & Jual Eceran */}
+                        <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '10px' }}>
+                          <div style={{ fontSize: '11px', fontWeight: 800, color: '#0f172a', marginBottom: '8px' }}>
+                            💰 HARGA MODAL &amp; HARGA ECERAN
+                          </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                            <div>
+                              <label style={{ fontSize: '10px', fontWeight: 700, color: '#64748b' }}>Harga Beli (Modal / {form.unit})</label>
+                              <input 
+                                type="number" 
+                                min="0" 
+                                className="bo-input" 
+                                style={{ background: '#ffffff', height: '34px', fontSize: '13px', fontWeight: 700 }} 
+                                value={form.purchasePrice} 
+                                onChange={e => setNum('purchasePrice', e.target.value)} 
+                              />
+                            </div>
+                            <div>
+                              <label style={{ fontSize: '10px', fontWeight: 800, color: '#da291c' }}>Harga Jual Eceran (per {form.unit})</label>
+                              <input 
+                                type="number" 
+                                min="0" 
+                                className="bo-input" 
+                                style={{ background: '#fff5f5', borderColor: '#fca5a5', height: '34px', fontSize: '13px', fontWeight: 800, color: '#da291c' }} 
+                                value={form.sellingPrice} 
+                                onChange={e => setNum('sellingPrice', e.target.value)} 
+                                required
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* 6. Foto & Varian */}
                         <div>
-                          <label style={labelStyle}>Tautan (URL) Gambar / Foto Kamera</label>
-                          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                          <label style={{ fontSize: '10.5px', fontWeight: 700, color: '#475569' }}>Tautan Foto Produk (Opsional)</label>
+                          <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginTop: '4px' }}>
                             {form.image && (
-                              <div style={{ position: 'relative', width: '32px', height: '32px', flexShrink: 0, borderRadius: '6px', overflow: 'hidden', border: '1px solid #cbd5e1', background: '#f1f5f9' }}>
+                              <div style={{ position: 'relative', width: '34px', height: '34px', flexShrink: 0, borderRadius: '6px', overflow: 'hidden', border: '1px solid #cbd5e1', background: '#f1f5f9' }}>
                                 <img
                                   src={form.image}
                                   alt="Preview"
@@ -373,7 +752,7 @@ const DraftReviewDrawer: React.FC<Props> = ({ items, mode, categories, onClose, 
                               type="text"
                               inputMode="url"
                               className="bo-input"
-                              style={{ ...inputStyle, flex: 1 }}
+                              style={{ background: '#ffffff', height: '34px', fontSize: '12px', flex: 1 }}
                               value={form.image}
                               onChange={e => setF('image', e.target.value)}
                               placeholder="https://... atau ambil kamera"
@@ -401,53 +780,124 @@ const DraftReviewDrawer: React.FC<Props> = ({ items, mode, categories, onClose, 
                               type="button"
                               onClick={() => document.getElementById(`draft-cam-${item.id}`)?.click()}
                               className="bo-btn"
-                              style={{ backgroundColor: '#2563eb', color: 'white', height: '30px', padding: '0 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}
+                              style={{ backgroundColor: '#2563eb', color: 'white', height: '34px', padding: '0 10px', borderRadius: '7px', fontSize: '11px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}
                             >
                               <Camera size={13} /> Kamera
                             </button>
                           </div>
                         </div>
+
                         <VariantEditor
                           variants={(form.variants || []) as VariantDraft[]}
                           onChange={(next) => setF('variants', next)}
-                          title="Varian"
+                          title="Varian Produk"
                           parentBarcode={item.barcode || item.id}
                         />
-                        <div style={{ fontSize: '10px', color: '#9ca3af' }}>Barcode/ID <strong style={{ fontFamily: 'monospace' }}>{item.barcode || item.id}</strong> tidak dapat diubah.</div>
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
-                          <button type="button" className="bo-btn bo-btn-secondary" style={{ padding: '4px 12px', fontSize: '12px' }} onClick={() => setEditingId(null)}>Batal</button>
-                          <button type="button" className="bo-btn bo-btn-primary" style={{ padding: '4px 12px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px' }} onClick={() => saveEdit(item)}>
-                            <Save size={13} /> Simpan Perubahan
+
+                        <div style={{ fontSize: '10.5px', color: '#64748b' }}>
+                          ID / Barcode Utama <strong style={{ fontFamily: 'monospace' }}>{item.barcode || item.id}</strong> bersifat permanen.
+                        </div>
+
+                        {/* Action buttons form */}
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', paddingTop: '4px' }}>
+                          <button 
+                            type="button" 
+                            className="bo-btn bo-btn-secondary" 
+                            style={{ padding: '6px 14px', fontSize: '12px' }} 
+                            onClick={() => setEditingId(null)}
+                          >
+                            Batal
+                          </button>
+                          <button 
+                            type="button" 
+                            className="bo-btn bo-btn-primary" 
+                            style={{ padding: '6px 16px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '5px' }} 
+                            onClick={() => saveEdit(item)}
+                          >
+                            <Save size={14} /> Simpan Perubahan
                           </button>
                         </div>
                       </div>
                     ) : (
+                      /* ===== CARD VIEW READ-ONLY DENGAN INFORMASI LENGKAP ===== */
                       <>
-                        {/* Angka ringkas */}
+                        {/* Grid Statistik Harga & Kuantitas */}
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px' }}>
-                          {[
-                            ['Qty', `${item.qty} ${item.unit}`],
-                            ['H. Beli', idr(item.purchasePrice)],
-                            ['H. Jual', idr(item.sellingPrice)],
-                            ['H. Grosir', item.wholesalePrice ? idr(item.wholesalePrice) : '-'],
-                            ['Min Stok', String(item.minStock ?? 0)],
-                            ['Subtotal', idr(item.purchasePrice * item.qty)],
-                          ].map(([k, v]) => (
-                            <div key={k} style={{ background: '#f9fafb', borderRadius: '6px', padding: '4px 8px' }}>
-                              <div style={{ color: '#9ca3af', fontSize: '9px', fontWeight: 600, textTransform: 'uppercase' }}>{k}</div>
-                              <div style={{ fontWeight: 700, color: '#111827', fontSize: '11px', whiteSpace: 'nowrap' }}>{v}</div>
+                          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '6px 8px' }}>
+                            <div style={{ color: '#64748b', fontSize: '9.5px', fontWeight: 700, textTransform: 'uppercase' }}>Qty Masuk</div>
+                            <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '12.5px', marginTop: '1px' }}>
+                              {item.qty.toLocaleString('id-ID')} <span style={{ fontSize: '10.5px', color: '#64748b' }}>{item.unit}</span>
                             </div>
-                          ))}
+                            {boxCap > 1 && (
+                              <div style={{ fontSize: '9.5px', color: '#92400e', fontWeight: 700, marginTop: '1px' }}>
+                                {Math.floor(item.qty / boxCap)} Dus {item.qty % boxCap > 0 ? `+ ${item.qty % boxCap}` : ''}
+                              </div>
+                            )}
+                          </div>
+
+                          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '6px 8px' }}>
+                            <div style={{ color: '#64748b', fontSize: '9.5px', fontWeight: 700, textTransform: 'uppercase' }}>Harga Beli</div>
+                            <div style={{ fontWeight: 800, color: '#475569', fontSize: '12.5px', marginTop: '1px' }}>
+                              {idr(item.purchasePrice)}
+                            </div>
+                            {boxCap > 1 && (
+                              <div style={{ fontSize: '9.5px', color: '#94a3b8', marginTop: '1px' }}>
+                                {idr(item.purchasePrice * boxCap)}/Dus
+                              </div>
+                            )}
+                          </div>
+
+                          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '6px 8px' }}>
+                            <div style={{ color: '#dc2626', fontSize: '9.5px', fontWeight: 700, textTransform: 'uppercase' }}>Harga Eceran</div>
+                            <div style={{ fontWeight: 800, color: '#dc2626', fontSize: '12.5px', marginTop: '1px' }}>
+                              {idr(item.sellingPrice)}
+                            </div>
+                            <div style={{ fontSize: '9.5px', color: '#94a3b8', marginTop: '1px' }}>
+                              per {item.unit}
+                            </div>
+                          </div>
+
+                          <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '8px', padding: '6px 8px' }}>
+                            <div style={{ color: '#92400e', fontSize: '9.5px', fontWeight: 700, textTransform: 'uppercase' }}>Harga Dus</div>
+                            <div style={{ fontWeight: 800, color: '#92400e', fontSize: '12px', marginTop: '1px' }}>
+                              {boxPriceVal > 0 ? idr(boxPriceVal) : '-'}
+                            </div>
+                            <div style={{ fontSize: '9.5px', color: '#b45309', marginTop: '1px' }}>
+                              {boxCap > 1 ? `isi ${boxCap} ${item.unit}` : '1 unit'}
+                            </div>
+                          </div>
+
+                          <div style={{ background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '8px', padding: '6px 8px' }}>
+                            <div style={{ color: '#0369a1', fontSize: '9.5px', fontWeight: 700, textTransform: 'uppercase' }}>
+                              Harga {hasMid ? midUnit : 'Menengah'}
+                            </div>
+                            <div style={{ fontWeight: 800, color: '#0369a1', fontSize: '12px', marginTop: '1px' }}>
+                              {hasMid && midPriceVal > 0 ? idr(midPriceVal) : '-'}
+                            </div>
+                            <div style={{ fontSize: '9.5px', color: '#0284c7', marginTop: '1px' }}>
+                              {hasMid ? `isi ${midCap} ${item.unit}` : '-'}
+                            </div>
+                          </div>
+
+                          <div style={{ background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '6px 8px' }}>
+                            <div style={{ color: '#475569', fontSize: '9.5px', fontWeight: 700, textTransform: 'uppercase' }}>Subtotal Modal</div>
+                            <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '12px', marginTop: '1px' }}>
+                              {idr(item.purchasePrice * item.qty)}
+                            </div>
+                            <div style={{ fontSize: '9.5px', color: '#64748b', marginTop: '1px' }}>
+                              nilai stok GR
+                            </div>
+                          </div>
                         </div>
 
-                        {/* Margin */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <span style={{ fontSize: '10px', fontWeight: 700, color: '#6b7280', whiteSpace: 'nowrap' }}>Margin</span>
-                          <div style={{ flex: 1, height: '4px', background: '#e5e7eb', borderRadius: '2px', overflow: 'hidden' }}>
+                        {/* Bar Margin Keuntungan */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#f8fafc', padding: '6px 10px', borderRadius: '8px' }}>
+                          <span style={{ fontSize: '10.5px', fontWeight: 700, color: '#475569', whiteSpace: 'nowrap' }}>Estimasi Margin:</span>
+                          <div style={{ flex: 1, height: '5px', background: '#e2e8f0', borderRadius: '999px', overflow: 'hidden' }}>
                             <div style={{ width: Math.min(Math.max((margin / 50) * 100, 0), 100) + '%', height: '100%', background: marginColor }} />
                           </div>
-                          <span style={{ fontSize: '10px', fontWeight: 800, color: marginColor, whiteSpace: 'nowrap' }}>
-                            {margin > 0 ? '+' : ''}{margin.toFixed(1)}% ({idr(profit)}/{item.unit})
+                          <span style={{ fontSize: '11px', fontWeight: 800, color: marginColor, whiteSpace: 'nowrap' }}>
+                            {margin > 0 ? '+' : ''}{margin.toFixed(1)}% <span style={{ fontWeight: 600, color: '#64748b', fontSize: '10px' }}>({idr(profit)}/{item.unit})</span>
                           </span>
                         </div>
                       </>
@@ -457,24 +907,42 @@ const DraftReviewDrawer: React.FC<Props> = ({ items, mode, categories, onClose, 
               })}
 
               {postable.length > 0 && (
-                <div style={{ display: 'flex', gap: '8px', padding: '8px 12px', backgroundColor: '#fef3c7', borderRadius: '8px', border: '1px solid #fde68a' }}>
-                  <AlertTriangle size={14} color="#92400e" style={{ flexShrink: 0, marginTop: '1px' }} />
-                  <span style={{ fontSize: '11px', color: '#92400e' }}>
-                    Setelah posting, stok bertambah dan produk baru langsung tampil di Kasir POS.
+                <div style={{ display: 'flex', gap: '10px', padding: '10px 14px', backgroundColor: '#ecfdf5', borderRadius: '10px', border: '1px solid #a7f3d0' }}>
+                  <CheckCircle size={16} color="#059669" style={{ flexShrink: 0, marginTop: '2px' }} />
+                  <span style={{ fontSize: '11.5px', color: '#065f46', lineHeight: 1.4 }}>
+                    Setelah tombol <strong>Konfirmasi &amp; Posting</strong> ditekan, seluruh item draf di atas akan resmi masuk ke stok fisik dan otomatis siap ditransaksikan di Kasir POS.
                   </span>
                 </div>
               )}
             </div>
 
             {/* Footer */}
-            <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '10px', padding: '12px 16px', borderTop: '1px solid #e5e7eb', backgroundColor: 'white' }}>
-              {editingId && <span style={{ fontSize: '11px', color: '#b45309', marginRight: 'auto' }}>Simpan / batalkan edit dulu</span>}
-              <button type="button" className="bo-btn bo-btn-secondary" onClick={close}>Tutup</button>
+            <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '10px', padding: '14px 20px', borderTop: '1px solid #e2e8f0', backgroundColor: '#ffffff' }}>
+              {editingId && (
+                <span style={{ fontSize: '11.5px', color: '#b45309', marginRight: 'auto', fontWeight: 600 }}>
+                  ⚠️ Simpan / batalkan edit dulu sebelum posting
+                </span>
+              )}
+              <button 
+                type="button" 
+                className="bo-btn bo-btn-secondary" 
+                onClick={close}
+                style={{ padding: '8px 18px', fontSize: '13px', borderRadius: '8px' }}
+              >
+                Tutup
+              </button>
               <button
-                type="button" className="bo-btn bo-btn-primary"
+                type="button" 
+                className="bo-btn bo-btn-primary"
                 onClick={handlePost}
                 disabled={postable.length === 0 || !!editingId}
-                style={{ minWidth: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', opacity: postable.length === 0 || editingId ? 0.5 : 1 }}
+                style={{ 
+                  minWidth: '220px', 
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', 
+                  opacity: postable.length === 0 || editingId ? 0.5 : 1,
+                  padding: '8px 20px', fontSize: '13px', borderRadius: '8px',
+                  boxShadow: '0 4px 12px rgba(218,41,28,0.25)'
+                }}
               >
                 <CheckCircle size={16} /> Konfirmasi &amp; Posting{postable.length > 1 ? ` (${postable.length})` : ''}
               </button>
