@@ -725,7 +725,7 @@ function App() {
       tierBarcode = product.boxBarcode || product.barcode;
     } else if (tier === 'MID') {
       tierMultiplier = product.midCapacity && product.midCapacity > 0 ? product.midCapacity : 1;
-      tierUnit = product.midUnitName || 'Renceng';
+      tierUnit = product.midUnitName || 'Paket';
       tierPrice = product.midPrice && product.midPrice > 0 ? product.midPrice : (product.price * tierMultiplier);
       tierBarcode = product.midBarcode || product.barcode;
     } else {
@@ -2790,11 +2790,14 @@ function App() {
         const boxP = p.boxPrice && p.boxPrice > 0 ? p.boxPrice : (p.price * boxCap);
         const boxStock = Math.floor(p.availableStock / boxCap);
 
-        const hasMid = Boolean(p.midPrice && p.midPrice > 0) || Boolean(p.midCapacity && p.midCapacity > 1);
+        const hasMid = Boolean(
+          (p.midPrice && p.midPrice > 0 && p.midCapacity && p.midCapacity > 1) ||
+          (p.midUnitName && p.midCapacity && p.midCapacity > 1 && (p.midPrice > 0 || p.midBarcode))
+        );
         const midCap = p.midCapacity && p.midCapacity > 0 ? p.midCapacity : 1;
         const midP = p.midPrice && p.midPrice > 0 ? p.midPrice : (p.price * midCap);
         const midStock = Math.floor(p.availableStock / midCap);
-        const midUnit = p.midUnitName || 'Renceng/Lusin';
+        const midUnit = p.midUnitName || 'Kemasan Menengah';
 
         const retailP = p.price;
         const retailStock = p.availableStock;

@@ -57,10 +57,10 @@ const mapProduct = (p: any): Product => ({
   boxBarcode: p.box_barcode || p.boxBarcode || '',
   boxCapacity: p.box_capacity || p.boxCapacity || 1,
   boxPrice: p.box_price || p.boxPrice || (p.wholesale_price || 0),
-  midUnitName: p.mid_unit_name || p.midUnitName || 'Renceng',
+  midUnitName: p.mid_unit_name || p.midUnitName || '',
   midBarcode: p.mid_barcode || p.midBarcode || '',
-  midCapacity: p.mid_capacity || p.midCapacity || 10,
-  midPrice: p.mid_price || p.midPrice || 0,
+  midCapacity: Number(p.mid_capacity ?? p.midCapacity ?? 0),
+  midPrice: Number(p.mid_price ?? p.midPrice ?? 0),
   retailBarcode: p.retail_barcode || p.retailBarcode || '',
   variants: (p.variants || []).map((v: any) => ({
     id: v.id,

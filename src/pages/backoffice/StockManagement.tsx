@@ -101,7 +101,7 @@ const StockManagement: React.FC = () => {
   const [boxQty, setBoxQty] = useState<number | string>('');
   
   const [hasMidTier, setHasMidTier] = useState(false);
-  const [midUnitName, setMidUnitName] = useState('Renceng');
+  const [midUnitName, setMidUnitName] = useState('');
   const [midBarcode, setMidBarcode] = useState('');
   const [midCapacity, setMidCapacity] = useState<number | string>(10);
   const [midPrice, setMidPrice] = useState<number | string>('');
@@ -181,7 +181,7 @@ const StockManagement: React.FC = () => {
     setBoxPrice('');
     setBoxQty('');
     setHasMidTier(false);
-    setMidUnitName('Renceng');
+    setMidUnitName('');
     setMidBarcode('');
     setMidCapacity(10);
     setMidPrice('');
@@ -275,8 +275,10 @@ const StockManagement: React.FC = () => {
         // c. Simpan master data multi-tier
         const finalBoxCap = Math.max(1, Number(boxCapacity) || 40);
         const finalBoxPrice = Number(boxPrice) > 0 ? Number(boxPrice) : (Number(wholesalePrice) > 0 ? Number(wholesalePrice) : (Number(sellingPrice) * finalBoxCap));
+        const finalMidCap = hasMidTier ? Math.max(1, Number(midCapacity) || 1) : 0;
         const finalMidPrice = hasMidTier ? (Number(midPrice) || 0) : 0;
-        const finalMidCap = hasMidTier ? Math.max(1, Number(midCapacity) || 10) : 0;
+        const finalMidUnitName = hasMidTier && midUnitName.trim() ? midUnitName.trim() : null;
+        const finalMidBarcode = hasMidTier && midBarcode.trim() ? midBarcode.trim() : null;
         const finalBoxBarcode = boxBarcode.trim() || finalBarcode;
         const finalRetailBarcode = retailBarcode.trim();
 
@@ -297,8 +299,8 @@ const StockManagement: React.FC = () => {
           boxBarcode: finalBoxBarcode,
           boxCapacity: finalBoxCap,
           boxPrice: finalBoxPrice,
-          midUnitName: hasMidTier ? midUnitName : undefined,
-          midBarcode: hasMidTier ? midBarcode.trim() : undefined,
+          midUnitName: finalMidUnitName,
+          midBarcode: finalMidBarcode,
           midCapacity: finalMidCap,
           midPrice: finalMidPrice,
           retailBarcode: finalRetailBarcode || undefined,
@@ -326,8 +328,10 @@ const StockManagement: React.FC = () => {
 
       const finalBoxCap = Math.max(1, Number(boxCapacity) || 40);
       const finalBoxPrice = Number(boxPrice) > 0 ? Number(boxPrice) : (Number(wholesalePrice) > 0 ? Number(wholesalePrice) : (Number(sellingPrice) * finalBoxCap));
+      const finalMidCap = hasMidTier ? Math.max(1, Number(midCapacity) || 1) : 0;
       const finalMidPrice = hasMidTier ? (Number(midPrice) || 0) : 0;
-      const finalMidCap = hasMidTier ? Math.max(1, Number(midCapacity) || 10) : 0;
+      const finalMidUnitName = hasMidTier && midUnitName.trim() ? midUnitName.trim() : undefined;
+      const finalMidBarcode = hasMidTier && midBarcode.trim() ? midBarcode.trim() : undefined;
       const finalBoxBarcode = boxBarcode.trim() || finalBarcode;
       const finalRetailBarcode = retailBarcode.trim();
 
@@ -351,8 +355,8 @@ const StockManagement: React.FC = () => {
         boxBarcode: finalBoxBarcode,
         boxCapacity: finalBoxCap,
         boxPrice: finalBoxPrice,
-        midUnitName: hasMidTier ? midUnitName : undefined,
-        midBarcode: hasMidTier ? midBarcode.trim() : undefined,
+        midUnitName: finalMidUnitName,
+        midBarcode: finalMidBarcode,
         midCapacity: finalMidCap,
         midPrice: finalMidPrice,
         retailBarcode: finalRetailBarcode || undefined,
@@ -521,6 +525,14 @@ const StockManagement: React.FC = () => {
           minWholesaleQty: Number(item.minWholesaleQty || 0),
           minStock: Number(item.minStock || 0),
           image: item.image ? getProductImage(item.image) : '',
+          boxBarcode: item.boxBarcode || undefined,
+          boxCapacity: item.boxCapacity || 1,
+          boxPrice: item.boxPrice || 0,
+          midUnitName: item.midUnitName || undefined,
+          midBarcode: item.midBarcode || undefined,
+          midCapacity: item.midCapacity || 0,
+          midPrice: item.midPrice || 0,
+          retailBarcode: item.retailBarcode || undefined,
           // Varian dibuat dengan stok 0; stok masuk lewat mutasi IN per varian
           variants: draftVariants.map(dv => ({
             id: dv.id, name: dv.name, stock: 0,
@@ -594,11 +606,17 @@ const StockManagement: React.FC = () => {
     setRetailBarcode(p.retailBarcode || '');
     setBoxCapacity(p.boxCapacity || 40);
     setBoxPrice(p.boxPrice || p.wholesalePrice || '');
-    setBoxQty(p.boxCapacity && Number(p.boxCapacity) > 0 ? Math.floor(Number(p.stock) / Number(p.boxCapacity)) : '');
-    setHasMidTier(Boolean(p.midPrice && Number(p.midPrice) > 0));
-    setMidUnitName(p.midUnitName || 'Renceng');
+    const isMidActive = Boolean(
+      (Number(p.midPrice) > 0 && Number(p.midCapacity) > 1) ||
+      (p.midUnitName && Number(p.midCapacity) > 1 && (Number(p.midPrice) > 0 || (p.midBarcode && p.midBarcode.trim() !== '')))
+    );
+    setHasMidTier(isMidActive);
+    const fallbackMidUnit = p.unit?.toLowerCase() === 'kg' || p.category?.toUpperCase()?.includes('BERAS') 
+      ? 'Sak' 
+      : (p.category?.toUpperCase()?.includes('ROKOK') ? 'Slop' : 'Pack');
+    setMidUnitName(p.midUnitName || fallbackMidUnit);
     setMidBarcode(p.midBarcode || '');
-    setMidCapacity(p.midCapacity || 10);
+    setMidCapacity(p.midCapacity && Number(p.midCapacity) > 0 ? Number(p.midCapacity) : (p.unit?.toLowerCase() === 'kg' ? 5 : 10));
     setMidPrice(p.midPrice || '');
     setSku(p.sku);
     setName(p.name);
@@ -722,10 +740,10 @@ const StockManagement: React.FC = () => {
     boxBarcode: si.boxBarcode || si.barcode,
     boxCapacity: si.boxCapacity || 40,
     boxPrice: si.boxPrice || si.wholesalePrice,
-    midUnitName: si.midUnitName || 'Renceng',
+    midUnitName: si.midUnitName || '',
     midBarcode: si.midBarcode || '',
-    midCapacity: si.midCapacity || 10,
-    midPrice: si.midPrice || 0,
+    midCapacity: Number(si.midCapacity || 0),
+    midPrice: Number(si.midPrice || 0),
     retailBarcode: si.retailBarcode || '',
     variants: (si.variants || []).map((v: any) => ({
       id: v.id,
@@ -1316,12 +1334,17 @@ const StockManagement: React.FC = () => {
                       const unit = p.unit || 'Pcs';
                       const boxCap = Number(p.boxCapacity) || 1;
                       const midCap = Number(p.midCapacity) || 0;
-                      const midUnit = p.midUnitName || 'Renceng';
+                      const midUnit = (p.midUnitName || '').trim();
 
                       // Multi-tier Barcodes
                       const dusBarcode = p.boxBarcode || p.barcode || (p.id !== p.barcode ? p.barcode : '');
                       const retailBarcode = p.retailBarcode || '';
                       const midBarcode = p.midBarcode || '';
+
+                      // Mid-tier active condition (hanya aktif bila disetel kapasitas, satuan, dan harga/barcode)
+                      const hasMid = Boolean(
+                        midCap > 1 && midUnit && (Number(p.midPrice) > 0 || (midBarcode && midBarcode !== dusBarcode && midBarcode !== retailBarcode))
+                      );
 
                       // Box Conversion for Stock
                       const fullBoxes = boxCap > 1 ? Math.floor(stockVal / boxCap) : 0;
@@ -1408,7 +1431,7 @@ const StockManagement: React.FC = () => {
                                 </div>
                               )}
 
-                              {midBarcode && (
+                              {hasMid && midBarcode && (
                                 <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: '#f0f9ff', border: '1px solid #bae6fd', padding: '2px 5px', borderRadius: '5px', width: 'fit-content' }}>
                                   <span style={{ fontSize: '9px', fontWeight: 800, color: '#0369a1', background: '#e0f2fe', padding: '1px 3px', borderRadius: '3px' }}>{midUnit.toUpperCase()}</span>
                                   <span
@@ -1501,7 +1524,7 @@ const StockManagement: React.FC = () => {
                                     📦 1 Dus = {boxCap} {unit}
                                   </span>
                                 )}
-                                {midCap > 1 && (
+                                {hasMid && (
                                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '10px', fontWeight: 600, color: '#0369a1', background: '#e0f2fe', border: '1px solid #bae6fd', padding: '1px 6px', borderRadius: '4px' }}>
                                     🗂️ 1 {midUnit} = {midCap} {unit}
                                   </span>
@@ -1610,13 +1633,13 @@ const StockManagement: React.FC = () => {
                           {/* Harga Menengah */}
                           <td style={{ padding: '8px 12px', verticalAlign: 'middle', textAlign: 'right' }}>
                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '1px' }}>
-                              {midPriceVal > 0 ? (
+                              {hasMid && midPriceVal > 0 ? (
                                 <>
                                   <span style={{ fontSize: '12px', fontWeight: 800, color: '#0284c7' }}>
                                     {formatIDR(midPriceVal)}
                                   </span>
                                   <span style={{ fontSize: '10px', fontWeight: 600, color: '#0369a1' }}>
-                                    /{midUnit} ({midCap || 10} {unit})
+                                    /{midUnit} ({midCap} {unit})
                                   </span>
                                 </>
                               ) : (
@@ -1796,11 +1819,16 @@ const StockManagement: React.FC = () => {
               const unit = p.unit || 'Pcs';
               const boxCap = Number(p.boxCapacity) || 1;
               const midCap = Number(p.midCapacity) || 0;
-              const midUnit = p.midUnitName || 'Renceng';
+              const midUnit = (p.midUnitName || '').trim();
 
               const dusBarcode = p.boxBarcode || p.barcode || (p.id !== p.barcode ? p.barcode : '');
               const retailBarcode = p.retailBarcode || '';
               const midBarcode = p.midBarcode || '';
+
+              // Mid-tier active condition
+              const hasMid = Boolean(
+                midCap > 1 && midUnit && (Number(p.midPrice) > 0 || (midBarcode && midBarcode !== dusBarcode && midBarcode !== retailBarcode))
+              );
 
               const fullBoxes = boxCap > 1 ? Math.floor(stockVal / boxCap) : 0;
               const remainderPcs = boxCap > 1 ? (stockVal % boxCap) : 0;
@@ -1832,7 +1860,7 @@ const StockManagement: React.FC = () => {
                             [ECER] {retailBarcode}
                           </span>
                         )}
-                        {midBarcode && (
+                        {hasMid && midBarcode && (
                           <span style={{ fontFamily: 'monospace', background: '#f0f9ff', color: '#0369a1', border: '1px solid #bae6fd', padding: '0 4px', borderRadius: '4px', fontSize: '10px' }}>
                             [{midUnit.toUpperCase()}] {midBarcode}
                           </span>
@@ -1844,7 +1872,7 @@ const StockManagement: React.FC = () => {
                             📦 1 Dus = {boxCap} {unit}
                           </span>
                         )}
-                        {midCap > 1 && (
+                        {hasMid && (
                           <span style={{ fontSize: '10px', fontWeight: 600, color: '#0369a1', background: '#e0f2fe', border: '1px solid #bae6fd', padding: '1px 5px', borderRadius: '4px' }}>
                             🗂️ 1 {midUnit} = {midCap} {unit}
                           </span>
@@ -1891,7 +1919,7 @@ const StockManagement: React.FC = () => {
                         <span style={{ color: '#92400e' }}>
                           Dus: <strong>{boxPriceVal > 0 ? formatIDR(boxPriceVal) : '-'}</strong>
                         </span>
-                        {midPriceVal > 0 && (
+                        {hasMid && midPriceVal > 0 && (
                           <span style={{ color: '#0369a1' }}>
                             {midUnit}: <strong>{formatIDR(midPriceVal)}</strong>
                           </span>
@@ -2805,9 +2833,9 @@ const StockManagement: React.FC = () => {
                 </div>
               </div>
 
-              {/* OPSI KEMASAN MENENGAH (RENCENG / LUSIN / SLOP) */}
+              {/* OPSI KEMASAN MENENGAH / GROSIR KECIL (SAK / PACK / SLOP / LUSIN / RENCENG) */}
               <div className="ios-section-header" style={{ marginTop: '22px' }}>
-                <span>KEMASAN MENENGAH (RENCENG / LUSIN / SLOP)</span>
+                <span>KEMASAN MENENGAH / GROSIR KECIL</span>
                 <label style={{
                   display: 'inline-flex',
                   alignItems: 'center',
@@ -2825,7 +2853,22 @@ const StockManagement: React.FC = () => {
                   <input 
                     type="checkbox" 
                     checked={hasMidTier} 
-                    onChange={(e) => setHasMidTier(e.target.checked)} 
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setHasMidTier(checked);
+                      if (checked && !midUnitName) {
+                        if (unit.toLowerCase() === 'kg' || category?.toUpperCase().includes('BERAS')) {
+                          setMidUnitName('Sak');
+                          setMidCapacity(5);
+                        } else if (category?.toUpperCase().includes('ROKOK')) {
+                          setMidUnitName('Slop');
+                          setMidCapacity(10);
+                        } else {
+                          setMidUnitName('Pack');
+                          setMidCapacity(10);
+                        }
+                      }
+                    }} 
                     style={{ accentColor: '#7c3aed', cursor: 'pointer' }}
                   />
                   <span>{hasMidTier ? 'Satuan Menengah Aktif' : 'Aktifkan Satuan Menengah'}</span>
@@ -2837,19 +2880,43 @@ const StockManagement: React.FC = () => {
                     <div className="ios-col">
                       <label style={{ fontSize: '12.5px', fontWeight: 700, color: '#5b21b6', marginBottom: '6px' }}>Nama Satuan</label>
                       <select 
-                        value={midUnitName} 
-                        onChange={(e) => setMidUnitName(e.target.value)}
+                        value={['Sak', 'Karung', 'Bal', 'Slop', 'Renceng', 'Pack', 'Lusin', 'Karton', 'Ikat'].includes(midUnitName) ? midUnitName : (midUnitName ? 'Lainnya' : 'Sak')} 
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val === 'Lainnya') {
+                            setMidUnitName('');
+                          } else {
+                            setMidUnitName(val);
+                          }
+                        }}
                         className="ios-input-gray"
                         style={{ background: '#ffffff' }}
                       >
-                        <option value="Renceng">Renceng</option>
+                        <option value="Sak">Sak (Beras / Tepung / Pakan)</option>
+                        <option value="Karung">Karung (25-50 Kg)</option>
+                        <option value="Bal">Bal (Gula / Garam / Krupuk)</option>
+                        <option value="Slop">Slop (10 Bungkus Rokok)</option>
+                        <option value="Pack">Pack (Kemasan Sedang)</option>
                         <option value="Lusin">Lusin (12 Pcs)</option>
-                        <option value="Slop">Slop (10 Bungkus)</option>
-                        <option value="Pack">Pack</option>
+                        <option value="Renceng">Renceng (10-12 Sachet)</option>
+                        <option value="Karton">Karton Kecil</option>
+                        <option value="Ikat">Ikat</option>
+                        <option value="Lainnya">Lainnya (Ketik Manual)...</option>
                       </select>
+                      {!['Sak', 'Karung', 'Bal', 'Slop', 'Renceng', 'Pack', 'Lusin', 'Karton', 'Ikat'].includes(midUnitName) && (
+                        <input
+                          type="text"
+                          value={midUnitName}
+                          onChange={(e) => setMidUnitName(e.target.value)}
+                          placeholder="Ketik nama satuan (cth: Sak 5kg, Bag)..."
+                          className="ios-input-gray"
+                          style={{ background: '#ffffff', marginTop: '6px' }}
+                          autoFocus
+                        />
+                      )}
                     </div>
                     <div className="ios-col">
-                      <label style={{ fontSize: '12.5px', fontWeight: 700, color: '#5b21b6', marginBottom: '6px' }}>Isi per {midUnitName}</label>
+                      <label style={{ fontSize: '12.5px', fontWeight: 700, color: '#5b21b6', marginBottom: '6px' }}>Isi per {midUnitName || 'Kemasan'}</label>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                         <input 
                           type="number" 
@@ -2963,8 +3030,8 @@ const StockManagement: React.FC = () => {
                 {hasMidTier && (
                   <div className="ios-row-horiz" style={{ background: '#eff6ff' }}>
                     <div>
-                      <label style={{ color: '#1d4ed8', fontWeight: 800 }}>3. Harga Jual {midUnitName}</label>
-                      <div className="ios-sublabel">Harga 1 {midUnitName} (isi {midCapacity} {unit})</div>
+                      <label style={{ color: '#1d4ed8', fontWeight: 800 }}>3. Harga Jual {midUnitName || 'Kemasan Menengah'}</label>
+                      <div className="ios-sublabel">Harga 1 {midUnitName || 'Kemasan'} (isi {midCapacity} {unit})</div>
                     </div>
                     <div className="ios-input-prefix" style={{ background: '#dbeafe' }}>
                       <span style={{ color: '#1d4ed8' }}>Rp</span>
