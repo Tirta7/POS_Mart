@@ -123,15 +123,16 @@ const DraftReviewDrawer: React.FC<Props> = ({ items, mode, categories, onClose, 
       wholesalePrice: Number(form.wholesalePrice || 0),
       image: form.image,
       variants: hasVariants
-        ? named.map(v => ({
+        ? named.map((v, idx) => ({
             id: v.id,
             name: v.name.trim(),
-            barcode: v.barcode ? v.barcode.trim() : undefined,
+            barcode: v.barcode ? v.barcode.trim() : (item.barcode ? `${item.barcode}-${idx + 1}` : undefined),
             sku: v.sku ? v.sku.trim() : undefined,
             image: v.image ? v.image.trim() : undefined,
             qty: Number(v.qty) || 0,
             sellingPrice: Number(v.sellingPrice) || 0,
             wholesalePrice: Number(v.wholesalePrice) || 0,
+            minWholesaleQty: Number((v as any).minWholesaleQty) || 0,
           }))
         : undefined,
     });
@@ -250,9 +251,19 @@ const DraftReviewDrawer: React.FC<Props> = ({ items, mode, categories, onClose, 
                         </div>
                         {item.variants && item.variants.length > 0 && (
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '4px' }}>
-                            {item.variants.map(v => (
-                              <span key={v.id} style={{ fontSize: '10px', fontWeight: 700, background: '#ede9fe', color: '#5b21b6', padding: '1px 7px', borderRadius: '999px' }}>{v.name}: {v.qty}</span>
-                            ))}
+                            {item.variants.map((v, vIdx) => {
+                              const vCode = v.barcode || (item.barcode ? `${item.barcode}-${vIdx + 1}` : '');
+                              return (
+                                <span key={v.id || vIdx} style={{ fontSize: '10px', fontWeight: 700, background: '#ede9fe', color: '#5b21b6', padding: '1px 7px', borderRadius: '6px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                  <span>{v.name}: {v.qty}</span>
+                                  {vCode && (
+                                    <span style={{ fontFamily: 'monospace', fontSize: '9.5px', background: '#fff', color: '#4338ca', padding: '0 4px', borderRadius: '3px', border: '1px solid #c4b5fd' }}>
+                                      ||| {vCode}
+                                    </span>
+                                  )}
+                                </span>
+                              );
+                            })}
                           </div>
                         )}
                       </div>

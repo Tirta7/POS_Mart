@@ -2559,12 +2559,13 @@ function App() {
               </div>
             </div>
             <div style={{ overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {variantProduct.variants.map((v: any) => {
+              {variantProduct.variants.map((v: any, vIdx: number) => {
                 const out = v.availableStock <= 0;
                 const inCart = cart.find(c => c.id === variantProduct.id && c.variantId === v.id)?.qty || 0;
+                const vBarcode = v.barcode || (variantProduct.barcode ? `${variantProduct.barcode}-${vIdx + 1}` : '');
                 return (
                   <button
-                    key={v.id}
+                    key={v.id || vIdx}
                     type="button"
                     disabled={out}
                     onClick={() => handlePickVariant(v)}
@@ -2580,7 +2581,26 @@ function App() {
                         style={{ width: '42px', height: '42px', objectFit: 'cover', borderRadius: '8px', flexShrink: 0, border: '1px solid #e5e7eb' }}
                       />
                       <div>
-                        <div style={{ fontWeight: 700, fontSize: '15px', color: '#111827' }}>{v.name}</div>
+                        <div style={{ fontWeight: 700, fontSize: '15px', color: '#111827', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                          <span>{v.name}</span>
+                          {vBarcode && (
+                            <span style={{
+                              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                              fontSize: '11px',
+                              fontWeight: 700,
+                              background: '#f5f3ff',
+                              color: '#6d28d9',
+                              padding: '1px 6px',
+                              borderRadius: '4px',
+                              border: '1px solid #ddd6fe',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '3px'
+                            }}>
+                              <span>|||</span> {vBarcode}
+                            </span>
+                          )}
+                        </div>
                         <div style={{ fontSize: '12px', marginTop: '2px', fontWeight: 600, color: out ? '#991b1b' : '#166534' }}>
                           {out ? 'Stok habis' : `Stok: ${v.availableStock} ${variantProduct.unit}`}
                           {inCart > 0 && <span style={{ color: '#6b7280', fontWeight: 500 }}> • di keranjang: {inCart}</span>}

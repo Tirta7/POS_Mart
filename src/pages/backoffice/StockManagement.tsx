@@ -25,24 +25,66 @@ const makeGrNumber = () => {
 };
 
 // Chip daftar varian + stok masing-masing (dipakai di tabel & kartu mobile)
-const VariantChips: React.FC<{ variants?: { id?: string; name: string; stock: number; barcode?: string }[] }> = ({ variants }) => {
+const VariantChips: React.FC<{ 
+  variants?: { id?: string; name: string; stock: number; barcode?: string; sku?: string }[];
+  parentBarcode?: string;
+  onCopyBarcode?: (code: string) => void;
+}> = ({ variants, parentBarcode, onCopyBarcode }) => {
   if (!variants || variants.length === 0) return null;
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '4px' }}>
-      {variants.map(v => (
-        <span 
-          key={v.id || v.name} 
-          style={{ fontSize: '10.5px', fontWeight: 700, background: '#ede9fe', color: '#5b21b6', padding: '1px 8px', borderRadius: '999px', whiteSpace: 'nowrap' }}
-          title={v.barcode ? `Barcode: ${v.barcode}` : undefined}
-        >
-          {v.name}: <span style={{ color: v.stock > 0 ? '#065f46' : '#b91c1c' }}>{v.stock}</span>
-          {v.barcode && (
-            <span style={{ marginLeft: '4px', opacity: 0.8, fontSize: '9.5px', fontFamily: 'monospace', color: '#4338ca' }}>
-              [{v.barcode}]
-            </span>
-          )}
-        </span>
-      ))}
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px', marginTop: '4px' }}>
+      {variants.map((v, idx) => {
+        const vBarcode = v.barcode || (parentBarcode ? `${parentBarcode}-${idx + 1}` : '');
+        return (
+          <span 
+            key={v.id || v.name || idx} 
+            style={{ 
+              fontSize: '11px', 
+              fontWeight: 700, 
+              background: '#f5f3ff', 
+              color: '#5b21b6', 
+              padding: '2px 8px', 
+              borderRadius: '8px', 
+              display: 'inline-flex', 
+              alignItems: 'center', 
+              gap: '6px',
+              border: '1px solid #ddd6fe',
+              whiteSpace: 'nowrap' 
+            }}
+            title={`Varian: ${v.name} | Stok: ${v.stock}${vBarcode ? ` | Barcode: ${vBarcode}` : ''}`}
+          >
+            <span>{v.name}:</span>
+            <span style={{ color: v.stock > 0 ? '#065f46' : '#b91c1c', fontWeight: 800 }}>{v.stock}</span>
+            {vBarcode && (
+              <span 
+                onClick={(e) => {
+                  if (onCopyBarcode) {
+                    e.stopPropagation();
+                    onCopyBarcode(vBarcode);
+                  }
+                }}
+                style={{
+                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                  fontSize: '10px',
+                  fontWeight: 800,
+                  background: '#ffffff',
+                  color: '#4338ca',
+                  padding: '1px 5px',
+                  borderRadius: '4px',
+                  border: '1px solid #c4b5fd',
+                  cursor: onCopyBarcode ? 'pointer' : 'default',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '3px'
+                }}
+                title={onCopyBarcode ? "Klik untuk salin barcode varian ini" : undefined}
+              >
+                <span>|||</span> {vBarcode}
+              </span>
+            )}
+          </span>
+        );
+      })}
     </div>
   );
 };
@@ -281,13 +323,13 @@ const StockManagement: React.FC = () => {
           minWholesaleQty: Number(minWholesaleQty) || 0,
           minStock: Number(minStock),
           image: image || original.image,
-          variants: namedVariants.map(v => {
+          variants: namedVariants.map((v, idx) => {
             const old = origVariants.find(o => o.id === v.id);
             return {
               id: v.id,
               name: v.name.trim(),
-              barcode: v.barcode ? v.barcode.trim() : (old?.barcode || undefined),
-              sku: v.sku ? v.sku.trim() : (old?.sku || undefined),
+              barcode: v.barcode ? v.barcode.trim() : (old?.barcode || (finalBarcode ? `${finalBarcode}-${idx + 1}` : undefined)),
+              sku: v.sku ? v.sku.trim() : (old?.sku || (finalSku ? `${finalSku}-${idx + 1}` : undefined)),
               image: v.image ? v.image.trim() : (old?.image || undefined),
               stock: old ? old.stock : 0, // varian baru mulai 0, diisi lewat mutasi di bawah
               purchasePrice: old?.purchasePrice,
@@ -334,11 +376,11 @@ const StockManagement: React.FC = () => {
         minStock: Number(minStock),
         image: image ? getProductImage(image) : '',
         variants: hasVariants
-          ? namedVariants.map(v => ({
+          ? namedVariants.map((v, idx) => ({
               id: v.id,
               name: v.name.trim(),
-              barcode: v.barcode ? v.barcode.trim() : undefined,
-              sku: v.sku ? v.sku.trim() : undefined,
+              barcode: v.barcode ? v.barcode.trim() : (finalBarcode ? `${finalBarcode}-${idx + 1}` : undefined),
+              sku: v.sku ? v.sku.trim() : (finalSku ? `${finalSku}-${idx + 1}` : undefined),
               image: v.image ? v.image.trim() : undefined,
               qty: Number(v.qty) || 0,
               sellingPrice: Number(v.sellingPrice) || 0,
@@ -358,7 +400,14 @@ const StockManagement: React.FC = () => {
       // Barang tanpa barcode pabrikan -> langsung tawarkan cetak label stiker
       if (isInternalBarcode(finalId)) {
         setLabelCopies(Math.max(1, Math.ceil(totalQty)));
-        setLabelProduct({ id: finalId, barcode: finalId, sku: finalSku, name, sellingPrice: Number(sellingPrice) });
+        setLabelProduct({
+          id: finalId,
+          barcode: finalBarcode,
+          sku: finalSku,
+          name,
+          sellingPrice: Number(sellingPrice),
+          variants: newItem.variants
+        });
       }
     }
     
@@ -690,7 +739,16 @@ const StockManagement: React.FC = () => {
     wholesalePrice: si.wholesalePrice,
     minStock: si.minStock,
     image: si.image,
-    variants: (si.variants || []).map((v: any) => ({ id: v.id, name: v.name, stock: Number(v.qty) || 0 })),
+    variants: (si.variants || []).map((v: any) => ({
+      id: v.id,
+      name: v.name,
+      barcode: v.barcode || '',
+      sku: v.sku || '',
+      stock: Number(v.qty) || 0,
+      sellingPrice: Number(v.sellingPrice) || 0,
+      wholesalePrice: Number(v.wholesalePrice) || 0,
+      minWholesaleQty: Number(v.minWholesaleQty) || 0
+    })),
     isActive: true,
     isPending: true
   }));
@@ -1297,12 +1355,55 @@ const StockManagement: React.FC = () => {
                               <button
                                 type="button"
                                 onClick={() => copyBarcode(barcodeVal)}
-                                title="Salin Barcode"
+                                title="Salin Barcode Induk"
                                 style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', display: 'inline-flex', color: copiedBarcode === barcodeVal ? '#10b981' : '#94a3b8' }}
                               >
                                 {copiedBarcode === barcodeVal ? <Check size={11} /> : <Copy size={11} />}
                               </button>
                             </div>
+
+                            {/* Tampilkan juga Barcode Varian jika ada */}
+                            {p.variants && p.variants.length > 0 && (
+                              <div style={{ marginTop: '4px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                {p.variants.map((v: any, vIdx: number) => {
+                                  const vCode = v.barcode || (barcodeVal ? `${barcodeVal}-${vIdx + 1}` : '');
+                                  if (!vCode) return null;
+                                  return (
+                                    <div
+                                      key={v.id || vIdx}
+                                      style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '4px',
+                                        fontSize: '9.5px',
+                                        background: '#f5f3ff',
+                                        color: '#6d28d9',
+                                        border: '1px solid #ddd6fe',
+                                        padding: '1px 5px',
+                                        borderRadius: '4px',
+                                        maxWidth: '125px'
+                                      }}
+                                      title={`Barcode Varian ${v.name}: ${vCode}`}
+                                    >
+                                      <span style={{ fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '48px' }}>
+                                        {v.name}:
+                                      </span>
+                                      <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontWeight: 800, whiteSpace: 'nowrap' }}>
+                                        {vCode}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => { e.stopPropagation(); copyBarcode(vCode); }}
+                                        title={`Salin Barcode ${v.name}`}
+                                        style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', display: 'inline-flex', color: copiedBarcode === vCode ? '#10b981' : '#8b5cf6' }}
+                                      >
+                                        {copiedBarcode === vCode ? <Check size={9} /> : <Copy size={9} />}
+                                      </button>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </td>
 
                           {/* SKU */}
@@ -1359,7 +1460,7 @@ const StockManagement: React.FC = () => {
                                   </span>
                                 )}
                               </div>
-                              <VariantChips variants={p.variants} />
+                              <VariantChips variants={p.variants} parentBarcode={p.barcode || p.sku || p.id} onCopyBarcode={copyBarcode} />
                             </div>
                           </td>
 
@@ -1603,7 +1704,7 @@ const StockManagement: React.FC = () => {
                       <div className="mobile-card-id">
                         SKU: {p.sku || '-'} • ID: {p.barcode || p.id}
                       </div>
-                      <VariantChips variants={p.variants} />
+                      <VariantChips variants={p.variants} parentBarcode={p.barcode || p.sku || p.id} onCopyBarcode={copyBarcode} />
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
                       <span className="mobile-badge mobile-badge-cat">{p.category}</span>

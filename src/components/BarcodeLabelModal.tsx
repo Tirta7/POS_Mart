@@ -153,23 +153,28 @@ const BarcodeLabelModal: React.FC<Props> = ({ product, products, initialCopies =
     if (product) {
       if (hasProductVariants) {
         if (variantSelection === 'all_variants') {
-          return product.variants!.map(v => ({
-            id: `${product.id}-${v.id}`,
-            barcode: v.barcode || v.sku || `${product.barcode || product.sku || product.id}-${v.name}`,
-            sku: v.sku || product.sku,
-            name: `${product.name} (${v.name})`,
-            sellingPrice: v.sellingPrice && v.sellingPrice > 0 ? v.sellingPrice : product.sellingPrice,
-            unit: product.unit,
-            stock: v.stock,
-          }));
+          return product.variants!.map((v, idx) => {
+            const vBarcode = v.barcode || (product.barcode ? `${product.barcode}-${idx + 1}` : (product.sku ? `${product.sku}-${idx + 1}` : `${product.id}-${idx + 1}`));
+            return {
+              id: `${product.id}-${v.id || idx}`,
+              barcode: vBarcode,
+              sku: v.sku || (product.sku ? `${product.sku}-${idx + 1}` : `${product.id}-${idx + 1}`),
+              name: `${product.name} (${v.name})`,
+              sellingPrice: v.sellingPrice && v.sellingPrice > 0 ? v.sellingPrice : product.sellingPrice,
+              unit: product.unit,
+              stock: v.stock,
+            };
+          });
         }
         if (variantSelection !== 'parent') {
-          const v = product.variants!.find(x => x.id === variantSelection);
+          const idx = product.variants!.findIndex(x => x.id === variantSelection);
+          const v = idx >= 0 ? product.variants![idx] : null;
           if (v) {
+            const vBarcode = v.barcode || (product.barcode ? `${product.barcode}-${idx + 1}` : (product.sku ? `${product.sku}-${idx + 1}` : `${product.id}-${idx + 1}`));
             return [{
-              id: `${product.id}-${v.id}`,
-              barcode: v.barcode || v.sku || `${product.barcode || product.sku || product.id}-${v.name}`,
-              sku: v.sku || product.sku,
+              id: `${product.id}-${v.id || idx}`,
+              barcode: vBarcode,
+              sku: v.sku || (product.sku ? `${product.sku}-${idx + 1}` : `${product.id}-${idx + 1}`),
               name: `${product.name} (${v.name})`,
               sellingPrice: v.sellingPrice && v.sellingPrice > 0 ? v.sellingPrice : product.sellingPrice,
               unit: product.unit,
@@ -463,15 +468,18 @@ const BarcodeLabelModal: React.FC<Props> = ({ product, products, initialCopies =
             {hasProductVariants && product?.variants && (
               <div style={{
                 background: '#f5f3ff',
-                border: '1px solid #ddd6fe',
-                borderRadius: '12px',
+                border: '1.5px solid #ddd6fe',
+                borderRadius: '14px',
                 padding: '12px 14px',
                 marginBottom: '14px'
               }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '4px' }}>
                   <div style={{ fontSize: '12px', fontWeight: 800, color: '#6d28d9', display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <Layers size={14} /> Pilihan Cetak Label Varian ({product.variants.length} Varian)
                   </div>
+                  <span style={{ fontSize: '11px', color: '#7c3aed', fontWeight: 600 }}>
+                    Tiap varian memiliki barcode unik
+                  </span>
                 </div>
 
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
@@ -479,14 +487,15 @@ const BarcodeLabelModal: React.FC<Props> = ({ product, products, initialCopies =
                     type="button"
                     onClick={() => { setVariantSelection('all_variants'); setPreviewIndex(0); }}
                     style={{
-                      padding: '5px 10px',
+                      padding: '6px 12px',
                       borderRadius: '8px',
-                      fontSize: '11px',
+                      fontSize: '11.5px',
                       fontWeight: 700,
                       cursor: 'pointer',
                       border: variantSelection === 'all_variants' ? '1.5px solid #7c3aed' : '1px solid #cbd5e1',
                       background: variantSelection === 'all_variants' ? '#7c3aed' : '#ffffff',
                       color: variantSelection === 'all_variants' ? '#ffffff' : '#334155',
+                      boxShadow: variantSelection === 'all_variants' ? '0 2px 6px rgba(124,58,237,0.25)' : 'none'
                     }}
                   >
                     Semua Varian ({product.variants.length})
@@ -496,39 +505,88 @@ const BarcodeLabelModal: React.FC<Props> = ({ product, products, initialCopies =
                     type="button"
                     onClick={() => { setVariantSelection('parent'); setPreviewIndex(0); }}
                     style={{
-                      padding: '5px 10px',
+                      padding: '6px 12px',
                       borderRadius: '8px',
-                      fontSize: '11px',
+                      fontSize: '11.5px',
                       fontWeight: 700,
                       cursor: 'pointer',
                       border: variantSelection === 'parent' ? '1.5px solid #7c3aed' : '1px solid #cbd5e1',
                       background: variantSelection === 'parent' ? '#7c3aed' : '#ffffff',
                       color: variantSelection === 'parent' ? '#ffffff' : '#334155',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                      boxShadow: variantSelection === 'parent' ? '0 2px 6px rgba(124,58,237,0.25)' : 'none'
                     }}
                   >
-                    Hanya Induk ({product.barcode || product.id})
+                    <span>Hanya Induk</span>
+                    <span style={{
+                      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                      fontSize: '10px',
+                      fontWeight: 800,
+                      background: variantSelection === 'parent' ? 'rgba(255,255,255,0.25)' : '#f1f5f9',
+                      color: variantSelection === 'parent' ? '#ffffff' : '#475569',
+                      padding: '1px 5px',
+                      borderRadius: '4px'
+                    }}>
+                      ||| {product.barcode || product.sku || product.id}
+                    </span>
                   </button>
 
-                  {product.variants.map(v => (
-                    <button
-                      key={v.id}
-                      type="button"
-                      onClick={() => { setVariantSelection(v.id); setPreviewIndex(0); }}
-                      style={{
-                        padding: '5px 10px',
-                        borderRadius: '8px',
-                        fontSize: '11px',
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        border: variantSelection === v.id ? '1.5px solid #7c3aed' : '1px solid #cbd5e1',
-                        background: variantSelection === v.id ? '#7c3aed' : '#ffffff',
-                        color: variantSelection === v.id ? '#ffffff' : '#334155',
-                      }}
-                      title={`${v.name} (Barcode: ${v.barcode || 'Otomatis'})`}
-                    >
-                      {v.name} {v.barcode ? `[${v.barcode}]` : ''}
-                    </button>
-                  ))}
+                  {product.variants.map((v, idx) => {
+                    const vBarcode = v.barcode || (product.barcode ? `${product.barcode}-${idx + 1}` : (product.sku ? `${product.sku}-${idx + 1}` : `${product.id}-${idx + 1}`));
+                    const isSelected = variantSelection === v.id;
+                    const priceFormatted = v.sellingPrice && v.sellingPrice > 0 ? `Rp ${v.sellingPrice.toLocaleString('id-ID')}` : null;
+                    return (
+                      <button
+                        key={v.id || idx}
+                        type="button"
+                        onClick={() => { setVariantSelection(v.id); setPreviewIndex(0); }}
+                        style={{
+                          padding: '6px 12px',
+                          borderRadius: '8px',
+                          fontSize: '11.5px',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          border: isSelected ? '1.5px solid #7c3aed' : '1px solid #cbd5e1',
+                          background: isSelected ? '#7c3aed' : '#ffffff',
+                          color: isSelected ? '#ffffff' : '#334155',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          transition: 'all 0.15s ease',
+                          boxShadow: isSelected ? '0 2px 8px rgba(124,58,237,0.25)' : 'none'
+                        }}
+                        title={`Varian: ${v.name} | Barcode: ${vBarcode}`}
+                      >
+                        <span>{v.name}</span>
+                        <span style={{
+                          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                          fontSize: '10.5px',
+                          fontWeight: 800,
+                          background: isSelected ? 'rgba(255,255,255,0.25)' : '#ede9fe',
+                          color: isSelected ? '#ffffff' : '#6d28d9',
+                          padding: '1px 6px',
+                          borderRadius: '4px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '3px'
+                        }}>
+                          <span>|||</span> {vBarcode}
+                        </span>
+                        {priceFormatted && (
+                          <span style={{
+                            fontSize: '10px',
+                            fontWeight: 700,
+                            color: isSelected ? '#e9d5ff' : '#059669',
+                            marginLeft: '2px'
+                          }}>
+                            {priceFormatted}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -820,7 +878,7 @@ const BarcodeLabelModal: React.FC<Props> = ({ product, products, initialCopies =
               }}
             >
               {isBulk && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
                   <button
                     type="button"
                     onClick={() => setPreviewIndex((prev) => (prev > 0 ? prev - 1 : targetProducts.length - 1))}
@@ -829,7 +887,7 @@ const BarcodeLabelModal: React.FC<Props> = ({ product, products, initialCopies =
                     <ChevronLeft size={16} />
                   </button>
                   <span style={{ fontSize: '12px', fontWeight: 700, color: '#475569' }}>
-                    Pratinjau Produk: <strong>{previewIndex + 1}</strong> dari <strong>{targetProducts.length}</strong>
+                    Item Ke-<strong>{previewIndex + 1}</strong> dari <strong>{targetProducts.length}</strong>
                   </span>
                   <button
                     type="button"
@@ -838,6 +896,39 @@ const BarcodeLabelModal: React.FC<Props> = ({ product, products, initialCopies =
                   >
                     <ChevronRight size={16} />
                   </button>
+                </div>
+              )}
+
+              {/* Tag Banner Menampilkan Nama & Barcode Item yang Sedang Dipratinjau */}
+              {currentPreviewProd && (
+                <div style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  background: '#ffffff',
+                  border: '1.5px solid #ddd6fe',
+                  borderRadius: '20px',
+                  padding: '4px 12px',
+                  marginBottom: '10px',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
+                }}>
+                  <span style={{ fontSize: '12px', fontWeight: 800, color: '#1e293b' }}>
+                    {currentPreviewProd.name}
+                  </span>
+                  <span style={{
+                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                    fontSize: '11px',
+                    fontWeight: 800,
+                    background: '#7c3aed',
+                    color: '#ffffff',
+                    padding: '1.5px 7px',
+                    borderRadius: '5px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}>
+                    <span>|||</span> {currentPreviewProd.barcode || currentPreviewProd.sku || currentPreviewProd.id}
+                  </span>
                 </div>
               )}
 
