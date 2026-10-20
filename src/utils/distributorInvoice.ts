@@ -131,7 +131,7 @@ export const buildDistributorInvoiceHtml = (sale: SalesTransaction, opts: Distri
     .map((item, idx) => {
       const p = products.find(x => x.id === item.productId);
       const unit = item.tierUnit || p?.unit || 'Pcs';
-      const tierBadge = item.tierType === 'BOX' ? ' [DUS]' : (item.tierType === 'MID' ? ` [${(item.tierUnit || 'MID').toUpperCase()}]` : '');
+      const tierBadge = item.tierType === 'BOX' ? ' [DUS]' : (item.tierType === 'MID' ? ` [${(item.tierUnit || 'MID').toUpperCase()}]` : (item.tierType === 'WHOLESALE' ? ' [GROSIR]' : ''));
       const isCustom = Boolean(item.isCustomPrice || (item.originalPrice && item.originalPrice !== item.price));
       const discountPerItem = isCustom && item.originalPrice && item.originalPrice > item.price
         ? item.originalPrice - item.price

@@ -423,7 +423,11 @@ function App() {
   const resolvePrice = (p: any, variantId: string | undefined | null, type: string) => {
     const v = variantId ? (p.variants || []).find((x: any) => x.id === variantId) : null;
     const sell = v?.sellingPrice && v.sellingPrice > 0 ? v.sellingPrice : p.sellingPrice;
-    const wholesale = v?.wholesalePrice && v.wholesalePrice > 0 ? v.wholesalePrice : p.wholesalePrice;
+    let wholesale = v?.wholesalePrice && v.wholesalePrice > 0 ? v.wholesalePrice : p.wholesalePrice;
+    // Fallback cerdas: jika produk belum memiliki wholesalePrice tapi memiliki boxPrice saat boxCapacity <= 1
+    if ((!wholesale || wholesale <= 0) && Number(p.boxPrice) > 0 && (!p.boxCapacity || p.boxCapacity <= 1)) {
+      wholesale = p.boxPrice;
+    }
     return type === 'TAKEAWAY' && wholesale ? wholesale : sell;
   };
 
@@ -432,6 +436,14 @@ function App() {
     const availableStock = p.stock - (p.reserved || 0);
     const minStock = p.minStock ?? 10;
     const isLowStock = availableStock <= minStock;
+    const isBoxValid = Boolean(p.boxCapacity && p.boxCapacity > 1);
+    const boxPriceVal = Number(p.boxPrice) || 0;
+    const effectiveWholesalePrice = (p.wholesalePrice && p.wholesalePrice > 0)
+      ? p.wholesalePrice
+      : (!isBoxValid && boxPriceVal > 0 ? boxPriceVal : 0);
+    const effectiveBoxPrice = isBoxValid ? boxPriceVal : 0;
+    const effectiveBoxCapacity = isBoxValid ? (p.boxCapacity || 1) : 1;
+
     const variants = (p.variants || []).map(v => ({
       id: v.id,
       name: v.name,
@@ -439,7 +451,7 @@ function App() {
       sku: v.sku || '',
       image: v.image || '',
       price: resolvePrice(p, v.id, orderType),
-      wholesalePrice: v.wholesalePrice && v.wholesalePrice > 0 ? v.wholesalePrice : (p.wholesalePrice || 0),
+      wholesalePrice: v.wholesalePrice && v.wholesalePrice > 0 ? v.wholesalePrice : (effectiveWholesalePrice || 0),
       minWholesaleQty: v.minWholesaleQty && v.minWholesaleQty > 0 ? v.minWholesaleQty : (p.minWholesaleQty || 0),
       availableStock: v.stock - (v.reserved || 0),
     }));
@@ -450,7 +462,7 @@ function App() {
       barcode: p.barcode || p.sku || '',
       name: p.name,
       price: resolvePrice(p, null, orderType),
-      wholesalePrice: p.wholesalePrice || 0,
+      wholesalePrice: effectiveWholesalePrice,
       minWholesaleQty: p.minWholesaleQty || 0,
       type: p.category,
       unit: p.unit || 'Pcs',
@@ -461,13 +473,13 @@ function App() {
       availableStock: availableStock,  // actual available stock
       rawStock: p.stock,
       variants,
-      boxBarcode: p.boxBarcode || '',
-      boxCapacity: p.boxCapacity || 1,
-      boxPrice: p.boxPrice || 0,
+      boxBarcode: isBoxValid ? (p.boxBarcode || '') : '',
+      boxCapacity: effectiveBoxCapacity,
+      boxPrice: effectiveBoxPrice,
       midUnitName: p.midUnitName || '',
       midBarcode: p.midBarcode || '',
-      midCapacity: p.midCapacity || 0,
-      midPrice: p.midPrice || 0,
+      midCapacity: (p.midCapacity && p.midCapacity > 1) ? p.midCapacity : 0,
+      midPrice: (p.midCapacity && p.midCapacity > 1) ? (p.midPrice || 0) : 0,
       retailBarcode: p.retailBarcode || '',
     };
   });
@@ -712,22 +724,27 @@ function App() {
     (a.variantId || null) === (b.variantId || null) &&
     (a.tierType || 'RETAIL') === (b.tierType || 'RETAIL');
 
-  const addTierToCart = (product: any, tier: 'BOX' | 'MID' | 'RETAIL', customQty: number = 1) => {
+  const addTierToCart = (product: any, tier: 'BOX' | 'MID' | 'RETAIL' | 'WHOLESALE', customQty: number = 1) => {
     let tierMultiplier = 1;
     let tierUnit = product.unit || 'Pcs';
     let tierPrice = product.price;
     let tierBarcode = product.retailBarcode || product.barcode;
 
     if (tier === 'BOX') {
-      tierMultiplier = product.boxCapacity && product.boxCapacity > 0 ? product.boxCapacity : 1;
+      tierMultiplier = product.boxCapacity && product.boxCapacity > 1 ? product.boxCapacity : 1;
       tierUnit = 'Dus';
       tierPrice = product.boxPrice && product.boxPrice > 0 ? product.boxPrice : (product.price * tierMultiplier);
       tierBarcode = product.boxBarcode || product.barcode;
     } else if (tier === 'MID') {
-      tierMultiplier = product.midCapacity && product.midCapacity > 0 ? product.midCapacity : 1;
+      tierMultiplier = product.midCapacity && product.midCapacity > 1 ? product.midCapacity : 1;
       tierUnit = product.midUnitName || 'Paket';
       tierPrice = product.midPrice && product.midPrice > 0 ? product.midPrice : (product.price * tierMultiplier);
       tierBarcode = product.midBarcode || product.barcode;
+    } else if (tier === 'WHOLESALE') {
+      tierMultiplier = 1;
+      tierUnit = product.unit || 'Pcs';
+      tierPrice = Number(product.wholesalePrice) > 0 ? Number(product.wholesalePrice) : product.price;
+      tierBarcode = product.retailBarcode || product.barcode;
     } else {
       // RETAIL
       tierMultiplier = 1;
@@ -781,10 +798,11 @@ function App() {
       ];
     });
 
+    const tierLabel = tier === 'BOX' ? 'DUS' : (tier === 'MID' ? (tierUnit || 'PAKET').toUpperCase() : (tier === 'WHOLESALE' ? 'GROSIR' : 'ECERAN'));
     sound.playScanSuccess();
     setToastNotice({
       type: 'success',
-      message: `${customQty > 1 ? `${customQty}x ` : ''}${product.name} [${tierUnit.toUpperCase()}] masuk keranjang`
+      message: `${customQty > 1 ? `${customQty}x ` : ''}${product.name} [${tierLabel}] masuk keranjang`
     });
   };
 
@@ -911,12 +929,10 @@ function App() {
       return;
     }
 
-    // 2. Produk multi-tier (Dus / Renceng / Eceran): tampilkan dialog 3 pilihan harga
-    const hasTier = Boolean(
-      (product.boxPrice && product.boxPrice > 0) ||
-      (product.boxCapacity && product.boxCapacity > 1) ||
-      (product.midPrice && product.midPrice > 0)
-    );
+    // 2. Produk multi-tier (Dus / Renceng / Eceran): tampilkan dialog level kemasan HANYA jika ada kemasan bertingkat fisik (Dus isi > 1 atau Menengah isi > 1)
+    const hasBoxTier = Boolean(product.boxCapacity && product.boxCapacity > 1 && product.boxPrice && product.boxPrice > 0);
+    const hasMidTier = Boolean(product.midCapacity && product.midCapacity > 1 && product.midPrice && product.midPrice > 0);
+    const hasTier = hasBoxTier || hasMidTier;
 
     if (hasTier) {
       setTierModalProduct({ product, customQty });
@@ -1080,11 +1096,9 @@ function App() {
           return;
         }
 
-        const hasTier = Boolean(
-          (matchedProduct.boxPrice && matchedProduct.boxPrice > 0) ||
-          (matchedProduct.boxCapacity && matchedProduct.boxCapacity > 1) ||
-          (matchedProduct.midPrice && matchedProduct.midPrice > 0)
-        );
+        const hasBoxTier = Boolean(matchedProduct.boxCapacity && matchedProduct.boxCapacity > 1 && matchedProduct.boxPrice && matchedProduct.boxPrice > 0);
+        const hasMidTier = Boolean(matchedProduct.midCapacity && matchedProduct.midCapacity > 1 && matchedProduct.midPrice && matchedProduct.midPrice > 0);
+        const hasTier = hasBoxTier || hasMidTier;
 
         if (hasTier) {
           setTierModalProduct({ product: matchedProduct, customQty: multiplier });
@@ -2047,6 +2061,11 @@ function App() {
                         {(item.tierUnit || 'MID').toUpperCase()} ({item.tierMultiplier} pcs)
                       </span>
                     )}
+                    {item.tierType === 'WHOLESALE' && (
+                      <span style={{ marginLeft: '6px', fontSize: '10.5px', fontWeight: 800, backgroundColor: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe', padding: '1px 7px', borderRadius: '4px' }}>
+                        GROSIR
+                      </span>
+                    )}
                     {item.tierType === 'RETAIL' && (
                       <span style={{ marginLeft: '6px', fontSize: '10.5px', fontWeight: 700, backgroundColor: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0', padding: '1px 7px', borderRadius: '4px' }}>
                         ECER
@@ -2782,49 +2801,72 @@ function App() {
         </div>
       )}
 
-      {/* 3-TIER PACKAGING SELECTION MODAL (DUS, RENCENG/LUSIN/SLOP, ECERAN) */}
+      {/* MULTI-TIER & PACKAGING SELECTION MODAL (DUS, RENCENG/LUSIN, GROSIR, ECERAN) */}
       {tierModalProduct && (() => {
         const p = tierModalProduct.product;
         const q = tierModalProduct.customQty || 1;
-        const boxCap = p.boxCapacity && p.boxCapacity > 0 ? p.boxCapacity : 1;
-        const boxP = p.boxPrice && p.boxPrice > 0 ? p.boxPrice : (p.price * boxCap);
-        const boxStock = Math.floor(p.availableStock / boxCap);
+        const retailUnit = p.unit || 'Pcs';
+        const retailStock = p.availableStock;
+        const retailP = p.price;
 
+        const isTakeaway = orderType === 'TAKEAWAY';
+        const wholesaleP = Number(p.wholesalePrice) || 0;
+        const minWholesaleQtyVal = Number(p.minWholesaleQty) || 1;
+
+        // Box: hanya valid jika kapasitasnya > 1
+        const hasBox = Boolean(p.boxCapacity && p.boxCapacity > 1 && (p.boxPrice > 0 || p.boxBarcode));
+        const boxCap = hasBox ? p.boxCapacity : 1;
+        const boxP = hasBox ? (p.boxPrice && p.boxPrice > 0 ? p.boxPrice : (retailP * boxCap)) : 0;
+        const boxStock = hasBox ? Math.floor(p.availableStock / boxCap) : 0;
+
+        // Kemasan Menengah (Renceng / Lusin / Slop)
         const hasMid = Boolean(
           (p.midPrice && p.midPrice > 0 && p.midCapacity && p.midCapacity > 1) ||
           (p.midUnitName && p.midCapacity && p.midCapacity > 1 && (p.midPrice > 0 || p.midBarcode))
         );
-        const midCap = p.midCapacity && p.midCapacity > 0 ? p.midCapacity : 1;
-        const midP = p.midPrice && p.midPrice > 0 ? p.midPrice : (p.price * midCap);
-        const midStock = Math.floor(p.availableStock / midCap);
+        const midCap = hasMid && p.midCapacity && p.midCapacity > 0 ? p.midCapacity : 1;
+        const midP = hasMid && p.midPrice && p.midPrice > 0 ? p.midPrice : (retailP * midCap);
+        const midStock = hasMid ? Math.floor(p.availableStock / midCap) : 0;
         const midUnit = p.midUnitName || 'Kemasan Menengah';
 
-        const retailP = p.price;
-        const retailStock = p.availableStock;
-        const retailUnit = p.unit || 'Pcs';
+        // Opsi grosir satuan terpisah jika produk memiliki harga grosir
+        const hasWholesaleCard = !isTakeaway && wholesaleP > 0 && wholesaleP !== retailP;
+
+        // Hitung jumlah kolom grid
+        const activeCardsCount = (hasBox ? 1 : 0) + (hasMid ? 1 : 0) + (hasWholesaleCard ? 1 : 0) + 1;
+        const modalWidth = activeCardsCount >= 4 ? '920px' : (activeCardsCount === 3 ? '760px' : '580px');
 
         return (
           <div className="modal-overlay" onClick={() => setTierModalProduct(null)} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
-            <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ backgroundColor: '#ffffff', borderRadius: '20px', padding: '24px', width: '640px', maxWidth: '95vw', maxHeight: '92vh', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.3)', border: '1px solid #e2e8f0' }}>
+            <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ backgroundColor: '#ffffff', borderRadius: '20px', padding: '24px', width: modalWidth, maxWidth: '95vw', maxHeight: '92vh', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.3)', border: '1px solid #e2e8f0', overflowY: 'auto' }}>
               
               {/* Header Modal */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
                 <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                     <span style={{ background: '#eff6ff', color: '#1d4ed8', padding: '3px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 800 }}>
-                      PILIH LEVEL KEMASAN
+                      PILIH LEVEL KEMASAN & HARGA
                     </span>
                     <span style={{ fontSize: '12px', color: '#64748b' }}>
                       (Kuantitas: {q}x)
                     </span>
+                    {isTakeaway && (
+                      <span style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca', padding: '2px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 800 }}>
+                        Mode Aktif: GROSIR / PARTAI
+                      </span>
+                    )}
                   </div>
                   <h3 style={{ fontSize: '18px', fontWeight: 800, margin: '6px 0 2px 0', color: '#0f172a' }}>
                     {p.name}
                   </h3>
-                  <div style={{ fontSize: '12px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <div style={{ fontSize: '12px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                     <span>Stok Fisik Tersedia: <strong style={{ color: p.availableStock <= 0 ? '#dc2626' : '#16a34a' }}>{p.availableStock} {retailUnit}</strong></span>
-                    <span>•</span>
-                    <span>Setara <strong>{boxStock} Dus</strong></span>
+                    {hasBox && (
+                      <>
+                        <span>•</span>
+                        <span>Setara <strong>{boxStock} Dus</strong></span>
+                      </>
+                    )}
                   </div>
                 </div>
                 <button 
@@ -2836,84 +2878,86 @@ function App() {
                 </button>
               </div>
 
-              {/* 3 Opsi Kartu Kemasan */}
-              <div style={{ display: 'grid', gridTemplateColumns: hasMid ? 'repeat(3, 1fr)' : 'repeat(2, 1fr)', gap: '14px', margin: '8px 0 16px 0' }}>
+              {/* Grid Kartu Kemasan */}
+              <div style={{ display: 'grid', gridTemplateColumns: `repeat(${activeCardsCount}, minmax(0, 1fr))`, gap: '14px', margin: '8px 0 16px 0' }}>
                 
-                {/* 1. KEMASAN DUS / KARTON */}
-                <div 
-                  onClick={() => {
-                    if (boxStock <= 0) {
-                      sound.playScanError();
-                      alert('Stok fisik tidak mencukupi untuk 1 Dus!');
-                      return;
-                    }
-                    addTierToCart(p, 'BOX', q);
-                    setTierModalProduct(null);
-                  }}
-                  style={{
-                    border: '2px solid #fbbf24',
-                    background: 'linear-gradient(180deg, #fffdf5 0%, #fffbeb 100%)',
-                    borderRadius: '16px',
-                    padding: '16px 14px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    cursor: boxStock > 0 ? 'pointer' : 'not-allowed',
-                    opacity: boxStock > 0 ? 1 : 0.5,
-                    position: 'relative',
-                    transition: 'all 0.18s ease',
-                    boxShadow: '0 4px 12px rgba(251, 191, 36, 0.12)'
-                  }}
-                  onMouseOver={(e) => { if (boxStock > 0) e.currentTarget.style.transform = 'translateY(-2px)'; }}
-                  onMouseOut={(e) => { e.currentTarget.style.transform = 'none'; }}
-                >
-                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', background: '#fef3c7', color: '#92400e', padding: '2px 8px', borderRadius: '6px', fontSize: '10.5px', fontWeight: 800, width: 'fit-content', marginBottom: '8px' }}>
-                    <Package size={12} />
-                    DUS / KARTON
-                  </div>
-                  <div style={{ fontSize: '13px', fontWeight: 700, color: '#1e293b' }}>
-                    Kemasan Dus
-                  </div>
-                  <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
-                    Isi: <strong>{boxCap} {retailUnit}</strong>
-                  </div>
-                  
-                  <div style={{ margin: '14px 0 12px 0' }}>
-                    <div style={{ fontSize: '10.5px', color: '#92400e', fontWeight: 700 }}>Harga Jual / Dus:</div>
-                    <div style={{ fontSize: '16px', fontWeight: 900, color: '#b45309' }}>
-                      {formatIDR(boxP)}
-                    </div>
-                    <div style={{ fontSize: '10px', color: '#78350f', marginTop: '1px' }}>
-                      @{formatIDR(Math.round(boxP / boxCap))}/{retailUnit}
-                    </div>
-                  </div>
-
-                  <div style={{ marginTop: 'auto', paddingTop: '8px', borderTop: '1px dashed #fde68a', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '11px', fontWeight: 700, color: boxStock > 0 ? '#16a34a' : '#dc2626' }}>
-                      Tersedia: {boxStock} Dus
-                    </span>
-                  </div>
-
-                  <button
-                    type="button"
-                    style={{
-                      marginTop: '10px',
-                      background: '#d97706',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '8px',
-                      padding: '8px 10px',
-                      fontWeight: 800,
-                      fontSize: '12px',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '4px'
+                {/* 1. KEMASAN DUS / KARTON (Hanya jika boxCap > 1) */}
+                {hasBox && (
+                  <div 
+                    onClick={() => {
+                      if (boxStock <= 0) {
+                        sound.playScanError();
+                        alert('Stok fisik tidak mencukupi untuk 1 Dus!');
+                        return;
+                      }
+                      addTierToCart(p, 'BOX', q);
+                      setTierModalProduct(null);
                     }}
+                    style={{
+                      border: '2px solid #fbbf24',
+                      background: 'linear-gradient(180deg, #fffdf5 0%, #fffbeb 100%)',
+                      borderRadius: '16px',
+                      padding: '16px 14px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      cursor: boxStock > 0 ? 'pointer' : 'not-allowed',
+                      opacity: boxStock > 0 ? 1 : 0.5,
+                      position: 'relative',
+                      transition: 'all 0.18s ease',
+                      boxShadow: '0 4px 12px rgba(251, 191, 36, 0.12)'
+                    }}
+                    onMouseOver={(e) => { if (boxStock > 0) e.currentTarget.style.transform = 'translateY(-2px)'; }}
+                    onMouseOut={(e) => { e.currentTarget.style.transform = 'none'; }}
                   >
-                    <Check size={14} /> Beli Dus
-                  </button>
-                </div>
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', background: '#fef3c7', color: '#92400e', padding: '2px 8px', borderRadius: '6px', fontSize: '10.5px', fontWeight: 800, width: 'fit-content', marginBottom: '8px' }}>
+                      <Package size={12} />
+                      DUS / KARTON
+                    </div>
+                    <div style={{ fontSize: '13px', fontWeight: 700, color: '#1e293b' }}>
+                      Kemasan Dus
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                      Isi: <strong>{boxCap} {retailUnit}</strong>
+                    </div>
+                    
+                    <div style={{ margin: '14px 0 12px 0' }}>
+                      <div style={{ fontSize: '10.5px', color: '#92400e', fontWeight: 700 }}>Harga Jual / Dus:</div>
+                      <div style={{ fontSize: '16px', fontWeight: 900, color: '#b45309' }}>
+                        {formatIDR(boxP)}
+                      </div>
+                      <div style={{ fontSize: '10px', color: '#78350f', marginTop: '1px' }}>
+                        @{formatIDR(Math.round(boxP / boxCap))}/{retailUnit}
+                      </div>
+                    </div>
+
+                    <div style={{ marginTop: 'auto', paddingTop: '8px', borderTop: '1px dashed #fde68a', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '11px', fontWeight: 700, color: boxStock > 0 ? '#16a34a' : '#dc2626' }}>
+                        Tersedia: {boxStock} Dus
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      style={{
+                        marginTop: '10px',
+                        background: '#d97706',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '8px',
+                        padding: '8px 10px',
+                        fontWeight: 800,
+                        fontSize: '12px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '4px'
+                      }}
+                    >
+                      <Check size={14} /> Beli Dus
+                    </button>
+                  </div>
+                )}
 
                 {/* 2. KEMASAN MENENGAH (RENCENG / LUSIN / SLOP) */}
                 {hasMid && (
@@ -2993,7 +3037,85 @@ function App() {
                   </div>
                 )}
 
-                {/* 3. KEMASAN ECERAN / SATUAN */}
+                {/* 3. OPSIONAL: GROSIR / PARTAI SATUAN (Jika kasir Reguler & produk memiliki harga grosir) */}
+                {hasWholesaleCard && (
+                  <div 
+                    onClick={() => {
+                      if (retailStock <= 0) {
+                        sound.playScanError();
+                        alert('Stok fisik produk habis!');
+                        return;
+                      }
+                      addTierToCart(p, 'WHOLESALE', Math.max(q, minWholesaleQtyVal));
+                      setTierModalProduct(null);
+                    }}
+                    style={{
+                      border: '2px solid #60a5fa',
+                      background: 'linear-gradient(180deg, #f0f7ff 0%, #e0edff 100%)',
+                      borderRadius: '16px',
+                      padding: '16px 14px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      cursor: retailStock > 0 ? 'pointer' : 'not-allowed',
+                      opacity: retailStock > 0 ? 1 : 0.5,
+                      position: 'relative',
+                      transition: 'all 0.18s ease',
+                      boxShadow: '0 4px 12px rgba(96, 165, 250, 0.15)'
+                    }}
+                    onMouseOver={(e) => { if (retailStock > 0) e.currentTarget.style.transform = 'translateY(-2px)'; }}
+                    onMouseOut={(e) => { e.currentTarget.style.transform = 'none'; }}
+                  >
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', background: '#dbeafe', color: '#1d4ed8', padding: '2px 8px', borderRadius: '6px', fontSize: '10.5px', fontWeight: 800, width: 'fit-content', marginBottom: '8px' }}>
+                      <Tag size={12} />
+                      GROSIR / PARTAI
+                    </div>
+                    <div style={{ fontSize: '13px', fontWeight: 700, color: '#1e293b' }}>
+                      Satuan Grosir
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#1d4ed8', marginTop: '2px', fontWeight: 600 }}>
+                      Min: <strong>{minWholesaleQtyVal} {retailUnit}</strong>
+                    </div>
+
+                    <div style={{ margin: '14px 0 12px 0' }}>
+                      <div style={{ fontSize: '10.5px', color: '#1d4ed8', fontWeight: 700 }}>Harga Jual / Grosir:</div>
+                      <div style={{ fontSize: '16px', fontWeight: 900, color: '#1d4ed8' }}>
+                        {formatIDR(wholesaleP)}
+                      </div>
+                      <div style={{ fontSize: '10px', color: '#16a34a', marginTop: '1px', fontWeight: 700 }}>
+                        Hemat {formatIDR(retailP - wholesaleP)}/{retailUnit}
+                      </div>
+                    </div>
+
+                    <div style={{ marginTop: 'auto', paddingTop: '8px', borderTop: '1px dashed #bfdbfe', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '11px', fontWeight: 700, color: retailStock > 0 ? '#16a34a' : '#dc2626' }}>
+                        Tersedia: {retailStock} {retailUnit}
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      style={{
+                        marginTop: '10px',
+                        background: '#2563eb',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '8px',
+                        padding: '8px 10px',
+                        fontWeight: 800,
+                        fontSize: '12px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '4px'
+                      }}
+                    >
+                      <Check size={14} /> Beli Grosir (≥{minWholesaleQtyVal})
+                    </button>
+                  </div>
+                )}
+
+                {/* 4. KEMASAN SATUAN (ECERAN ATAU GROSIR SESUAI MODE KASIR) */}
                 <div 
                   onClick={() => {
                     if (retailStock <= 0) {
@@ -3001,12 +3123,16 @@ function App() {
                       alert('Stok fisik produk habis!');
                       return;
                     }
-                    addTierToCart(p, 'RETAIL', q);
+                    if (isTakeaway && wholesaleP > 0) {
+                      addTierToCart(p, 'WHOLESALE', q);
+                    } else {
+                      addTierToCart(p, 'RETAIL', q);
+                    }
                     setTierModalProduct(null);
                   }}
                   style={{
-                    border: '2px solid #cbd5e1',
-                    background: 'linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)',
+                    border: isTakeaway ? '2px solid #ef4444' : '2px solid #cbd5e1',
+                    background: isTakeaway ? 'linear-gradient(180deg, #fff7f7 0%, #fee2e2 100%)' : 'linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)',
                     borderRadius: '16px',
                     padding: '16px 14px',
                     display: 'flex',
@@ -3020,28 +3146,42 @@ function App() {
                   onMouseOver={(e) => { if (retailStock > 0) e.currentTarget.style.transform = 'translateY(-2px)'; }}
                   onMouseOut={(e) => { e.currentTarget.style.transform = 'none'; }}
                 >
-                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', background: '#f1f5f9', color: '#475569', padding: '2px 8px', borderRadius: '6px', fontSize: '10.5px', fontWeight: 800, width: 'fit-content', marginBottom: '8px' }}>
+                  <div style={{ 
+                    display: 'inline-flex', 
+                    alignItems: 'center', 
+                    gap: '5px', 
+                    background: isTakeaway ? '#fee2e2' : '#f1f5f9', 
+                    color: isTakeaway ? '#b91c1c' : '#475569', 
+                    padding: '2px 8px', 
+                    borderRadius: '6px', 
+                    fontSize: '10.5px', 
+                    fontWeight: 800, 
+                    width: 'fit-content', 
+                    marginBottom: '8px' 
+                  }}>
                     <ShoppingBag size={12} />
-                    ECERAN
+                    {isTakeaway ? 'GROSIR / PARTAI' : 'ECERAN'}
                   </div>
                   <div style={{ fontSize: '13px', fontWeight: 700, color: '#1e293b' }}>
-                    Satuan Ecer / Loose
+                    {isTakeaway ? 'Satuan Grosir / Partai' : 'Satuan Ecer / Loose'}
                   </div>
                   <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
                     Isi: <strong>1 {retailUnit}</strong>
                   </div>
 
                   <div style={{ margin: '14px 0 12px 0' }}>
-                    <div style={{ fontSize: '10.5px', color: '#475569', fontWeight: 700 }}>Harga Jual / Ecer:</div>
-                    <div style={{ fontSize: '16px', fontWeight: 900, color: '#0f172a' }}>
-                      {formatIDR(retailP)}
+                    <div style={{ fontSize: '10.5px', color: isTakeaway ? '#b91c1c' : '#475569', fontWeight: 700 }}>
+                      {isTakeaway ? 'Harga Grosir Aktif:' : 'Harga Jual / Ecer:'}
+                    </div>
+                    <div style={{ fontSize: '16px', fontWeight: 900, color: isTakeaway ? '#b91c1c' : '#0f172a' }}>
+                      {formatIDR(isTakeaway && wholesaleP > 0 ? wholesaleP : retailP)}
                     </div>
                     <div style={{ fontSize: '10px', color: '#64748b', marginTop: '1px' }}>
-                      Satuan eceran biasa
+                      {isTakeaway ? 'Otomatis mode grosir aktif' : 'Satuan eceran standar'}
                     </div>
                   </div>
 
-                  <div style={{ marginTop: 'auto', paddingTop: '8px', borderTop: '1px dashed #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ marginTop: 'auto', paddingTop: '8px', borderTop: isTakeaway ? '1px dashed #fca5a5' : '1px dashed #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: '11px', fontWeight: 700, color: retailStock > 0 ? '#16a34a' : '#dc2626' }}>
                       Tersedia: {retailStock} {retailUnit}
                     </span>
@@ -3051,7 +3191,7 @@ function App() {
                     type="button"
                     style={{
                       marginTop: '10px',
-                      background: '#475569',
+                      background: isTakeaway ? '#dc2626' : '#475569',
                       color: 'white',
                       border: 'none',
                       borderRadius: '8px',
@@ -3065,18 +3205,18 @@ function App() {
                       gap: '4px'
                     }}
                   >
-                    <Check size={14} /> Beli Eceran
+                    <Check size={14} /> {isTakeaway ? 'Beli Satuan Grosir' : 'Beli Eceran'}
                   </button>
                 </div>
 
               </div>
 
               {/* Barcode Info Footer */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11.5px', color: '#64748b', background: '#f8fafc', padding: '10px 14px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11.5px', color: '#64748b', background: '#f8fafc', padding: '10px 14px', borderRadius: '10px', border: '1px solid #e2e8f0', flexWrap: 'wrap', gap: '8px' }}>
                 <div>
-                  💡 <em>Tips: Scan langsung barcode kemasan untuk input otomatis tanpa dialog ini.</em>
+                  💡 <em>Tips: Scan langsung barcode kemasan Dus atau Eceran untuk input cepat tanpa dialog ini.</em>
                 </div>
-                {p.boxBarcode && (
+                {p.boxBarcode && hasBox && (
                   <div style={{ fontFamily: 'monospace', fontWeight: 700, color: '#b45309' }}>
                     Dus: {p.boxBarcode}
                   </div>

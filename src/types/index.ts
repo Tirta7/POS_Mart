@@ -125,7 +125,7 @@ export interface CustomerOrder {
     originalPrice?: number;
     isCustomPrice?: boolean;
     customPriceNote?: string;
-    tierType?: 'BOX' | 'MID' | 'RETAIL';
+    tierType?: 'BOX' | 'MID' | 'RETAIL' | 'WHOLESALE';
     tierUnit?: string;
     tierMultiplier?: number;
   }[];
@@ -189,7 +189,7 @@ export interface SalesTransaction {
     originalPrice?: number;
     isCustomPrice?: boolean;
     customPriceNote?: string;
-    tierType?: 'BOX' | 'MID' | 'RETAIL';
+    tierType?: 'BOX' | 'MID' | 'RETAIL' | 'WHOLESALE';
     tierUnit?: string;
     tierMultiplier?: number;
   }[];

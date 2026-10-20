@@ -74,7 +74,7 @@ export const buildReceiptHtml = (sale: SalesTransaction, opts: ReceiptOptions): 
     .map((i, idx) => {
       const p = products.find(x => x.id === i.productId);
       const unit = i.tierUnit || p?.unit || 'Pcs';
-      const tierBadge = i.tierType === 'BOX' ? ' [DUS]' : (i.tierType === 'MID' ? ` [${(i.tierUnit || 'MID').toUpperCase()}]` : '');
+      const tierBadge = i.tierType === 'BOX' ? ' [DUS]' : (i.tierType === 'MID' ? ` [${(i.tierUnit || 'MID').toUpperCase()}]` : (i.tierType === 'WHOLESALE' ? ' [GROSIR]' : ''));
       const isCustom = Boolean(i.isCustomPrice || (i.originalPrice && i.originalPrice !== i.price));
       const customLabel = i.customPriceNote ? `* Special: ${esc(i.customPriceNote)}` : '* Special Price';
       const origNote = (isCustom && i.originalPrice) ? ` (Normal: ${idr(i.originalPrice)})` : '';
