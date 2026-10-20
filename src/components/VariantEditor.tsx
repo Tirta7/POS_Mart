@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Plus, Trash2, Layers } from 'lucide-react';
+import { Plus, Trash2, Layers, Camera } from 'lucide-react';
 import type { VariantDraft } from '../types';
+import { compressImageFile } from '../utils/defaultProductImage';
 
 /** ID unik untuk varian baru (dibuat di sisi klien agar bisa langsung dipakai mutasi stok) */
 export const makeVariantId = (): string => {
@@ -61,7 +62,7 @@ const VariantEditor: React.FC<Props> = ({ variants, onChange, title = 'Varian Pr
   const update = (id: string, patch: Partial<VariantDraft>) =>
     onChange(variants.map(v => (v.id === id ? { ...v, ...patch } : v)));
 
-  const addBlank = () => onChange([...variants, { id: makeVariantId(), name: '', barcode: '', qty: '', sellingPrice: '', wholesalePrice: '' }]);
+  const addBlank = () => onChange([...variants, { id: makeVariantId(), name: '', barcode: '', image: '', qty: '', sellingPrice: '', wholesalePrice: '' }]);
 
   // Tambah cepat: "Merah, Hijau, Kuning" -> 3 baris sekaligus
   const addQuick = () => {
@@ -74,6 +75,7 @@ const VariantEditor: React.FC<Props> = ({ variants, onChange, title = 'Varian Pr
         id: makeVariantId(), 
         name: n, 
         barcode: '',
+        image: '',
         qty: '' as number | string, 
         sellingPrice: '' as number | string, 
         wholesalePrice: '' as number | string 
@@ -222,6 +224,100 @@ const VariantEditor: React.FC<Props> = ({ variants, onChange, title = 'Varian Pr
                   />
                 </div>
               )}
+
+              {/* Row 4: Foto Varian (Kamera Ponsel & Tautan URL) */}
+              <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                {v.image && (
+                  <div style={{ position: 'relative', width: '34px', height: '34px', flexShrink: 0, borderRadius: '8px', overflow: 'hidden', border: '1px solid #cbd5e1', background: '#f1f5f9' }}>
+                    <img
+                      src={v.image}
+                      alt={v.name}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => update(v.id, { image: '' })}
+                      title="Hapus foto varian"
+                      style={{ position: 'absolute', top: 0, right: 0, background: 'rgba(0,0,0,0.65)', color: 'white', border: 'none', width: '15px', height: '15px', fontSize: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', borderRadius: '0 0 0 6px', padding: 0 }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )}
+
+                <div style={{ position: 'relative', flex: 1, display: 'flex', alignItems: 'center' }}>
+                  <input
+                    type="text"
+                    inputMode="url"
+                    value={v.image || ''}
+                    onChange={e => update(v.id, { image: e.target.value })}
+                    placeholder="Tautan (URL) foto varian (https://...)"
+                    style={{
+                      ...cellInput,
+                      fontSize: '11px',
+                      color: '#0f172a',
+                      background: v.image ? '#ffffff' : '#f8fafc',
+                      border: v.image ? '1px solid #cbd5e1' : '1px dashed #cbd5e1',
+                      paddingRight: v.image ? '24px' : '8px'
+                    }}
+                  />
+                  {v.image && (
+                    <button
+                      type="button"
+                      onClick={() => update(v.id, { image: '' })}
+                      title="Hapus tautan foto"
+                      style={{ position: 'absolute', right: '6px', background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: 0, fontSize: '11px' }}
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  id={`variant-cam-${v.id}`}
+                  style={{ display: 'none' }}
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    try {
+                      const compressed = await compressImageFile(file);
+                      update(v.id, { image: compressed });
+                    } catch (err: any) {
+                      alert(err?.message || 'Gagal memproses foto kamera');
+                    } finally {
+                      e.target.value = '';
+                    }
+                  }}
+                />
+
+                <button
+                  type="button"
+                  onClick={() => document.getElementById(`variant-cam-${v.id}`)?.click()}
+                  title="Ambil foto varian langsung lewat kamera ponsel"
+                  style={{
+                    height: '34px',
+                    padding: '0 10px',
+                    border: '1px solid #bfdbfe',
+                    borderRadius: '8px',
+                    background: '#eff6ff',
+                    color: '#1d4ed8',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    flexShrink: 0
+                  }}
+                >
+                  <Camera size={13} /> Kamera
+                </button>
+              </div>
             </div>
           ))}
         </div>

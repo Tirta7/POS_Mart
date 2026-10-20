@@ -284,6 +284,7 @@ const StockManagement: React.FC = () => {
               name: v.name.trim(),
               barcode: v.barcode ? v.barcode.trim() : (old?.barcode || undefined),
               sku: v.sku ? v.sku.trim() : (old?.sku || undefined),
+              image: v.image ? v.image.trim() : (old?.image || undefined),
               stock: old ? old.stock : 0, // varian baru mulai 0, diisi lewat mutasi di bawah
               purchasePrice: old?.purchasePrice,
               sellingPrice: Number(v.sellingPrice) > 0 ? Number(v.sellingPrice) : undefined,
@@ -332,6 +333,7 @@ const StockManagement: React.FC = () => {
               name: v.name.trim(),
               barcode: v.barcode ? v.barcode.trim() : undefined,
               sku: v.sku ? v.sku.trim() : undefined,
+              image: v.image ? v.image.trim() : undefined,
               qty: Number(v.qty) || 0,
               sellingPrice: Number(v.sellingPrice) || 0,
               wholesalePrice: Number(v.wholesalePrice) || 0,
@@ -439,6 +441,7 @@ const StockManagement: React.FC = () => {
         const variantsPayload: any[] = exVariants.map(v => ({
           id: v.id, name: v.name, stock: v.stock,
           barcode: v.barcode, sku: v.sku,
+          image: v.image,
           purchasePrice: v.purchasePrice, sellingPrice: v.sellingPrice, wholesalePrice: v.wholesalePrice,
         }));
         const resolved: { id: string; name: string; qty: number }[] = [];
@@ -448,11 +451,13 @@ const StockManagement: React.FC = () => {
             if (match) {
               if (dv.barcode && !match.barcode) match.barcode = dv.barcode;
               if (dv.sku && !match.sku) match.sku = dv.sku;
+              if (dv.image && !match.image) match.image = dv.image;
               resolved.push({ id: match.id, name: match.name, qty: Number(dv.qty) || 0 });
             } else {
               variantsPayload.push({
                 id: dv.id, name: dv.name, stock: 0,
                 barcode: dv.barcode, sku: dv.sku,
+                image: dv.image ? dv.image.trim() : undefined,
                 sellingPrice: Number(dv.sellingPrice) > 0 ? Number(dv.sellingPrice) : undefined,
                 wholesalePrice: Number(dv.wholesalePrice) > 0 ? Number(dv.wholesalePrice) : undefined,
               });
@@ -494,6 +499,7 @@ const StockManagement: React.FC = () => {
           variants: draftVariants.map(dv => ({
             id: dv.id, name: dv.name, stock: 0,
             barcode: dv.barcode, sku: dv.sku,
+            image: dv.image ? dv.image.trim() : undefined,
             sellingPrice: Number(dv.sellingPrice) > 0 ? Number(dv.sellingPrice) : undefined,
             wholesalePrice: Number(dv.wholesalePrice) > 0 ? Number(dv.wholesalePrice) : undefined,
           })),
@@ -573,6 +579,7 @@ const StockManagement: React.FC = () => {
       name: v.name,
       barcode: v.barcode || '',
       sku: v.sku || '',
+      image: v.image || '',
       qty: v.stock,
       sellingPrice: v.sellingPrice ?? '',
       wholesalePrice: v.wholesalePrice ?? '',

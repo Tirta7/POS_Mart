@@ -147,6 +147,7 @@ model ProductVariant {
   name            String
   barcode         String?
   sku             String?
+  image_url       String?
   stock           Float    @default(0)
   purchase_price  Float?
   selling_price   Float?

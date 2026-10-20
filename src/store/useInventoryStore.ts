@@ -58,6 +58,7 @@ const mapProduct = (p: any): Product => ({
     name: v.name,
     barcode: v.barcode || '',
     sku: v.sku || '',
+    image: v.image_url || v.image || '',
     stock: round3(v.stock),
     purchasePrice: v.purchase_price ?? undefined,
     sellingPrice: v.selling_price ?? undefined,

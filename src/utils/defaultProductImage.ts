@@ -37,3 +37,46 @@ export function handleProductImageError(e: React.SyntheticEvent<HTMLImageElement
     target.src = DEFAULT_PRODUCT_IMAGE;
   }
 }
+
+/**
+ * Kompresi gambar dari kamera ponsel atau file upload ke DataURL JPEG
+ * agar ringan disimpan ke DB / LocalStorage tanpa lag.
+ */
+export function compressImageFile(file: File, maxSize: number = 800, quality: number = 0.6): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Gagal membaca file gambar'));
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Gagal memproses gambar'));
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        if (width > height) {
+          if (width > maxSize) {
+            height *= maxSize / width;
+            width = maxSize;
+          }
+        } else {
+          if (height > maxSize) {
+            width *= maxSize / height;
+            height = maxSize;
+          }
+        }
+        canvas.width = Math.round(width);
+        canvas.height = Math.round(height);
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(event.target?.result as string);
+          return;
+        }
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL('image/jpeg', quality);
+        resolve(dataUrl);
+      };
+      img.src = event.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  });
+}

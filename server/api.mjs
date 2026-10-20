@@ -63,12 +63,14 @@ const syncProductVariants = async (tx, tenantId, productId, variants) => {
     if (!name) continue;
     const barcode = v.barcode ? String(v.barcode).trim() : null;
     const sku = v.sku ? String(v.sku).trim() : null;
+    const image_url = (v.image || v.image_url) ? String(v.image || v.image_url).trim() : null;
     const prices = {
       purchase_price: optNum(v.purchasePrice ?? v.purchase_price ?? v.harga_beli),
       selling_price: optNum(v.sellingPrice ?? v.selling_price ?? v.harga_jual),
       wholesale_price: optNum(v.wholesalePrice ?? v.wholesale_price ?? v.harga_grosir),
       barcode,
       sku,
+      image_url,
     };
 
     const matchByName = existing.find(e => e.name.toLowerCase() === name.toLowerCase());

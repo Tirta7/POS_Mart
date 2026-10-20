@@ -1,11 +1,15 @@
 import React, { useState } from 'react';
-import { CheckCircle, X, Package, AlertTriangle, Trash2, Edit2, Save } from 'lucide-react';
+import { CheckCircle, X, Package, AlertTriangle, Trash2, Edit2, Save, Camera } from 'lucide-react';
 import VariantEditor, { sumVariantQty, findDuplicateVariant } from './VariantEditor';
 import type { VariantDraft } from '../types';
+import { compressImageFile } from '../utils/defaultProductImage';
 
 export interface ReviewVariant {
   id: string;
   name: string;
+  barcode?: string;
+  sku?: string;
+  image?: string;
   qty: number;
   sellingPrice?: number;
   wholesalePrice?: number;
@@ -75,6 +79,9 @@ const DraftReviewDrawer: React.FC<Props> = ({ items, mode, categories, onClose, 
       variants: (item.variants || []).map(v => ({
         id: v.id,
         name: v.name,
+        barcode: v.barcode || '',
+        sku: v.sku || '',
+        image: v.image || '',
         qty: v.qty,
         sellingPrice: v.sellingPrice || '',
         wholesalePrice: v.wholesalePrice || '',
@@ -114,6 +121,9 @@ const DraftReviewDrawer: React.FC<Props> = ({ items, mode, categories, onClose, 
         ? named.map(v => ({
             id: v.id,
             name: v.name.trim(),
+            barcode: v.barcode ? v.barcode.trim() : undefined,
+            sku: v.sku ? v.sku.trim() : undefined,
+            image: v.image ? v.image.trim() : undefined,
             qty: Number(v.qty) || 0,
             sellingPrice: Number(v.sellingPrice) || 0,
             wholesalePrice: Number(v.wholesalePrice) || 0,
@@ -310,13 +320,69 @@ const DraftReviewDrawer: React.FC<Props> = ({ items, mode, categories, onClose, 
                           </div>
                         </div>
                         <div>
-                          <label style={labelStyle}>URL Gambar</label>
-                          <input className="bo-input" style={inputStyle} value={form.image} onChange={e => setF('image', e.target.value)} placeholder="https://..." />
+                          <label style={labelStyle}>Tautan (URL) Gambar / Foto Kamera</label>
+                          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                            {form.image && (
+                              <div style={{ position: 'relative', width: '32px', height: '32px', flexShrink: 0, borderRadius: '6px', overflow: 'hidden', border: '1px solid #cbd5e1', background: '#f1f5f9' }}>
+                                <img
+                                  src={form.image}
+                                  alt="Preview"
+                                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                  onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => setF('image', '')}
+                                  title="Hapus gambar"
+                                  style={{ position: 'absolute', top: 0, right: 0, background: 'rgba(0,0,0,0.65)', color: 'white', border: 'none', width: '14px', height: '14px', fontSize: '9px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', borderRadius: '0 0 0 4px', padding: 0 }}
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                            )}
+                            <input
+                              type="text"
+                              inputMode="url"
+                              className="bo-input"
+                              style={{ ...inputStyle, flex: 1 }}
+                              value={form.image}
+                              onChange={e => setF('image', e.target.value)}
+                              placeholder="https://... atau ambil kamera"
+                            />
+                            <input
+                              type="file"
+                              accept="image/*"
+                              capture="environment"
+                              id={`draft-cam-${item.id}`}
+                              style={{ display: 'none' }}
+                              onChange={async (e) => {
+                                const file = e.target.files?.[0];
+                                if (!file) return;
+                                try {
+                                  const compressed = await compressImageFile(file);
+                                  setF('image', compressed);
+                                } catch (err: any) {
+                                  alert(err?.message || 'Gagal memproses foto kamera');
+                                } finally {
+                                  e.target.value = '';
+                                }
+                              }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => document.getElementById(`draft-cam-${item.id}`)?.click()}
+                              className="bo-btn"
+                              style={{ backgroundColor: '#2563eb', color: 'white', height: '30px', padding: '0 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}
+                            >
+                              <Camera size={13} /> Kamera
+                            </button>
+                          </div>
                         </div>
                         <VariantEditor
                           variants={(form.variants || []) as VariantDraft[]}
                           onChange={(next) => setF('variants', next)}
                           title="Varian"
+                          parentBarcode={item.barcode || item.id}
                         />
                         <div style={{ fontSize: '10px', color: '#9ca3af' }}>Barcode/ID <strong style={{ fontFamily: 'monospace' }}>{item.barcode || item.id}</strong> tidak dapat diubah.</div>
                         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>

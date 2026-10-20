@@ -145,6 +145,7 @@ export default function UnregisteredProductModal({
               name: v.name.trim(),
               barcode: v.barcode ? v.barcode.trim() : undefined,
               sku: v.sku ? v.sku.trim() : undefined,
+              image: v.image ? v.image.trim() : undefined,
               stock: Number(v.qty) || 0,
               purchasePrice: buyNum,
               sellingPrice: Number(v.sellingPrice) > 0 ? Number(v.sellingPrice) : sellNum,

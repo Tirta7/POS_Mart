@@ -383,6 +383,7 @@ function App() {
       name: v.name,
       barcode: v.barcode || '',
       sku: v.sku || '',
+      image: v.image || '',
       price: resolvePrice(p, v.id, orderType),
       availableStock: v.stock - (v.reserved || 0),
     }));
@@ -640,6 +641,7 @@ function App() {
       barcode: variant.barcode || base.barcode,
       sku: variant.sku || base.sku,
       price: variant.price,
+      img: variant.image ? getProductImage(variant.image) : base.img,
       availableStock: variant.availableStock,
       unit: variantProduct.unit || 'Pcs',
     }, qty);
@@ -731,6 +733,7 @@ function App() {
           barcode: matchedVariant.barcode || base.barcode,
           sku: matchedVariant.sku || base.sku,
           price: matchedVariant.price,
+          img: matchedVariant.image ? getProductImage(matchedVariant.image) : base.img,
           availableStock: matchedVariant.availableStock,
           unit: matchedProduct.unit || 'Pcs',
         }, multiplier);
@@ -2338,15 +2341,23 @@ function App() {
                     type="button"
                     disabled={out}
                     onClick={() => handlePickVariant(v)}
-                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', padding: '12px 14px', border: '1.5px solid #e5e7eb', borderRadius: '12px', background: out ? '#f9fafb' : 'white', cursor: out ? 'not-allowed' : 'pointer', opacity: out ? 0.55 : 1, textAlign: 'left', transition: 'border-color 0.15s, box-shadow 0.15s' }}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', padding: '10px 14px', border: '1.5px solid #e5e7eb', borderRadius: '12px', background: out ? '#f9fafb' : 'white', cursor: out ? 'not-allowed' : 'pointer', opacity: out ? 0.55 : 1, textAlign: 'left', transition: 'border-color 0.15s, box-shadow 0.15s' }}
                     onMouseOver={(e) => { if (!out) { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(218,41,28,0.12)'; } }}
                     onMouseOut={(e) => { e.currentTarget.style.borderColor = '#e5e7eb'; e.currentTarget.style.boxShadow = 'none'; }}
                   >
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: '15px', color: '#111827' }}>{v.name}</div>
-                      <div style={{ fontSize: '12px', marginTop: '2px', fontWeight: 600, color: out ? '#991b1b' : '#166534' }}>
-                        {out ? 'Stok habis' : `Stok: ${v.availableStock} ${variantProduct.unit}`}
-                        {inCart > 0 && <span style={{ color: '#6b7280', fontWeight: 500 }}> • di keranjang: {inCart}</span>}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <img
+                        src={getProductImage(v.image || variantProduct.img)}
+                        onError={handleProductImageError}
+                        alt={v.name}
+                        style={{ width: '42px', height: '42px', objectFit: 'cover', borderRadius: '8px', flexShrink: 0, border: '1px solid #e5e7eb' }}
+                      />
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: '15px', color: '#111827' }}>{v.name}</div>
+                        <div style={{ fontSize: '12px', marginTop: '2px', fontWeight: 600, color: out ? '#991b1b' : '#166534' }}>
+                          {out ? 'Stok habis' : `Stok: ${v.availableStock} ${variantProduct.unit}`}
+                          {inCart > 0 && <span style={{ color: '#6b7280', fontWeight: 500 }}> • di keranjang: {inCart}</span>}
+                        </div>
                       </div>
                     </div>
                     <div style={{ fontWeight: 800, fontSize: '15px', color: 'var(--primary)', whiteSpace: 'nowrap' }}>{formatIDR(v.price)}</div>
