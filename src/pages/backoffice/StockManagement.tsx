@@ -25,13 +25,22 @@ const makeGrNumber = () => {
 };
 
 // Chip daftar varian + stok masing-masing (dipakai di tabel & kartu mobile)
-const VariantChips: React.FC<{ variants?: { id?: string; name: string; stock: number }[] }> = ({ variants }) => {
+const VariantChips: React.FC<{ variants?: { id?: string; name: string; stock: number; barcode?: string }[] }> = ({ variants }) => {
   if (!variants || variants.length === 0) return null;
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '4px' }}>
       {variants.map(v => (
-        <span key={v.id || v.name} style={{ fontSize: '10.5px', fontWeight: 700, background: '#ede9fe', color: '#5b21b6', padding: '1px 8px', borderRadius: '999px', whiteSpace: 'nowrap' }}>
+        <span 
+          key={v.id || v.name} 
+          style={{ fontSize: '10.5px', fontWeight: 700, background: '#ede9fe', color: '#5b21b6', padding: '1px 8px', borderRadius: '999px', whiteSpace: 'nowrap' }}
+          title={v.barcode ? `Barcode: ${v.barcode}` : undefined}
+        >
           {v.name}: <span style={{ color: v.stock > 0 ? '#065f46' : '#b91c1c' }}>{v.stock}</span>
+          {v.barcode && (
+            <span style={{ marginLeft: '4px', opacity: 0.8, fontSize: '9.5px', fontFamily: 'monospace', color: '#4338ca' }}>
+              [{v.barcode}]
+            </span>
+          )}
         </span>
       ))}
     </div>
@@ -273,6 +282,8 @@ const StockManagement: React.FC = () => {
             return {
               id: v.id,
               name: v.name.trim(),
+              barcode: v.barcode ? v.barcode.trim() : (old?.barcode || undefined),
+              sku: v.sku ? v.sku.trim() : (old?.sku || undefined),
               stock: old ? old.stock : 0, // varian baru mulai 0, diisi lewat mutasi di bawah
               purchasePrice: old?.purchasePrice,
               sellingPrice: Number(v.sellingPrice) > 0 ? Number(v.sellingPrice) : undefined,
@@ -319,6 +330,8 @@ const StockManagement: React.FC = () => {
           ? namedVariants.map(v => ({
               id: v.id,
               name: v.name.trim(),
+              barcode: v.barcode ? v.barcode.trim() : undefined,
+              sku: v.sku ? v.sku.trim() : undefined,
               qty: Number(v.qty) || 0,
               sellingPrice: Number(v.sellingPrice) || 0,
               wholesalePrice: Number(v.wholesalePrice) || 0,
@@ -425,6 +438,7 @@ const StockManagement: React.FC = () => {
         // Cocokkan varian draf dengan varian yang sudah ada (berdasarkan nama); sisanya dibuat baru
         const variantsPayload: any[] = exVariants.map(v => ({
           id: v.id, name: v.name, stock: v.stock,
+          barcode: v.barcode, sku: v.sku,
           purchasePrice: v.purchasePrice, sellingPrice: v.sellingPrice, wholesalePrice: v.wholesalePrice,
         }));
         const resolved: { id: string; name: string; qty: number }[] = [];
@@ -432,10 +446,13 @@ const StockManagement: React.FC = () => {
           for (const dv of draftVariants) {
             const match = variantsPayload.find(x => String(x.name).trim().toLowerCase() === dv.name.toLowerCase());
             if (match) {
+              if (dv.barcode && !match.barcode) match.barcode = dv.barcode;
+              if (dv.sku && !match.sku) match.sku = dv.sku;
               resolved.push({ id: match.id, name: match.name, qty: Number(dv.qty) || 0 });
             } else {
               variantsPayload.push({
                 id: dv.id, name: dv.name, stock: 0,
+                barcode: dv.barcode, sku: dv.sku,
                 sellingPrice: Number(dv.sellingPrice) > 0 ? Number(dv.sellingPrice) : undefined,
                 wholesalePrice: Number(dv.wholesalePrice) > 0 ? Number(dv.wholesalePrice) : undefined,
               });
@@ -476,6 +493,7 @@ const StockManagement: React.FC = () => {
           // Varian dibuat dengan stok 0; stok masuk lewat mutasi IN per varian
           variants: draftVariants.map(dv => ({
             id: dv.id, name: dv.name, stock: 0,
+            barcode: dv.barcode, sku: dv.sku,
             sellingPrice: Number(dv.sellingPrice) > 0 ? Number(dv.sellingPrice) : undefined,
             wholesalePrice: Number(dv.wholesalePrice) > 0 ? Number(dv.wholesalePrice) : undefined,
           })),
@@ -553,6 +571,8 @@ const StockManagement: React.FC = () => {
     setVariants((p.variants || []).map((v: any) => ({
       id: v.id,
       name: v.name,
+      barcode: v.barcode || '',
+      sku: v.sku || '',
       qty: v.stock,
       sellingPrice: v.sellingPrice ?? '',
       wholesalePrice: v.wholesalePrice ?? '',
@@ -2173,6 +2193,7 @@ const StockManagement: React.FC = () => {
               <VariantEditor
                 variants={variants}
                 onChange={setVariants}
+                parentBarcode={productId}
                 qtyLabel={editingId ? 'Stok' : 'Qty'}
                 hint={editingId
                   ? 'Ubah stok varian akan dicatat otomatis sebagai Penyesuaian di Mutasi Stok. Harga varian dikosongkan = ikut harga produk di bawah.'

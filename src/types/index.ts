@@ -23,6 +23,8 @@ export interface Product {
 export interface ProductVariant {
   id: string;
   name: string;
+  barcode?: string; // Barcode individual unik untuk varian ini
+  sku?: string;     // SKU individual unik untuk varian ini
   stock: number;
   reserved?: number; // stok varian yang dikunci oleh HOLD
   purchasePrice?: number;
@@ -34,6 +36,8 @@ export interface ProductVariant {
 export interface VariantDraft {
   id: string;
   name: string;
+  barcode?: string;
+  sku?: string;
   qty: number | string;
   sellingPrice?: number | string;
   wholesalePrice?: number | string;

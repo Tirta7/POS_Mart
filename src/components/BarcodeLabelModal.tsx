@@ -13,6 +13,14 @@ export interface LabelProduct {
   sellingPrice: number;
   unit?: string;
   stock?: number;
+  variants?: {
+    id: string;
+    name: string;
+    barcode?: string;
+    sku?: string;
+    stock?: number;
+    sellingPrice?: number;
+  }[];
 }
 
 interface Props {
@@ -136,12 +144,44 @@ const buildLabelHtml = (
 };
 
 const BarcodeLabelModal: React.FC<Props> = ({ product, products, initialCopies = 1, onClose }) => {
-  // Tentukan daftar target produk (bisa satuan atau masal/keseluruhan)
+  const hasProductVariants = !!(product?.variants && product.variants.length > 0);
+  const [variantSelection, setVariantSelection] = useState<string>('all_variants');
+
+  // Tentukan daftar target produk (bisa satuan, per varian spesifik, atau masal/keseluruhan)
   const targetProducts: LabelProduct[] = useMemo(() => {
     if (products && products.length > 0) return products;
-    if (product) return [product];
+    if (product) {
+      if (hasProductVariants) {
+        if (variantSelection === 'all_variants') {
+          return product.variants!.map(v => ({
+            id: `${product.id}-${v.id}`,
+            barcode: v.barcode || v.sku || `${product.barcode || product.sku || product.id}-${v.name}`,
+            sku: v.sku || product.sku,
+            name: `${product.name} (${v.name})`,
+            sellingPrice: v.sellingPrice && v.sellingPrice > 0 ? v.sellingPrice : product.sellingPrice,
+            unit: product.unit,
+            stock: v.stock,
+          }));
+        }
+        if (variantSelection !== 'parent') {
+          const v = product.variants!.find(x => x.id === variantSelection);
+          if (v) {
+            return [{
+              id: `${product.id}-${v.id}`,
+              barcode: v.barcode || v.sku || `${product.barcode || product.sku || product.id}-${v.name}`,
+              sku: v.sku || product.sku,
+              name: `${product.name} (${v.name})`,
+              sellingPrice: v.sellingPrice && v.sellingPrice > 0 ? v.sellingPrice : product.sellingPrice,
+              unit: product.unit,
+              stock: v.stock,
+            }];
+          }
+        }
+      }
+      return [product];
+    }
     return [];
-  }, [product, products]);
+  }, [product, products, hasProductVariants, variantSelection]);
 
   const isBulk = targetProducts.length > 1;
 
@@ -419,6 +459,79 @@ const BarcodeLabelModal: React.FC<Props> = ({ product, products, initialCopies =
           </div>
 
           <div style={{ flex: 1, overflowY: 'auto', paddingRight: '4px' }}>
+            {/* OPSI PILIHAN LABEL VARIAN */}
+            {hasProductVariants && product?.variants && (
+              <div style={{
+                background: '#f5f3ff',
+                border: '1px solid #ddd6fe',
+                borderRadius: '12px',
+                padding: '12px 14px',
+                marginBottom: '14px'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <div style={{ fontSize: '12px', fontWeight: 800, color: '#6d28d9', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Layers size={14} /> Pilihan Cetak Label Varian ({product.variants.length} Varian)
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                  <button
+                    type="button"
+                    onClick={() => { setVariantSelection('all_variants'); setPreviewIndex(0); }}
+                    style={{
+                      padding: '5px 10px',
+                      borderRadius: '8px',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      border: variantSelection === 'all_variants' ? '1.5px solid #7c3aed' : '1px solid #cbd5e1',
+                      background: variantSelection === 'all_variants' ? '#7c3aed' : '#ffffff',
+                      color: variantSelection === 'all_variants' ? '#ffffff' : '#334155',
+                    }}
+                  >
+                    Semua Varian ({product.variants.length})
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => { setVariantSelection('parent'); setPreviewIndex(0); }}
+                    style={{
+                      padding: '5px 10px',
+                      borderRadius: '8px',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      border: variantSelection === 'parent' ? '1.5px solid #7c3aed' : '1px solid #cbd5e1',
+                      background: variantSelection === 'parent' ? '#7c3aed' : '#ffffff',
+                      color: variantSelection === 'parent' ? '#ffffff' : '#334155',
+                    }}
+                  >
+                    Hanya Induk ({product.barcode || product.id})
+                  </button>
+
+                  {product.variants.map(v => (
+                    <button
+                      key={v.id}
+                      type="button"
+                      onClick={() => { setVariantSelection(v.id); setPreviewIndex(0); }}
+                      style={{
+                        padding: '5px 10px',
+                        borderRadius: '8px',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        border: variantSelection === v.id ? '1.5px solid #7c3aed' : '1px solid #cbd5e1',
+                        background: variantSelection === v.id ? '#7c3aed' : '#ffffff',
+                        color: variantSelection === v.id ? '#ffffff' : '#334155',
+                      }}
+                      title={`${v.name} (Barcode: ${v.barcode || 'Otomatis'})`}
+                    >
+                      {v.name} {v.barcode ? `[${v.barcode}]` : ''}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             {/* Status Printer Bluetooth */}
             <div
               style={{

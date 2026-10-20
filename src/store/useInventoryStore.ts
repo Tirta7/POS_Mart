@@ -56,6 +56,8 @@ const mapProduct = (p: any): Product => ({
   variants: (p.variants || []).map((v: any) => ({
     id: v.id,
     name: v.name,
+    barcode: v.barcode || '',
+    sku: v.sku || '',
     stock: round3(v.stock),
     purchasePrice: v.purchase_price ?? undefined,
     sellingPrice: v.selling_price ?? undefined,

@@ -143,6 +143,8 @@ export default function UnregisteredProductModal({
           ? namedVariants.map((v: VariantDraft) => ({
               id: v.id,
               name: v.name.trim(),
+              barcode: v.barcode ? v.barcode.trim() : undefined,
+              sku: v.sku ? v.sku.trim() : undefined,
               stock: Number(v.qty) || 0,
               purchasePrice: buyNum,
               sellingPrice: Number(v.sellingPrice) > 0 ? Number(v.sellingPrice) : sellNum,
@@ -421,6 +423,7 @@ export default function UnregisteredProductModal({
               <VariantEditor
                 variants={variants}
                 onChange={setVariants}
+                parentBarcode={barcode}
                 qtyLabel="Qty"
                 hint="Satu produk, banyak varian dengan harga sama? Cukup ketik nama varian dipisah koma lalu isi qty tiap varian. Harga varian dikosongkan = ikut harga produk di bawah."
               />

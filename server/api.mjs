@@ -61,10 +61,14 @@ const syncProductVariants = async (tx, tenantId, productId, variants) => {
   for (const v of variants) {
     const name = String(v.name || '').trim();
     if (!name) continue;
+    const barcode = v.barcode ? String(v.barcode).trim() : null;
+    const sku = v.sku ? String(v.sku).trim() : null;
     const prices = {
       purchase_price: optNum(v.purchasePrice ?? v.purchase_price ?? v.harga_beli),
       selling_price: optNum(v.sellingPrice ?? v.selling_price ?? v.harga_jual),
-      wholesale_price: optNum(v.wholesalePrice ?? v.wholesale_price ?? v.harga_grosir)
+      wholesale_price: optNum(v.wholesalePrice ?? v.wholesale_price ?? v.harga_grosir),
+      barcode,
+      sku,
     };
 
     const matchByName = existing.find(e => e.name.toLowerCase() === name.toLowerCase());

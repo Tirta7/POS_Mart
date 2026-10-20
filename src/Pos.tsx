@@ -381,6 +381,8 @@ function App() {
     const variants = (p.variants || []).map(v => ({
       id: v.id,
       name: v.name,
+      barcode: v.barcode || '',
+      sku: v.sku || '',
       price: resolvePrice(p, v.id, orderType),
       availableStock: v.stock - (v.reserved || 0),
     }));
@@ -434,7 +436,7 @@ function App() {
       id: String(item.id),
       cartId: item.cartId || `${item.id}-${item.selectedVariant?.id || 'std'}`,
       name: item.name,
-      variantName: item.selectedVariant?.name || '',
+      variantName: item.variantName || item.selectedVariant?.name || '',
       barcode: item.barcode || '',
       sku: item.sku || '',
       price: item.price,
@@ -635,6 +637,8 @@ function App() {
       ...base,
       variantId: variant.id,
       variantName: variant.name,
+      barcode: variant.barcode || base.barcode,
+      sku: variant.sku || base.sku,
       price: variant.price,
       availableStock: variant.availableStock,
       unit: variantProduct.unit || 'Pcs',
@@ -667,23 +671,40 @@ function App() {
 
     const q = code.toLowerCase();
 
-    // 1. Cari exact match produk utama (barcode, SKU, ID)
-    let matchedProduct: any = PRODUCTS.find(p =>
-      (p.barcode && p.barcode.toLowerCase() === q) ||
-      (p.sku && p.sku.toLowerCase() === q) ||
-      p.id.toLowerCase() === q
-    );
-
-    // 2. Jika tidak ada di produk utama, cari di varian produk
+    // 1. PRIORITAS UTAMA: Cari apakah barcode yang di-scan cocok dengan BARCODE KHUSUS VARIAN
+    let matchedProduct: any = null;
     let matchedVariant: any = null;
+
+    for (const p of PRODUCTS) {
+      if (p.variants && p.variants.length > 0) {
+        const v = p.variants.find((vx: any) =>
+          (vx.barcode && vx.barcode.toLowerCase() === q) ||
+          (vx.sku && vx.sku.toLowerCase() === q)
+        );
+        if (v) {
+          matchedProduct = p;
+          matchedVariant = v;
+          break;
+        }
+      }
+    }
+
+    // 2. Jika bukan barcode khusus varian, cari exact match produk utama (barcode, SKU, ID)
+    if (!matchedProduct) {
+      matchedProduct = PRODUCTS.find(p =>
+        (p.barcode && p.barcode.toLowerCase() === q) ||
+        (p.sku && p.sku.toLowerCase() === q) ||
+        p.id.toLowerCase() === q
+      );
+    }
+
+    // 3. Fallback: cari berdasarkan ID varian atau nama varian persis
     if (!matchedProduct) {
       for (const p of PRODUCTS) {
         if (p.variants && p.variants.length > 0) {
           const v = p.variants.find((vx: any) =>
             vx.id.toLowerCase() === q ||
-            vx.name.toLowerCase() === q ||
-            (vx.sku && vx.sku.toLowerCase() === q) ||
-            (vx.barcode && vx.barcode.toLowerCase() === q)
+            vx.name.toLowerCase() === q
           );
           if (v) {
             matchedProduct = p;
@@ -696,7 +717,7 @@ function App() {
 
     if (matchedProduct) {
       if (matchedVariant) {
-        // Varian spesifik langsung cocok
+        // Varian spesifik langsung cocok dari scan barcode varian
         if (matchedVariant.availableStock <= 0) {
           sound.playScanError();
           alert(`Stok varian "${matchedVariant.name}" habis!`);
@@ -707,6 +728,8 @@ function App() {
           ...base,
           variantId: matchedVariant.id,
           variantName: matchedVariant.name,
+          barcode: matchedVariant.barcode || base.barcode,
+          sku: matchedVariant.sku || base.sku,
           price: matchedVariant.price,
           availableStock: matchedVariant.availableStock,
           unit: matchedProduct.unit || 'Pcs',
@@ -1053,7 +1076,8 @@ function App() {
                   const exactMatch = PRODUCTS.find(p => 
                     (p.barcode && p.barcode.toLowerCase() === q) || 
                     (p.sku && p.sku.toLowerCase() === q) || 
-                    p.id.toLowerCase() === q
+                    p.id.toLowerCase() === q ||
+                    (p.variants && p.variants.some((v: any) => (v.barcode && v.barcode.toLowerCase() === q) || (v.sku && v.sku.toLowerCase() === q)))
                   );
                   if (exactMatch) {
                     handleBarcodeProcess(trimmed);

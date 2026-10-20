@@ -145,6 +145,8 @@ model ProductVariant {
   tenant_id       String
   product_id      String
   name            String
+  barcode         String?
+  sku             String?
   stock           Float    @default(0)
   purchase_price  Float?
   selling_price   Float?
@@ -154,6 +156,7 @@ model ProductVariant {
   product Product @relation(fields: [product_id], references: [id], onDelete: Cascade)
 
   @@index([product_id])
+  @@index([barcode])
   @@map("product_variants")
 }
 
