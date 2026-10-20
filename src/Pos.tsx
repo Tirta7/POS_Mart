@@ -26,6 +26,7 @@ import type { ReceiptOptions } from './utils/receipt';
 import { getProductImage, handleProductImageError } from './utils/defaultProductImage';
 import { sound } from './utils/audioFeedback';
 import BarcodeLabelModal from './components/BarcodeLabelModal';
+import UnregisteredProductModal from './components/UnregisteredProductModal';
 
 /** Tanggal & jam real-time (mengikuti jam perangkat), diperbarui tiap detik. */
 function LiveClock() {
@@ -41,7 +42,7 @@ function LiveClock() {
 
 function App() {
   const { appName, appLogo, taxEnabled, taxRate, roundingUnit } = useSettingsStore();
-  const { products: storeProducts, categories, reserveStock, releaseReservedStock, addProduct } = useInventoryStore();
+  const { products: storeProducts, categories, reserveStock, releaseReservedStock } = useInventoryStore();
   const { addSale, sales } = useSalesStore();
   const todayTxCount = sales.filter(s => new Date(s.date).toDateString() === new Date().toDateString()).length;
   const { currentUser, logout } = useAuthStore();
@@ -330,17 +331,10 @@ function App() {
   // Floating Toast notification
   const [toastNotice, setToastNotice] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
 
-  // Point 7: Modal Pendaftaran Kilat Produk Baru saat Barcode tak ditemukan
+  // Point 7: Modal Pendaftaran Produk Baru saat Barcode tak ditemukan (Form Lengkap)
   const [quickRegModalOpen, setQuickRegModalOpen] = useState(false);
   const [quickRegBarcode, setQuickRegBarcode] = useState('');
   const [quickRegQty, setQuickRegQty] = useState<number>(1);
-  const [quickRegName, setQuickRegName] = useState('');
-  const [quickRegCategory, setQuickRegCategory] = useState('Umum');
-  const [quickRegUnit, setQuickRegUnit] = useState('Pcs');
-  const [quickRegSellPrice, setQuickRegSellPrice] = useState<number | ''>('');
-  const [quickRegBuyPrice, setQuickRegBuyPrice] = useState<number | ''>('');
-  const [quickRegStock, setQuickRegStock] = useState<number | ''>(10);
-  const [quickRegSaving, setQuickRegSaving] = useState(false);
 
   // Point 8: Modal Cetak Label Stiker Bluetooth / Browser (Single & Bulk)
   const [labelModalProduct, setLabelModalProduct] = useState<any | null>(null);
@@ -667,16 +661,10 @@ function App() {
         });
       }
     } else {
-      // 3. BARCODE TIDAK DITEMUKAN -> Dialog Pendaftaran Kilat (Point 7)
+      // 3. BARCODE TIDAK DITEMUKAN -> Dialog Tambah Stok Lengkap (Sesuai Backoffice)
       sound.playScanError();
       setQuickRegBarcode(code);
       setQuickRegQty(multiplier);
-      setQuickRegName('');
-      setQuickRegCategory(categories[0] || 'Umum');
-      setQuickRegUnit('Pcs');
-      setQuickRegSellPrice('');
-      setQuickRegBuyPrice('');
-      setQuickRegStock(10);
       setQuickRegModalOpen(true);
     }
   };
@@ -783,43 +771,18 @@ function App() {
     orderType,
   ]);
 
-  // Simpan Pendaftaran Kilat Produk Baru (Point 7)
-  const handleSaveQuickRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!quickRegName.trim() || !quickRegSellPrice) {
-      sound.playScanError();
-      alert('Nama produk dan harga jual kasir wajib diisi!');
-      return;
-    }
+  // Handler Sukses Pendaftaran Produk Baru dari Scan Barcode
+  const handleSuccessQuickRegister = (created: any, qty: number) => {
+    sound.playSuccessChime();
+    setToastNotice({
+      type: 'success',
+      message: `⚡ "${created.name}" (x${qty}) berhasil didaftarkan dan masuk ke keranjang!`
+    });
 
-    setQuickRegSaving(true);
-    try {
-      const finalId = quickRegBarcode.trim() || `PRD-${Date.now()}`;
-      const sellPrice = Number(quickRegSellPrice) || 0;
-      const buyPrice = Number(quickRegBuyPrice) || 0;
-      const initStock = Math.max(Number(quickRegQty), Number(quickRegStock) || 10);
-
-      const newProd: any = {
-        id: finalId,
-        barcode: finalId,
-        sku: finalId,
-        name: quickRegName.trim(),
-        category: quickRegCategory || 'Umum',
-        location: 'Toko Utama',
-        unit: quickRegUnit || 'Pcs',
-        stock: initStock,
-        baseUnitMultiplier: 1,
-        purchasePrice: buyPrice,
-        sellingPrice: sellPrice,
-        wholesalePrice: 0,
-        minStock: 5,
-        image: '',
-        variants: []
-      };
-
-      const created = await addProduct(newProd);
-
-      // Langsung masukkan ke keranjang kasir
+    if (created.variants && created.variants.length > 0) {
+      setPendingVariantQty(qty);
+      setVariantProduct(created);
+    } else {
       proceedAdd({
         id: created.id,
         sku: created.sku || created.id,
@@ -835,20 +798,7 @@ function App() {
         availableStock: created.stock,
         rawStock: created.stock,
         variants: []
-      }, quickRegQty);
-
-      sound.playSuccessChime();
-      setToastNotice({
-        type: 'success',
-        message: `⚡ "${created.name}" (x${quickRegQty}) berhasil didaftarkan dan masuk ke keranjang!`
-      });
-
-      setQuickRegModalOpen(false);
-    } catch (err: any) {
-      sound.playScanError();
-      alert(`Gagal mendaftarkan produk: ${err.message || 'Terjadi kesalahan sistem'}`);
-    } finally {
-      setQuickRegSaving(false);
+      }, qty);
     }
   };
 
@@ -2650,12 +2600,6 @@ function App() {
                 setCameraScannerOpen(false);
                 setQuickRegBarcode(code);
                 setQuickRegQty(multiplier);
-                setQuickRegName('');
-                setQuickRegCategory(categories[0] || 'Umum');
-                setQuickRegUnit('Pcs');
-                setQuickRegSellPrice('');
-                setQuickRegBuyPrice('');
-                setQuickRegStock(10);
                 setQuickRegModalOpen(true);
               }, 400);
               return null;
@@ -2755,206 +2699,15 @@ function App() {
         </div>
       )}
 
-      {/* MODAL PENDAFTARAN KILAT PRODUK BARU SAAT SCAN TIDAK DITEMUKAN (POINT 7) */}
-      {quickRegModalOpen && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            backgroundColor: 'rgba(0,0,0,0.6)',
-            backdropFilter: 'blur(3px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 10000,
-            padding: '16px',
-            animation: 'fadeIn 0.2s ease-out',
-          }}
-          onClick={() => !quickRegSaving && setQuickRegModalOpen(false)}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              backgroundColor: 'white',
-              borderRadius: '20px',
-              padding: '24px',
-              width: '100%',
-              maxWidth: '480px',
-              maxHeight: '90vh',
-              overflowY: 'auto',
-              boxShadow: '0 20px 50px rgba(0,0,0,0.3)',
-              animation: 'scaleIn 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '14px' }}>
-              <div>
-                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#fee2e2', color: '#dc2626', padding: '3px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }}>
-                  ⚡ Pendaftaran Kilat Produk Baru
-                </div>
-                <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 800, color: '#111827' }}>
-                  Barcode Belum Terdaftar
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => !quickRegSaving && setQuickRegModalOpen(false)}
-                style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#f3f4f6', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-              >
-                <X size={18} color="#6b7280" />
-              </button>
-            </div>
-
-            <p style={{ margin: '0 0 16px', fontSize: '13px', color: '#4b5563', lineHeight: 1.4 }}>
-              Barcode <strong style={{ fontFamily: 'monospace', background: '#f3f4f6', padding: '2px 6px', borderRadius: '4px', color: '#111' }}>{quickRegBarcode}</strong> belum ada di katalog. Lengkapi formulir cepat ini agar langsung masuk ke nota:
-            </p>
-
-            <form onSubmit={handleSaveQuickRegister}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#374151', marginBottom: '4px' }}>
-                    Nama Produk <span style={{ color: '#dc2626' }}>*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    autoFocus
-                    placeholder="Contoh: Biskuit Roma Kelapa 300g"
-                    value={quickRegName}
-                    onChange={(e) => setQuickRegName(e.target.value)}
-                    style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '14px', outline: 'none' }}
-                  />
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '10px' }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#374151', marginBottom: '4px' }}>
-                      Kategori
-                    </label>
-                    <select
-                      value={quickRegCategory}
-                      onChange={(e) => setQuickRegCategory(e.target.value)}
-                      style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '13.5px', background: 'white' }}
-                    >
-                      {categories.map((c) => (
-                        <option key={c} value={c}>{c}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#374151', marginBottom: '4px' }}>
-                      Satuan
-                    </label>
-                    <select
-                      value={quickRegUnit}
-                      onChange={(e) => setQuickRegUnit(e.target.value)}
-                      style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '13.5px', background: 'white' }}
-                    >
-                      {['Pcs', 'Btl', 'Bks', 'Kg', 'Pack', 'Box', 'Kaleng', 'Lusin'].map((u) => (
-                        <option key={u} value={u}>{u}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#dc2626', marginBottom: '4px' }}>
-                      Harga Jual Kasir (Rp) <span style={{ color: '#dc2626' }}>*</span>
-                    </label>
-                    <input
-                      type="number"
-                      required
-                      min={0}
-                      placeholder="0"
-                      value={quickRegSellPrice}
-                      onChange={(e) => setQuickRegSellPrice(e.target.value === '' ? '' : Math.max(0, Number(e.target.value)))}
-                      style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '2px solid #fecaca', background: '#fff1f2', fontSize: '15px', fontWeight: 800, color: '#991b1b', outline: 'none' }}
-                    />
-                  </div>
-
-                  <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#6b7280', marginBottom: '4px' }}>
-                      Harga Beli / HPP (Rp)
-                    </label>
-                    <input
-                      type="number"
-                      min={0}
-                      placeholder="0"
-                      value={quickRegBuyPrice}
-                      onChange={(e) => setQuickRegBuyPrice(e.target.value === '' ? '' : Math.max(0, Number(e.target.value)))}
-                      style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '14px', outline: 'none' }}
-                    />
-                  </div>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', background: '#f8fafc', padding: '10px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 700, color: '#475569', marginBottom: '4px' }}>
-                      Qty Masuk Nota:
-                    </label>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <button
-                        type="button"
-                        onClick={() => setQuickRegQty((q) => Math.max(1, q - 1))}
-                        style={{ width: '28px', height: '28px', borderRadius: '6px', border: '1px solid #cbd5e1', background: 'white', fontWeight: 700 }}
-                      >
-                        -
-                      </button>
-                      <input
-                        type="number"
-                        min={1}
-                        value={quickRegQty}
-                        onChange={(e) => setQuickRegQty(Math.max(1, Number(e.target.value) || 1))}
-                        style={{ width: '46px', textAlign: 'center', padding: '4px', borderRadius: '6px', border: '1px solid #cbd5e1', fontWeight: 800 }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setQuickRegQty((q) => q + 1)}
-                        style={{ width: '28px', height: '28px', borderRadius: '6px', border: '1px solid #cbd5e1', background: 'white', fontWeight: 700 }}
-                      >
-                        +
-                      </button>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 700, color: '#475569', marginBottom: '4px' }}>
-                      Stok Fisik Awal:
-                    </label>
-                    <input
-                      type="number"
-                      min={1}
-                      value={quickRegStock}
-                      onChange={(e) => setQuickRegStock(e.target.value === '' ? '' : Math.max(1, Number(e.target.value)))}
-                      style={{ width: '100%', padding: '6px 8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontWeight: 700, fontSize: '13px' }}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', gap: '10px', marginTop: '18px' }}>
-                <button
-                  type="button"
-                  disabled={quickRegSaving}
-                  onClick={() => setQuickRegModalOpen(false)}
-                  style={{ flex: 1, padding: '12px', borderRadius: '10px', background: '#f3f4f6', border: 'none', color: '#4b5563', fontWeight: 700, cursor: 'pointer' }}
-                >
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  disabled={quickRegSaving}
-                  style={{ flex: 1.6, padding: '12px', borderRadius: '10px', background: 'var(--primary, #dc2626)', border: 'none', color: 'white', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', cursor: 'pointer', boxShadow: '0 4px 12px rgba(220,38,38,0.25)' }}
-                >
-                  {quickRegSaving ? <RefreshCw size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
-                  Simpan & Masuk Nota
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* FORMULIR TAMBAH STOK LENGKAP SAAT SCAN TIDAK DITEMUKAN (SESUAI BACKOFFICE) */}
+      <UnregisteredProductModal
+        isOpen={quickRegModalOpen}
+        initialBarcode={quickRegBarcode}
+        initialQty={quickRegQty}
+        appName={appName}
+        onClose={() => setQuickRegModalOpen(false)}
+        onSuccess={handleSuccessQuickRegister}
+      />
 
       {/* MODAL PICKER CETAK LABEL BARCODE (POINT 8) */}
       {labelPickerOpen && (
