@@ -1,11 +1,11 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Search, Printer, ShoppingBag, Truck, Package, ShoppingCart,
   CreditCard, QrCode, Banknote, Ticket, Trash2, PauseCircle,
   LayoutGrid, Plus, Minus, X, LogOut, Camera, ChevronUp, Settings2,
   Grid, List, Tag, Edit3, Check,
   AlertCircle, RefreshCw, ChevronDown, CheckCircle2, Layers,
-  Clock
+  Clock, Monitor
 } from 'lucide-react';
 import './index.css';
 import { useNavigate, Link } from 'react-router-dom';
@@ -27,6 +27,8 @@ import { getProductImage, handleProductImageError } from './utils/defaultProduct
 import { sound } from './utils/audioFeedback';
 import BarcodeLabelModal from './components/BarcodeLabelModal';
 import UnregisteredProductModal from './components/UnregisteredProductModal';
+import { sendCfdUpdate, subscribeCfd } from './utils/cfdSync';
+import CfdLauncherModal from './components/CfdLauncherModal';
 
 /** Tanggal & jam real-time (mengikuti jam perangkat), diperbarui tiap detik. */
 function LiveClock() {
@@ -135,6 +137,7 @@ function App() {
   const [tenderedStr, setTenderedStr] = useState('');
   const [holdListOpen, setHoldListOpen] = useState(false);
   const [orderCounter, setOrderCounter] = useState(52);
+  const [cfdModalOpen, setCfdModalOpen] = useState(false);
 
   // Wholesale / Tempo State
   const [tempoType, setTempoType] = useState<'ZERO_DP' | 'DP'>('ZERO_DP');
@@ -424,6 +427,78 @@ function App() {
   const formatIDR = (num: number) => {
     return 'Rp ' + num.toLocaleString('id-ID');
   };
+
+  // Synchronize state with Customer Facing Display (CFD) in real-time
+  const emitCfdState = useCallback((override?: any) => {
+    const cfdItems = cart.map(item => ({
+      id: String(item.id),
+      cartId: item.cartId || `${item.id}-${item.selectedVariant?.id || 'std'}`,
+      name: item.name,
+      variantName: item.selectedVariant?.name || '',
+      barcode: item.barcode || '',
+      sku: item.sku || '',
+      price: item.price,
+      originalPrice: item.originalPrice,
+      qty: item.qty,
+      unit: item.unit || 'Pcs',
+      subtotal: Math.round(item.price * item.qty),
+      img: item.img || null,
+      isCustomPrice: item.isCustomPrice,
+      customPriceNote: item.customPriceNote,
+    }));
+
+    const totalQty = cart.reduce((sum, item) => sum + (item.qty || 1), 0);
+
+    const payload = {
+      tenantId: 'TID-DEMO-123',
+      storeName: appName,
+      storeLogo: appLogo,
+      cashierName: currentUser?.name || 'Kasir',
+      orderNumber: orderCounter,
+      orderType,
+      customerName: selectedCustomer?.name || null,
+      items: cfdItems,
+      itemCount: cfdItems.length,
+      totalQty,
+      subtotal,
+      tax,
+      taxRate,
+      taxEnabled,
+      rounding,
+      total,
+      paymentState: {
+        isOpen: paymentPopupOpen,
+        method: paymentMethod,
+        tendered: tendered,
+        change: change,
+        tempoType,
+        tempoDp: Math.max(0, parseInt(tempoDpStr.replace(/\D/g, '') || '0', 10)),
+        tempoDueDate,
+        isCompleted: false,
+        ...(override?.paymentState || {}),
+      },
+      lastUpdated: Date.now(),
+      ...override,
+    };
+
+    sendCfdUpdate(payload);
+  }, [cart, appName, appLogo, currentUser, orderCounter, orderType, selectedCustomer, subtotal, tax, taxRate, taxEnabled, rounding, total, paymentPopupOpen, paymentMethod, tendered, change, tempoType, tempoDpStr, tempoDueDate]);
+
+  // Synchronize CFD on every state change
+  useEffect(() => {
+    emitCfdState();
+  }, [emitCfdState]);
+
+  // Respond when customer tablet connects or requests sync
+  useEffect(() => {
+    const unsubscribe = subscribeCfd(
+      () => {},
+      () => {
+        emitCfdState();
+      }
+    );
+    return () => unsubscribe();
+  }, [emitCfdState]);
 
   const handleNumpad = (val: string) => {
     if (val === 'C') {
@@ -897,6 +972,15 @@ function App() {
             )}
           </button>
           <button className="nav-btn hide-mobile">Shift &amp; Drawer</button>
+          <button 
+            className="nav-btn" 
+            onClick={() => setCfdModalOpen(true)}
+            title="Hubungkan Layar Pelanggan (CFD Tablet / Second Screen)"
+            style={{ display: 'flex', alignItems: 'center', gap: '5px' }}
+          >
+            <Monitor size={15} color="#0284c7" />
+            <span className="btn-label" style={{ color: '#0369a1', fontWeight: 600 }}>Layar CFD</span>
+          </button>
           <Link to="/backoffice" className="nav-btn" style={{ textDecoration: 'none' }}>
             <Settings2 size={15} className="show-mobile" />
             <span className="btn-label">Back-Office</span>
@@ -2040,6 +2124,19 @@ function App() {
                   },
                 });
 
+                // Broadcast payment completion to customer CFD screen
+                emitCfdState({
+                  paymentState: {
+                    isOpen: false,
+                    method: paymentMethod,
+                    tendered: tendered,
+                    change: change,
+                    isCompleted: true,
+                    completedAt: new Date().toISOString(),
+                    receiptSaleId: sale.id,
+                  }
+                });
+
                 setPaymentPopupOpen(false);
                 setCartSheetOpen(false);
                 setCart([]);
@@ -2707,6 +2804,12 @@ function App() {
         appName={appName}
         onClose={() => setQuickRegModalOpen(false)}
         onSuccess={handleSuccessQuickRegister}
+      />
+
+      {/* MODAL PENGHUBUNG LAYAR PELANGGAN (CFD) */}
+      <CfdLauncherModal
+        isOpen={cfdModalOpen}
+        onClose={() => setCfdModalOpen(false)}
       />
 
       {/* MODAL PICKER CETAK LABEL BARCODE (POINT 8) */}

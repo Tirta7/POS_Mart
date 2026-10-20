@@ -40,6 +40,17 @@ export const initSocket = async (httpServer) => {
         socket.to(tenantId).emit('sync_drafts', drafts);
       }
     });
+
+    // Customer Facing Display (CFD) Real-time Synchronization
+    socket.on('cfd_update', (payload) => {
+      const tenantId = payload?.tenantId || 'TID-DEMO-123';
+      socket.to(tenantId).emit('cfd_cart_update', payload);
+    });
+
+    socket.on('cfd_request_state', (payload) => {
+      const tenantId = payload?.tenantId || 'TID-DEMO-123';
+      socket.to(tenantId).emit('cfd_send_current_state');
+    });
   });
 
   return io;

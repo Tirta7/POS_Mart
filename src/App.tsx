@@ -26,6 +26,7 @@ const Settings = lazy(() => import('./pages/backoffice/Settings'));
 const CustomerData = lazy(() => import('./pages/backoffice/CustomerData'));
 const Reports = lazy(() => import('./pages/backoffice/Reports'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
+const CustomerFacingDisplay = lazy(() => import('./pages/CustomerFacingDisplay'));
 
 // Fallback spinner saat transisi antar halaman
 const RouteLoading = () => (
@@ -177,6 +178,9 @@ function App() {
                 : <LoginPage onLogin={() => { /* handled by store */ }} />
             }
           />
+
+          {/* Customer Facing Display (CFD) - Layar Pelanggan Bebas Akses Tanpa Login */}
+          <Route path="/cfd" element={<CustomerFacingDisplay />} />
 
           {/* POS Route */}
           <Route
