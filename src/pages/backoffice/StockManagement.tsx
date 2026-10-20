@@ -11,7 +11,7 @@ import {
 import BarcodeScannerCamera from '../../components/BarcodeScannerCamera';
 import BarcodeLabelModal from '../../components/BarcodeLabelModal';
 import DraftReviewDrawer from '../../components/DraftReviewDrawer';
-import { generateInternalBarcode, isInternalBarcode } from '../../utils/barcode';
+import { generateInternalBarcode, isInternalBarcode, generateAutoSKU } from '../../utils/barcode';
 import { recordStockMutation, makeDocNo } from '../../utils/stockMutation';
 import type { MutationLine } from '../../utils/stockMutation';
 import VariantEditor, { makeVariantId, sumVariantQty, findDuplicateVariant } from '../../components/VariantEditor';
@@ -217,7 +217,7 @@ const StockManagement: React.FC = () => {
     const hasVariants = namedVariants.length > 0;
     const totalQty = hasVariants ? sumVariantQty(namedVariants) : Number(qty);
 
-    if (!sku || !name || Number(sellingPrice) <= 0) return;
+    if (!name || Number(sellingPrice) <= 0) return;
     if (!editingId && totalQty <= 0) {
       if (hasVariants) alert('Isi jumlah (qty) minimal pada satu varian.');
       return;
@@ -231,6 +231,7 @@ const StockManagement: React.FC = () => {
     // Tanpa barcode -> buat barcode internal unik (SKxxxxxx), sama untuk ID & barcode
     const finalId = productId || generateInternalBarcode(products);
     const finalBarcode = finalId;
+    const finalSku = (sku || '').trim() || generateAutoSKU(name, finalBarcode);
 
     if (editingId) {
       // Find original to keep unmodified fields (like id, barcode, etc)
@@ -268,7 +269,7 @@ const StockManagement: React.FC = () => {
           ...baseFields,
           id: finalId, // Izinkan update ID/Barcode
           barcode: finalBarcode,
-          sku,
+          sku: finalSku,
           name,
           category,
           unit,
@@ -319,7 +320,7 @@ const StockManagement: React.FC = () => {
         pending: true,
         id: finalId,
         barcode: finalBarcode,
-        sku, name, category, unit,
+        sku: finalSku, name, category, unit,
         location: 'Gudang Utama',
         qty: totalQty,
         purchasePrice: Number(purchasePrice),
@@ -351,7 +352,7 @@ const StockManagement: React.FC = () => {
       // Barang tanpa barcode pabrikan -> langsung tawarkan cetak label stiker
       if (isInternalBarcode(finalId)) {
         setLabelCopies(Math.max(1, Math.ceil(totalQty)));
-        setLabelProduct({ id: finalId, barcode: finalId, sku, name, sellingPrice: Number(sellingPrice) });
+        setLabelProduct({ id: finalId, barcode: finalId, sku: finalSku, name, sellingPrice: Number(sellingPrice) });
       }
     }
     
@@ -2177,8 +2178,32 @@ const StockManagement: React.FC = () => {
 
                 <div className="ios-row-split">
                   <div className="ios-col">
-                    <div className="ios-label-row"><label>SKU Internal Toko</label></div>
-                    <input type="text" value={sku} onChange={(e) => setSku(e.target.value)} className="ios-input-gray" required />
+                    <div className="ios-label-row">
+                      <label>SKU Internal Toko</label>
+                      <span className="ios-sublabel" style={{ color: '#16a34a', fontSize: '11px', fontWeight: 600 }}>
+                        {sku.trim() ? 'Kustom' : 'Otomatis'}
+                      </span>
+                    </div>
+                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                      <input
+                        type="text"
+                        value={sku}
+                        onChange={(e) => setSku(e.target.value)}
+                        className="ios-input-gray"
+                        placeholder={name.trim() ? generateAutoSKU(name, productId) : 'Otomatis dari nama & barcode'}
+                        style={{ paddingRight: sku ? '28px' : '8px' }}
+                      />
+                      {sku && (
+                        <button
+                          type="button"
+                          onClick={() => setSku('')}
+                          title="Hapus untuk gunakan SKU otomatis"
+                          style={{ position: 'absolute', right: '8px', background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: 0, fontSize: '11px' }}
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <div className="ios-col">
                     <div className="ios-label-row">

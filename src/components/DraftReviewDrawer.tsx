@@ -3,6 +3,7 @@ import { CheckCircle, X, Package, AlertTriangle, Trash2, Edit2, Save, Camera } f
 import VariantEditor, { sumVariantQty, findDuplicateVariant } from './VariantEditor';
 import type { VariantDraft } from '../types';
 import { compressImageFile } from '../utils/defaultProductImage';
+import { generateAutoSKU } from '../utils/barcode';
 
 export interface ReviewVariant {
   id: string;
@@ -96,8 +97,9 @@ const DraftReviewDrawer: React.FC<Props> = ({ items, mode, categories, onClose, 
     const named: VariantDraft[] = ((form.variants || []) as VariantDraft[]).filter(v => v.name.trim());
     const hasVariants = named.length > 0;
     const qty = hasVariants ? sumVariantQty(named) : Number(form.qty);
-    if (!String(form.name).trim() || !String(form.sku).trim() || qty <= 0 || Number(form.sellingPrice) <= 0) {
-      alert('Nama, SKU, Qty (> 0) dan Harga Jual (> 0) wajib diisi.');
+    const finalSku = String(form.sku || '').trim() || generateAutoSKU(form.name, item.barcode || item.id);
+    if (!String(form.name).trim() || qty <= 0 || Number(form.sellingPrice) <= 0) {
+      alert('Nama, Qty (> 0) dan Harga Jual (> 0) wajib diisi.');
       return;
     }
     const dup = findDuplicateVariant(named);
@@ -108,7 +110,7 @@ const DraftReviewDrawer: React.FC<Props> = ({ items, mode, categories, onClose, 
     onSaveItem({
       ...item,
       name: String(form.name).trim(),
-      sku: String(form.sku).trim(),
+      sku: finalSku,
       category: form.category,
       unit: form.unit,
       qty,
@@ -274,8 +276,17 @@ const DraftReviewDrawer: React.FC<Props> = ({ items, mode, categories, onClose, 
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                           <div>
-                            <label style={labelStyle}>SKU</label>
-                            <input className="bo-input" style={inputStyle} value={form.sku} onChange={e => setF('sku', e.target.value)} />
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <label style={labelStyle}>SKU</label>
+                              <span style={{ fontSize: '9px', color: '#16a34a', fontWeight: 600 }}>{String(form.sku || '').trim() ? 'Kustom' : 'Otomatis'}</span>
+                            </div>
+                            <input
+                              className="bo-input"
+                              style={inputStyle}
+                              value={form.sku}
+                              onChange={e => setF('sku', e.target.value)}
+                              placeholder={form.name ? generateAutoSKU(form.name, item.barcode || item.id) : 'Otomatis'}
+                            />
                           </div>
                           <div>
                             <label style={labelStyle}>Kategori</label>

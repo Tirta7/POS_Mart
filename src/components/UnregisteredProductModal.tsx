@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { X, AlertTriangle, CheckCircle2, RefreshCw } from 'lucide-react';
 import { useInventoryStore } from '../store/useInventoryStore';
 import VariantEditor, { sumVariantQty, findDuplicateVariant } from './VariantEditor';
-import { generateInternalBarcode } from '../utils/barcode';
+import { generateInternalBarcode, generateAutoSKU } from '../utils/barcode';
 import type { Product, VariantDraft } from '../types';
 
 interface UnregisteredProductModalProps {
@@ -50,7 +50,7 @@ export default function UnregisteredProductModal({
     if (isOpen) {
       const code = (initialBarcode || '').trim();
       setBarcode(code);
-      setSku(code || `SKU-${Date.now().toString().slice(-6)}`);
+      setSku('');
       setName('');
       setCategory(categories[0] || 'Umum');
       setVariants([]);
@@ -92,10 +92,6 @@ export default function UnregisteredProductModal({
       alert('Nama produk wajib diisi!');
       return;
     }
-    if (!sku.trim()) {
-      alert('SKU Internal toko wajib diisi!');
-      return;
-    }
     if (sellNum <= 0) {
       alert('Harga jual kasir harus lebih dari Rp 0!');
       return;
@@ -110,7 +106,7 @@ export default function UnregisteredProductModal({
     }
 
     const finalBarcode = barcode.trim() || generateInternalBarcode(products);
-    const finalSku = sku.trim() || finalBarcode;
+    const finalSku = sku.trim() || generateAutoSKU(name, finalBarcode);
 
     // Cek apakah barcode sudah terdaftar di master produk
     const dup = products.find(p => p.id === finalBarcode || p.barcode === finalBarcode);
@@ -356,27 +352,44 @@ export default function UnregisteredProductModal({
               {/* Grid: SKU Internal & Kategori */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', padding: '12px 14px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
-                    SKU Internal Toko <span style={{ color: '#dc2626' }}>*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="SKU-..."
-                    value={sku}
-                    onChange={(e) => setSku(e.target.value)}
-                    style={{
-                      width: '100%',
-                      backgroundColor: '#f8fafc',
-                      border: '1px solid #cbd5e1',
-                      borderRadius: '8px',
-                      padding: '8px 12px',
-                      fontSize: '13px',
-                      fontWeight: 700,
-                      color: '#0f172a',
-                      outline: 'none'
-                    }}
-                  />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 700, color: '#334155' }}>
+                      SKU Internal Toko
+                    </label>
+                    <span style={{ fontSize: '11px', color: '#16a34a', fontWeight: 600 }}>
+                      {sku.trim() ? 'Kustom' : 'Otomatis'}
+                    </span>
+                  </div>
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                    <input
+                      type="text"
+                      placeholder={name.trim() ? generateAutoSKU(name, barcode) : 'Otomatis dari nama & barcode'}
+                      value={sku}
+                      onChange={(e) => setSku(e.target.value)}
+                      style={{
+                        width: '100%',
+                        backgroundColor: '#f8fafc',
+                        border: '1px solid #cbd5e1',
+                        borderRadius: '8px',
+                        padding: '8px 12px',
+                        paddingRight: sku ? '28px' : '12px',
+                        fontSize: '13px',
+                        fontWeight: 700,
+                        color: '#0f172a',
+                        outline: 'none'
+                      }}
+                    />
+                    {sku && (
+                      <button
+                        type="button"
+                        onClick={() => setSku('')}
+                        title="Hapus untuk gunakan SKU otomatis"
+                        style={{ position: 'absolute', right: '8px', background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: 0, fontSize: '11px' }}
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 <div>
