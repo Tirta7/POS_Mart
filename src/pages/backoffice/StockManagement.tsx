@@ -176,18 +176,27 @@ const StockManagement: React.FC = () => {
     if (e.key === 'Enter') {
       e.preventDefault(); // Prevent form submission
       
-      const foundProduct = products.find(p => p.id === productId || p.barcode === productId);
-      if (foundProduct) {
-        // Otomatis buka modal Restock karena ini kemungkinan barang masuk
-        openRestockModal(foundProduct);
-        setProductId(''); // Reset input barcode untuk scan selanjutnya
-      } else {
-        // Not found, treat as new item. Reset editing state but keep the scanned ID.
-        setEditingId(null);
-        setSku('');
-        setName('');
-        setQty(1);
+      const scannedCode = productId.trim();
+      if (!scannedCode) return;
+
+      if (editingId) {
+        // Mode EDIT: User hanya sedang mengubah ID / Barcode produk ini.
+        // JANGAN PERNAH reset form atau membatalkan status edit!
+        const isDuplicate = products.some(p => p.id !== editingId && (p.id === scannedCode || p.barcode === scannedCode));
+        if (isDuplicate) {
+          alert(`Peringatan: Barcode "${scannedCode}" sudah digunakan oleh produk lain!`);
+        }
+        return;
       }
+
+      // Mode TAMBAH BARU:
+      const foundProduct = products.find(p => p.id === scannedCode || p.barcode === scannedCode);
+      if (foundProduct) {
+        if (confirm(`Barcode "${scannedCode}" sudah terdaftar sebagai "${foundProduct.name}". Buka data produk ini untuk diedit?`)) {
+          handleEditClick(foundProduct);
+        }
+      }
+      // Jika barcode belum ada, biarkan nilai productId tetap terisi barcode tersebut (jangan reset form!)
     }
   };
 
@@ -530,7 +539,7 @@ const StockManagement: React.FC = () => {
 
   const handleEditClick = (p: any) => {
     setEditingId(p.id);
-    setProductId(p.barcode && p.barcode !== p.id ? p.barcode : '');
+    setProductId(p.barcode || p.id || '');
     setSku(p.sku);
     setName(p.name);
     setCategory(p.category);
@@ -2026,19 +2035,41 @@ const StockManagement: React.FC = () => {
       {cameraScannerOpen && (
         <BarcodeScannerCamera 
           onScan={(decodedText) => {
-            setProductId(decodedText);
-            const foundProduct = products.find(p => p.id === decodedText || p.barcode === decodedText);
+            const scannedCode = decodedText.trim();
+            setProductId(scannedCode);
+
+            // Jika drawer form sedang terbuka:
+            if (isFormOpen) {
+              setCameraScannerOpen(false);
+              if (editingId) {
+                const isDuplicate = products.some(p => p.id !== editingId && (p.id === scannedCode || p.barcode === scannedCode));
+                if (isDuplicate) {
+                  alert(`Peringatan: Barcode "${scannedCode}" sudah digunakan oleh produk lain!`);
+                }
+              } else {
+                const foundProduct = products.find(p => p.id === scannedCode || p.barcode === scannedCode);
+                if (foundProduct) {
+                  if (confirm(`Barcode "${scannedCode}" sudah terdaftar sebagai "${foundProduct.name}". Buka data produk ini untuk diedit?`)) {
+                    handleEditClick(foundProduct);
+                  }
+                }
+              }
+              return scannedCode;
+            }
+
+            // Jika drawer form TIDAK terbuka (scan langsung dari tombol scan navbar/header):
+            const foundProduct = products.find(p => p.id === scannedCode || p.barcode === scannedCode);
             if (foundProduct) {
               openRestockModal(foundProduct);
               setProductId('');
               setCameraScannerOpen(false);
               return foundProduct.name;
             } else {
-              setEditingId(null);
-              setSku('');
-              setName('');
-              setQty(1);
               setCameraScannerOpen(false);
+              resetForm();
+              setProductId(scannedCode);
+              setSku(scannedCode);
+              setIsFormOpen(true);
               return null;
             }
           }} 
