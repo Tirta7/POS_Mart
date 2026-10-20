@@ -2489,8 +2489,8 @@ const StockManagement: React.FC = () => {
           animation: `${drawerClosing ? 'fadeOut' : 'fadeIn'} 0.25s ease forwards`
         }}>
           <div className={`ios-sheet${drawerClosing ? ' is-closing' : ''}`}>
-            {/* Grabber */}
-            <div style={{ display: 'flex', justifyContent: 'center', padding: '8px 0 4px' }}>
+            {/* Grabber (khusus mobile) */}
+            <div className="ios-sheet-grabber">
               <div style={{ width: '40px', height: '5px', backgroundColor: '#d1d5db', borderRadius: '999px' }} />
             </div>
             
@@ -2806,15 +2806,29 @@ const StockManagement: React.FC = () => {
               </div>
 
               {/* OPSI KEMASAN MENENGAH (RENCENG / LUSIN / SLOP) */}
-              <div className="ios-section-header" style={{ marginTop: '20px' }}>
+              <div className="ios-section-header" style={{ marginTop: '22px' }}>
                 <span>KEMASAN MENENGAH (RENCENG / LUSIN / SLOP)</span>
-                <label style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 700, color: '#6d28d9', cursor: 'pointer' }}>
+                <label style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  fontSize: '11.5px',
+                  fontWeight: 700,
+                  color: hasMidTier ? '#6d28d9' : '#64748b',
+                  background: hasMidTier ? '#ede9fe' : '#f1f5f9',
+                  border: `1px solid ${hasMidTier ? '#ddd6fe' : '#cbd5e1'}`,
+                  padding: '3px 10px',
+                  borderRadius: '999px',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s'
+                }}>
                   <input 
                     type="checkbox" 
                     checked={hasMidTier} 
                     onChange={(e) => setHasMidTier(e.target.checked)} 
+                    style={{ accentColor: '#7c3aed', cursor: 'pointer' }}
                   />
-                  Aktifkan Satuan Menengah
+                  <span>{hasMidTier ? 'Satuan Menengah Aktif' : 'Aktifkan Satuan Menengah'}</span>
                 </label>
               </div>
               {hasMidTier && (
@@ -2883,15 +2897,15 @@ const StockManagement: React.FC = () => {
               )}
 
               {/* SECTION: STRUKTUR 3 TINGKAT HARGA */}
-              <div className="ios-section-header" style={{ marginTop: '20px' }}>
+              <div className="ios-section-header" style={{ marginTop: '22px' }}>
                 <span>STRUKTUR 3 TINGKAT HARGA (IDR)</span>
                 {(() => {
                   const m = (Number(sellingPrice) - Number(purchasePrice));
                   const pct = Number(sellingPrice) > 0 ? (m / Number(sellingPrice)) * 100 : 0;
-                  const color = pct >= 0 ? '#10b981' : '#ef4444';
+                  const color = pct >= 0 ? '#047857' : '#b91c1c';
                   const bg = pct >= 0 ? '#dcfce7' : '#fee2e2';
                   return (
-                    <span style={{ backgroundColor: bg, color, padding: '2px 8px', borderRadius: '999px', fontSize: '11px', fontWeight: 700 }}>
+                    <span style={{ backgroundColor: bg, color, border: `1px solid ${pct >= 0 ? '#bbf7d0' : '#fecaca'}`, padding: '2px 8px', borderRadius: '999px', fontSize: '11px', fontWeight: 800 }}>
                       Margin Eceran: {pct > 0 ? '+' : ''}{pct.toFixed(1)}%
                     </span>
                   );
@@ -2906,7 +2920,7 @@ const StockManagement: React.FC = () => {
                   </div>
                   <div className="ios-input-prefix">
                     <span>Rp</span>
-                    <input type="number" inputMode="numeric" value={purchasePrice} onChange={(e) => setPurchasePrice(e.target.value === '' ? '' : Number(e.target.value))} className="ios-input-gray" style={{ textAlign: 'right', width: '110px', fontWeight: 700 }} />
+                    <input type="number" inputMode="numeric" value={purchasePrice} onChange={(e) => setPurchasePrice(e.target.value === '' ? '' : Number(e.target.value))} className="ios-input-gray" style={{ textAlign: 'right', width: '130px', fontWeight: 700 }} />
                   </div>
                 </div>
                 
@@ -2918,7 +2932,7 @@ const StockManagement: React.FC = () => {
                   </div>
                   <div className="ios-input-prefix is-red">
                     <span>Rp</span>
-                    <input type="number" inputMode="numeric" value={sellingPrice} onChange={(e) => setSellingPrice(e.target.value === '' ? '' : Number(e.target.value))} className="ios-input-gray" style={{ textAlign: 'right', width: '110px', color: 'var(--primary)', fontWeight: 800 }} required />
+                    <input type="number" inputMode="numeric" value={sellingPrice} onChange={(e) => setSellingPrice(e.target.value === '' ? '' : Number(e.target.value))} className="ios-input-gray" style={{ textAlign: 'right', width: '130px', color: 'var(--primary)', fontWeight: 800 }} required />
                   </div>
                 </div>
 
@@ -2940,7 +2954,7 @@ const StockManagement: React.FC = () => {
                       }} 
                       placeholder={sellingPrice && boxCapacity ? String(Number(sellingPrice) * Number(boxCapacity)) : ''}
                       className="ios-input-gray" 
-                      style={{ textAlign: 'right', width: '110px', fontWeight: 800, color: '#6d28d9' }} 
+                      style={{ textAlign: 'right', width: '130px', fontWeight: 800, color: '#6d28d9' }} 
                     />
                   </div>
                 </div>
@@ -2961,7 +2975,7 @@ const StockManagement: React.FC = () => {
                         onChange={(e) => setMidPrice(e.target.value === '' ? '' : Number(e.target.value))} 
                         placeholder={sellingPrice && midCapacity ? String(Number(sellingPrice) * Number(midCapacity)) : ''}
                         className="ios-input-gray" 
-                        style={{ textAlign: 'right', width: '110px', fontWeight: 800, color: '#1d4ed8' }} 
+                        style={{ textAlign: 'right', width: '130px', fontWeight: 800, color: '#1d4ed8' }} 
                       />
                     </div>
                   </div>
@@ -3050,98 +3064,401 @@ const StockManagement: React.FC = () => {
         </div>
       )}
       <style>{`
-        /* iOS Bottom Sheet Styles */
-        .ios-modal-overlay { padding: max(20px, calc(env(safe-area-inset-top) + 15px)) 0 0 0; }
+        /* iOS Bottom Sheet / Right Drawer Styles */
+        .ios-modal-overlay {
+          padding: max(20px, calc(env(safe-area-inset-top) + 15px)) 0 0 0;
+        }
         .ios-sheet {
-          background-color: #f2f2f7; width: 100%; max-width: 480px; height: 100%;
-          border-radius: 20px 20px 0 0; display: flex; flex-direction: column;
-          box-shadow: 0 -10px 40px rgba(0,0,0,0.15); overflow: hidden; position: relative;
+          background-color: #f8fafc;
+          width: 100%;
+          max-width: 100%;
+          height: 100%;
+          border-radius: 20px 20px 0 0;
+          display: flex;
+          flex-direction: column;
+          box-shadow: 0 -10px 40px rgba(0,0,0,0.18);
+          overflow: hidden;
+          position: relative;
           animation: slideUp 0.35s cubic-bezier(0.32,0.72,0,1) forwards;
         }
         .ios-sheet.is-closing { animation: slideDown 0.25s ease-in forwards; }
+
+        .ios-sheet-grabber {
+          display: flex;
+          justify-content: center;
+          padding: 8px 0 4px;
+        }
         
         .ios-sheet-header {
-          display: flex; justify-content: space-between; align-items: flex-start;
-          padding: 8px 20px 16px; flex-shrink: 0;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 14px 24px;
+          flex-shrink: 0;
+          background: #ffffff;
+          border-bottom: 1px solid #e2e8f0;
         }
         .ios-close-btn {
-          width: 32px; height: 32px; border-radius: 50%; background: #e5e7eb;
-          border: none; color: #4b5563; display: flex; align-items: center; justify-content: center; cursor: pointer;
+          width: 34px;
+          height: 34px;
+          border-radius: 50%;
+          background: #f1f5f9;
+          border: 1px solid #e2e8f0;
+          color: #4b5563;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          transition: all 0.15s;
         }
-        .ios-sheet-body { flex: 1; overflow-y: auto; padding: 0 16px; padding-bottom: 90px; }
+        .ios-close-btn:hover {
+          background: #e2e8f0;
+          color: #0f172a;
+        }
+        .ios-sheet-body {
+          flex: 1;
+          overflow-y: auto;
+          padding: 16px 24px;
+          padding-bottom: 110px;
+        }
         
         .ios-section-header {
-          display: flex; justify-content: space-between; align-items: flex-end;
-          padding: 0 4px 6px; font-size: 11.5px; font-weight: 700; color: #6b7280; letter-spacing: 0.2px;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 4px 2px 8px;
+          font-size: 11.5px;
+          font-weight: 800;
+          color: #64748b;
+          letter-spacing: 0.4px;
+          flex-wrap: wrap;
+          gap: 8px;
         }
-        .ios-req { color: var(--primary); }
-        .ios-hint-gray { font-weight: 500; }
+        .ios-req { color: var(--primary); font-size: 11px; font-weight: 700; }
+        .ios-hint-gray { font-weight: 600; font-size: 11px; color: #94a3b8; }
         
         .ios-group {
-          background: #ffffff; border-radius: 12px; overflow: hidden;
-          box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+          background: #ffffff;
+          border-radius: 14px;
+          overflow: hidden;
+          border: 1px solid #e2e8f0;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+          margin-bottom: 6px;
         }
-        .ios-row-vert { padding: 12px 16px; position: relative; border-bottom: 0.5px solid #e5e7eb; }
+        .ios-row-vert {
+          padding: 14px 18px;
+          position: relative;
+          border-bottom: 1px solid #f1f5f9;
+        }
         .ios-row-vert:last-child { border-bottom: none; }
-        .ios-label-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 13px; font-weight: 600; color: #374151; }
-        .ios-hint { color: #9ca3af; font-weight: 400; font-size: 12px; }
-        .ios-input-gray {
-          width: 100%; background: #f3f4f6; border: 1px solid transparent; border-radius: 8px;
-          padding: 10px 12px; font-size: 15px; color: #111827; outline: none; transition: border 0.2s;
+        .ios-label-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 8px;
+          font-size: 13.5px;
+          font-weight: 700;
+          color: #1e293b;
+          flex-wrap: wrap;
+          gap: 6px;
         }
-        .ios-input-gray:focus { border-color: #d1d5db; background: #fff; }
-        .ios-input-small { padding: 8px; }
+        .ios-hint { color: #94a3b8; font-weight: 500; font-size: 12px; }
+        .ios-input-gray {
+          width: 100%;
+          background: #f8fafc;
+          border: 1px solid #e2e8f0;
+          border-radius: 9px;
+          padding: 10px 14px;
+          font-size: 14.5px;
+          color: #0f172a;
+          outline: none;
+          transition: all 0.2s;
+        }
+        .ios-input-gray:focus {
+          border-color: #3b82f6;
+          background: #ffffff;
+          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+        .ios-input-small { padding: 8px 12px; }
         
-        .ios-input-wrap { display: flex; gap: 8px; align-items: center; }
-        .ios-inside-btn { display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; }
+        .ios-input-wrap {
+          display: flex;
+          gap: 8px;
+          align-items: center;
+          width: 100%;
+        }
+        .ios-inside-btn {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 24px;
+          height: 24px;
+          border: none;
+          background: none;
+          cursor: pointer;
+        }
         .ios-btn-pindai {
-          display: flex; align-items: center; gap: 6px; background: white; border: 1px solid #d1d5db;
-          padding: 0 12px; height: 38px; border-radius: 8px; font-weight: 600; font-size: 13px; color: #374151; cursor: pointer;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          background: white;
+          border: 1px solid #cbd5e1;
+          padding: 0 14px;
+          height: 40px;
+          border-radius: 9px;
+          font-weight: 700;
+          font-size: 13px;
+          color: #334155;
+          cursor: pointer;
+          white-space: nowrap;
+          transition: all 0.15s;
+        }
+        .ios-btn-pindai:hover {
+          background: #f1f5f9;
         }
         .ios-btn-zap {
-          display: flex; align-items: center; justify-content: center; background: #fee2e2; border: none;
-          width: 38px; height: 38px; border-radius: 8px; color: var(--primary); font-size: 16px; cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: #fee2e2;
+          border: 1px solid #fecaca;
+          width: 40px;
+          height: 40px;
+          border-radius: 9px;
+          color: var(--primary);
+          font-size: 16px;
+          cursor: pointer;
+          flex-shrink: 0;
+          transition: all 0.15s;
+        }
+        .ios-btn-zap:hover {
+          background: #fecaca;
         }
 
-        .ios-row-split { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px 16px; }
+        .ios-row-split {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 16px;
+          padding: 14px 18px;
+          border-bottom: 1px solid #f1f5f9;
+        }
+        .ios-row-split:last-child { border-bottom: none; }
         .ios-col { display: flex; flex-direction: column; }
-        .ios-link-red { background: none; border: none; color: var(--primary); font-weight: 700; font-size: 12px; cursor: pointer; padding: 0; }
+        .ios-link-red {
+          background: none;
+          border: none;
+          color: var(--primary);
+          font-weight: 700;
+          font-size: 12.5px;
+          cursor: pointer;
+          padding: 0;
+        }
 
         .ios-row-horiz {
-          display: flex; justify-content: space-between; align-items: center;
-          padding: 14px 16px; border-bottom: 0.5px solid #e5e7eb;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 14px 18px;
+          border-bottom: 1px solid #f1f5f9;
+          gap: 16px;
         }
         .ios-row-horiz:last-child { border-bottom: none; }
-        .ios-row-horiz label { font-size: 14px; font-weight: 600; color: #111827; }
-        .ios-sublabel { font-size: 12px; color: #9ca3af; margin-top: 2px; }
+        .ios-row-horiz > div:first-child { flex: 1; min-width: 0; }
+        .ios-row-horiz label {
+          font-size: 13.5px;
+          font-weight: 700;
+          color: #0f172a;
+          line-height: 1.35;
+        }
+        .ios-sublabel {
+          font-size: 12px;
+          color: #64748b;
+          margin-top: 3px;
+          line-height: 1.35;
+        }
         
-        .ios-stepper { display: flex; align-items: center; background: #f3f4f6; border-radius: 8px; padding: 2px; border: 1px solid #e5e7eb; }
-        .ios-stepper button { width: 32px; height: 32px; border: none; background: transparent; font-size: 18px; font-weight: 600; color: #4b5563; cursor: pointer; }
-        .ios-stepper input { width: 44px; text-align: center; border: none; background: transparent; font-size: 16px; font-weight: 800; }
+        .ios-stepper {
+          display: flex;
+          align-items: center;
+          background: #f1f5f9;
+          border-radius: 9px;
+          padding: 3px;
+          border: 1px solid #cbd5e1;
+          flex-shrink: 0;
+        }
+        .ios-stepper button {
+          width: 34px;
+          height: 34px;
+          border: none;
+          background: transparent;
+          font-size: 18px;
+          font-weight: 700;
+          color: #334155;
+          cursor: pointer;
+          border-radius: 6px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .ios-stepper button:hover { background: #e2e8f0; }
+        .ios-stepper input {
+          width: 52px;
+          text-align: center;
+          border: none;
+          background: transparent;
+          font-size: 15px;
+          font-weight: 800;
+          color: #0f172a;
+        }
         
-        .ios-segmented { display: flex; background: #f3f4f6; border-radius: 8px; padding: 2px; gap: 2px; }
-        .ios-segmented button { flex: 1; padding: 8px 0; border: none; background: transparent; border-radius: 6px; font-size: 13px; font-weight: 600; color: #6b7280; transition: all 0.2s; cursor: pointer; }
-        .ios-segmented button.active { background: white; color: #111827; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .ios-segmented {
+          display: flex;
+          background: #f1f5f9;
+          border-radius: 9px;
+          padding: 3px;
+          gap: 3px;
+        }
+        .ios-segmented button {
+          flex: 1;
+          padding: 8px 0;
+          border: none;
+          background: transparent;
+          border-radius: 7px;
+          font-size: 13px;
+          font-weight: 700;
+          color: #64748b;
+          transition: all 0.15s;
+          cursor: pointer;
+        }
+        .ios-segmented button.active {
+          background: white;
+          color: #0f172a;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        }
         
-        .ios-input-prefix { display: flex; align-items: center; gap: 8px; background: #f3f4f6; padding: 0 12px; border-radius: 8px; }
-        .ios-input-prefix span { font-size: 13px; font-weight: 700; color: #9ca3af; }
-        .ios-input-prefix .ios-input-gray { background: transparent; padding: 10px 0; border: none; }
-        .ios-input-prefix.is-red { background: #fff1f2; }
+        .ios-input-prefix {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          background: #f8fafc;
+          padding: 0 12px;
+          border-radius: 9px;
+          border: 1px solid #e2e8f0;
+          flex-shrink: 0;
+        }
+        .ios-input-prefix span {
+          font-size: 13px;
+          font-weight: 800;
+          color: #64748b;
+        }
+        .ios-input-prefix .ios-input-gray {
+          background: transparent;
+          padding: 10px 0;
+          border: none;
+          box-shadow: none;
+        }
+        .ios-input-prefix.is-red {
+          background: #fff1f2;
+          border-color: #fecdd3;
+        }
         .ios-input-prefix.is-red span { color: var(--primary); }
         
         .ios-sheet-footer {
-          position: absolute; bottom: 0; left: 0; right: 0;
-          background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); border-top: 1px solid #e5e7eb;
-          padding: 12px 16px 16px; display: flex; gap: 12px;
+          position: absolute;
+          bottom: 0;
+          left: 0;
+          right: 0;
+          background: rgba(255,255,255,0.96);
+          backdrop-filter: blur(12px);
+          border-top: 1px solid #e2e8f0;
+          padding: 14px 24px;
+          display: flex;
+          gap: 12px;
+          z-index: 20;
         }
-        .ios-btn-batal { flex: 0 0 100px; padding: 14px; border-radius: 12px; border: none; background: #f3f4f6; font-size: 15px; font-weight: 700; color: #374151; cursor: pointer; }
-        .ios-btn-simpan { flex: 1; padding: 14px; border-radius: 12px; border: none; background: var(--primary); font-size: 15px; font-weight: 700; color: white; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; }
+        .ios-btn-batal {
+          flex: 0 0 110px;
+          padding: 14px;
+          border-radius: 12px;
+          border: 1px solid #e2e8f0;
+          background: #f8fafc;
+          font-size: 15px;
+          font-weight: 700;
+          color: #475569;
+          cursor: pointer;
+          transition: all 0.15s;
+        }
+        .ios-btn-batal:hover { background: #f1f5f9; color: #0f172a; }
+        .ios-btn-simpan {
+          flex: 1;
+          padding: 14px;
+          border-radius: 12px;
+          border: none;
+          background: var(--primary);
+          font-size: 15px;
+          font-weight: 800;
+          color: white;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          cursor: pointer;
+          box-shadow: 0 4px 12px rgba(220, 38, 38, 0.25);
+          transition: all 0.15s;
+        }
+        .ios-btn-simpan:hover {
+          filter: brightness(0.95);
+          transform: translateY(-1px);
+        }
 
+        /* Desktop: Drawer on right side with wide comfortable layout (580px) */
         @media (min-width: 641px) {
-          .ios-modal-overlay { justify-content: flex-end !important; padding: 0 !important; }
-          .ios-sheet { border-radius: 0; max-width: 440px; animation: slideInRight 0.3s cubic-bezier(0.22,1,0.36,1) forwards; }
-          .ios-sheet.is-closing { animation: slideOutRight 0.3s forwards; }
-          .ios-sheet-footer { padding: 16px 20px; }
+          .ios-modal-overlay {
+            justify-content: flex-end !important;
+            padding: 0 !important;
+          }
+          .ios-sheet {
+            border-radius: 0;
+            width: 580px !important;
+            max-width: 580px !important;
+            animation: slideInRight 0.3s cubic-bezier(0.22,1,0.36,1) forwards;
+            box-shadow: -10px 0 40px rgba(0,0,0,0.14);
+          }
+          .ios-sheet.is-closing { animation: slideOutRight 0.25s forwards; }
+          .ios-sheet-footer { padding: 16px 24px; }
+          .ios-sheet-grabber { display: none !important; }
+        }
+
+        /* Mobile Screens */
+        @media (max-width: 640px) {
+          .ios-sheet {
+            max-width: 100% !important;
+            border-radius: 20px 20px 0 0;
+            height: 94vh;
+          }
+          .ios-sheet-body {
+            padding: 12px 16px 100px 16px;
+          }
+          .ios-sheet-footer {
+            padding: 12px 16px 20px;
+          }
+        }
+
+        /* Small Phones (e.g. <= 440px): avoid horizontal squeezing */
+        @media (max-width: 440px) {
+          .ios-row-split {
+            grid-template-columns: 1fr;
+            gap: 10px;
+          }
+          .ios-row-horiz {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 10px;
+          }
+          .ios-row-horiz > div:last-child {
+            display: flex;
+            justify-content: flex-end;
+          }
         }
 
         @keyframes fadeIn { from { opacity:0 } to { opacity:1 } }
