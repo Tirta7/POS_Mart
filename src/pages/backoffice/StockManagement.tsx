@@ -89,7 +89,7 @@ const StockManagement: React.FC = () => {
   const [boxPurchasePrice, setBoxPurchasePrice] = useState<number | string>('');
   const [sellingPrice, setSellingPrice] = useState<number | string>('');
   const [wholesalePrice, setWholesalePrice] = useState<number | string>('');
-  const [_minWholesaleQty, setMinWholesaleQty] = useState<number | string>('');
+  const [minWholesaleQty, setMinWholesaleQty] = useState<number | string>('');
   const [minStock, setMinStock] = useState<number | string>('');
   const [image, setImage] = useState('');
   const [variants, setVariants] = useState<VariantDraft[]>([]);
@@ -276,7 +276,9 @@ const StockManagement: React.FC = () => {
 
         // c. Simpan master data multi-tier
         const finalBoxCap = Math.max(1, Number(boxCapacity) || 40);
-        const finalBoxPrice = Number(boxPrice) > 0 ? Number(boxPrice) : (Number(wholesalePrice) > 0 ? Number(wholesalePrice) : (Number(sellingPrice) * finalBoxCap));
+        const finalBoxPrice = Number(boxPrice) > 0 ? Number(boxPrice) : 0;
+        const finalWholesalePrice = Number(wholesalePrice) > 0 ? Number(wholesalePrice) : 0;
+        const finalMinWholesaleQty = Number(minWholesaleQty) > 0 ? Number(minWholesaleQty) : 0;
         const finalMidCap = hasMidTier ? Math.max(1, Number(midCapacity) || 1) : 0;
         const finalMidPrice = hasMidTier ? (Number(midPrice) || 0) : 0;
         const finalMidUnitName = hasMidTier && midUnitName.trim() ? midUnitName.trim() : null;
@@ -294,8 +296,8 @@ const StockManagement: React.FC = () => {
           unit,
           purchasePrice: baseCost,
           sellingPrice: Number(sellingPrice),
-          wholesalePrice: finalBoxPrice,
-          minWholesaleQty: finalBoxCap,
+          wholesalePrice: finalWholesalePrice,
+          minWholesaleQty: finalMinWholesaleQty,
           minStock: Number(minStock),
           image: image || original.image,
           boxBarcode: finalBoxBarcode,
@@ -329,7 +331,9 @@ const StockManagement: React.FC = () => {
       }
 
       const finalBoxCap = Math.max(1, Number(boxCapacity) || 40);
-      const finalBoxPrice = Number(boxPrice) > 0 ? Number(boxPrice) : (Number(wholesalePrice) > 0 ? Number(wholesalePrice) : (Number(sellingPrice) * finalBoxCap));
+      const finalBoxPrice = Number(boxPrice) > 0 ? Number(boxPrice) : 0;
+      const finalWholesalePrice = Number(wholesalePrice) > 0 ? Number(wholesalePrice) : 0;
+      const finalMinWholesaleQty = Number(minWholesaleQty) > 0 ? Number(minWholesaleQty) : 0;
       const finalMidCap = hasMidTier ? Math.max(1, Number(midCapacity) || 1) : 0;
       const finalMidPrice = hasMidTier ? (Number(midPrice) || 0) : 0;
       const finalMidUnitName = hasMidTier && midUnitName.trim() ? midUnitName.trim() : undefined;
@@ -350,8 +354,8 @@ const StockManagement: React.FC = () => {
         qty: totalQty,
         purchasePrice: Number(purchasePrice),
         sellingPrice: Number(sellingPrice),
-        wholesalePrice: finalBoxPrice,
-        minWholesaleQty: finalBoxCap,
+        wholesalePrice: finalWholesalePrice,
+        minWholesaleQty: finalMinWholesaleQty,
         minStock: Number(minStock),
         image: image ? getProductImage(image) : '',
         boxBarcode: finalBoxBarcode,
@@ -621,7 +625,7 @@ const StockManagement: React.FC = () => {
     setBoxBarcode(p.boxBarcode || p.barcode || p.id || '');
     setRetailBarcode(p.retailBarcode || '');
     setBoxCapacity(p.boxCapacity || 40);
-    setBoxPrice(p.boxPrice || p.wholesalePrice || '');
+    setBoxPrice(p.boxPrice !== undefined && p.boxPrice !== null && Number(p.boxPrice) > 0 ? p.boxPrice : '');
     const isMidActive = Boolean(
       (Number(p.midPrice) > 0 && Number(p.midCapacity) > 1) ||
       (p.midUnitName && Number(p.midCapacity) > 1 && (Number(p.midPrice) > 0 || (p.midBarcode && p.midBarcode.trim() !== '')))
@@ -643,8 +647,8 @@ const StockManagement: React.FC = () => {
     const bCap = Number(p.boxCapacity) || 1;
     setBoxPurchasePrice(bCap > 1 && p.purchasePrice ? Math.round(Number(p.purchasePrice) * bCap) : '');
     setSellingPrice(p.sellingPrice);
-    setWholesalePrice(p.boxPrice || p.wholesalePrice || 0);
-    setMinWholesaleQty(p.boxCapacity || p.minWholesaleQty || '');
+    setWholesalePrice(p.wholesalePrice !== undefined && p.wholesalePrice !== null && Number(p.wholesalePrice) > 0 ? p.wholesalePrice : '');
+    setMinWholesaleQty(p.minWholesaleQty ? p.minWholesaleQty : '');
     setMinStock(p.minStock || 0);
     setImage(p.image || '');
     setVariants([]);
@@ -753,6 +757,7 @@ const StockManagement: React.FC = () => {
     purchasePrice: si.purchasePrice,
     sellingPrice: si.sellingPrice,
     wholesalePrice: si.wholesalePrice,
+    minWholesaleQty: si.minWholesaleQty || 0,
     minStock: si.minStock,
     image: si.image,
     boxBarcode: si.boxBarcode || si.barcode,
@@ -1307,21 +1312,22 @@ const StockManagement: React.FC = () => {
               >
                 <thead>
                   <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', position: 'sticky', top: 0, zIndex: 10 }}>
-                    <th style={{ padding: '10px 14px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', verticalAlign: 'middle', minWidth: '260px' }}>NAMA PRODUK & SPESIFIKASI</th>
-                    <th style={{ padding: '10px 12px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', width: '110px', verticalAlign: 'middle' }}>KATEGORI</th>
-                    <th style={{ padding: '10px 12px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', width: '140px', verticalAlign: 'middle' }}>STOK FISIK & DUS</th>
-                    <th style={{ padding: '10px 12px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right', width: '135px', verticalAlign: 'middle' }}>HARGA BELI</th>
-                    <th style={{ padding: '10px 12px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right', width: '120px', verticalAlign: 'middle' }}>HARGA ECER</th>
-                    <th style={{ padding: '10px 12px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right', width: '130px', verticalAlign: 'middle' }}>HARGA DUS</th>
-                    <th style={{ padding: '10px 12px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right', width: '130px', verticalAlign: 'middle' }}>HARGA MENENGAH</th>
-                    <th style={{ padding: '10px 12px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', width: '125px', verticalAlign: 'middle' }}>PROFIT MARGIN</th>
-                    <th style={{ padding: '10px 12px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', width: '145px', verticalAlign: 'middle' }}>AKSI</th>
+                    <th style={{ padding: '10px 14px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', verticalAlign: 'middle', minWidth: '240px' }}>NAMA PRODUK & SPESIFIKASI</th>
+                    <th style={{ padding: '10px 12px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', width: '105px', verticalAlign: 'middle' }}>KATEGORI</th>
+                    <th style={{ padding: '10px 12px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', width: '135px', verticalAlign: 'middle' }}>STOK FISIK & DUS</th>
+                    <th style={{ padding: '10px 12px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right', width: '130px', verticalAlign: 'middle' }}>HARGA BELI</th>
+                    <th style={{ padding: '10px 12px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right', width: '115px', verticalAlign: 'middle' }}>HARGA ECER</th>
+                    <th style={{ padding: '10px 12px', color: '#0369a1', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right', width: '125px', verticalAlign: 'middle' }}>HARGA GROSIR</th>
+                    <th style={{ padding: '10px 12px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right', width: '125px', verticalAlign: 'middle' }}>HARGA DUS</th>
+                    <th style={{ padding: '10px 12px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right', width: '125px', verticalAlign: 'middle' }}>HARGA MENENGAH</th>
+                    <th style={{ padding: '10px 12px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', width: '120px', verticalAlign: 'middle' }}>PROFIT MARGIN</th>
+                    <th style={{ padding: '10px 12px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', width: '140px', verticalAlign: 'middle' }}>AKSI</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredProducts.length === 0 ? (
                     <tr>
-                      <td colSpan={9} style={{ textAlign: 'center', padding: '64px 20px', color: '#64748b', verticalAlign: 'middle' }}>
+                      <td colSpan={10} style={{ textAlign: 'center', padding: '64px 20px', color: '#64748b', verticalAlign: 'middle' }}>
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
                           <PackageCheck size={42} style={{ opacity: 0.25, color: 'var(--primary)' }} />
                           <div style={{ fontSize: '14.5px', fontWeight: 700, color: '#1e293b' }}>Tidak ada produk ditemukan</div>
@@ -1366,12 +1372,14 @@ const StockManagement: React.FC = () => {
                       const fullBoxes = boxCap > 1 ? Math.floor(stockVal / boxCap) : 0;
                       const remainderPcs = boxCap > 1 ? (stockVal % boxCap) : 0;
 
-                      // Box & Mid Pricing
+                      // Pricing & Wholesale Logic
                       const isBoxActive = boxCap > 1;
                       const boxCost = cost * boxCap;
                       const boxPriceVal = isBoxActive 
-                        ? (Number(p.boxPrice) > 0 ? Number(p.boxPrice) : (Number(p.wholesalePrice) > 0 ? Number(p.wholesalePrice) : sell * boxCap))
+                        ? (Number(p.boxPrice) > 0 ? Number(p.boxPrice) : (sell * boxCap))
                         : 0;
+                      const wholesaleVal = Number(p.wholesalePrice) || 0;
+                      const minWholesaleQtyVal = Number(p.minWholesaleQty) || 0;
                       const midPriceVal = hasMid ? Number(p.midPrice) || 0 : 0;
 
                       return (
@@ -1645,7 +1653,25 @@ const StockManagement: React.FC = () => {
                             </div>
                           </td>
 
-                          {/* 6. HARGA DUS (Hanya tampil jika boxCap > 1) */}
+                          {/* 6. HARGA GROSIR (Partai) */}
+                          <td style={{ padding: '8px 12px', verticalAlign: 'middle', textAlign: 'right' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '1px' }}>
+                              {wholesaleVal > 0 ? (
+                                <>
+                                  <span style={{ fontSize: '12.5px', fontWeight: 800, color: '#0284c7' }}>
+                                    {formatIDR(wholesaleVal)}
+                                  </span>
+                                  <span style={{ fontSize: '10px', fontWeight: 600, color: '#0369a1' }}>
+                                    per {unit} {minWholesaleQtyVal > 1 ? `(≥${minWholesaleQtyVal})` : ''}
+                                  </span>
+                                </>
+                              ) : (
+                                <span style={{ color: '#cbd5e1', fontSize: '13px', fontWeight: 700 }} title="Sama dengan harga eceran">-</span>
+                              )}
+                            </div>
+                          </td>
+
+                          {/* 7. HARGA DUS (Hanya tampil jika boxCap > 1) */}
                           <td style={{ padding: '8px 12px', verticalAlign: 'middle', textAlign: 'right' }}>
                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '1px' }}>
                               {boxCap > 1 && boxPriceVal > 0 ? (
@@ -1663,7 +1689,7 @@ const StockManagement: React.FC = () => {
                             </div>
                           </td>
 
-                          {/* 7. HARGA MENENGAH */}
+                          {/* 8. HARGA MENENGAH */}
                           <td style={{ padding: '8px 12px', verticalAlign: 'middle', textAlign: 'right' }}>
                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '1px' }}>
                               {hasMid && midPriceVal > 0 ? (
@@ -1681,7 +1707,7 @@ const StockManagement: React.FC = () => {
                             </div>
                           </td>
 
-                          {/* 8. PROFIT MARGIN */}
+                          {/* 9. PROFIT MARGIN */}
                           <td style={{ padding: '8px 12px', verticalAlign: 'middle' }}>
                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
                               <span
@@ -1700,9 +1726,14 @@ const StockManagement: React.FC = () => {
                               <span style={{ fontSize: '9.5px', fontWeight: 600, color: profit >= 0 ? '#15803d' : '#b91c1c' }}>
                                 {profit >= 0 ? '+' : ''}{formatIDR(profit)}/{unit}
                               </span>
+                              {wholesaleVal > 0 && cost > 0 && (
+                                <span style={{ fontSize: '9px', fontWeight: 600, color: (wholesaleVal - cost) >= 0 ? '#0284c7' : '#b91c1c' }}>
+                                  Partai: {(wholesaleVal - cost) >= 0 ? '+' : ''}{formatIDR(wholesaleVal - cost)}
+                                </span>
+                              )}
                               {boxCap > 1 && boxPriceVal > 0 && (
                                 <span style={{ fontSize: '9px', fontWeight: 600, color: (boxPriceVal - boxCost) >= 0 ? '#b45309' : '#b91c1c' }}>
-                                  {(boxPriceVal - boxCost) >= 0 ? '+' : ''}{formatIDR(boxPriceVal - boxCost)}/Dus
+                                  Dus: {(boxPriceVal - boxCost) >= 0 ? '+' : ''}{formatIDR(boxPriceVal - boxCost)}
                                 </span>
                               )}
                               <div style={{ width: '56px', height: '3.5px', backgroundColor: '#e2e8f0', borderRadius: '2px', overflow: 'hidden', marginTop: '2px' }}>
@@ -1855,7 +1886,7 @@ const StockManagement: React.FC = () => {
               const cost = Number(p.purchasePrice) || 0;
               const sell = Number(p.sellingPrice) || 0;
               const profit = sell - cost;
-              const marginPercent = sell > 0 ? ((profit / sell) * 100).toFixed(1) : '0';
+              const marginPercent = sell > 0 ? (profit / sell) * 100 : 0;
               const stockVal = Number(p.stock) || 0;
               const unit = p.unit || 'Pcs';
               const boxCap = Number(p.boxCapacity) || 1;
@@ -1877,8 +1908,10 @@ const StockManagement: React.FC = () => {
               const isBoxActive = boxCap > 1;
               const boxCost = cost * boxCap;
               const boxPriceVal = isBoxActive 
-                ? (Number(p.boxPrice) > 0 ? Number(p.boxPrice) : (Number(p.wholesalePrice) > 0 ? Number(p.wholesalePrice) : sell * boxCap))
+                ? (Number(p.boxPrice) > 0 ? Number(p.boxPrice) : (sell * boxCap))
                 : 0;
+              const wholesaleVal = Number(p.wholesalePrice) || 0;
+              const minWholesaleQtyVal = Number(p.minWholesaleQty) || 0;
               const midPriceVal = hasMid ? Number(p.midPrice) || 0 : 0;
 
               return (
@@ -1961,6 +1994,11 @@ const StockManagement: React.FC = () => {
                     </div>
                     <div className="mobile-stock-extra" style={{ display: 'flex', flexDirection: 'column', gap: '4px', width: '100%' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', fontSize: '11.5px', flexWrap: 'wrap', gap: '6px' }}>
+                        {wholesaleVal > 0 && (
+                          <span style={{ color: '#0284c7', background: '#f0f9ff', padding: '1px 5px', borderRadius: '4px', border: '1px solid #bae6fd' }}>
+                            Grosir: <strong>{formatIDR(wholesaleVal)}</strong>{minWholesaleQtyVal > 1 ? ` (≥${minWholesaleQtyVal})` : ''}
+                          </span>
+                        )}
                         <span style={{ color: '#92400e' }}>
                           Dus: <strong>{boxCap > 1 && boxPriceVal > 0 ? formatIDR(boxPriceVal) : '-'}</strong>
                         </span>
@@ -1977,7 +2015,7 @@ const StockManagement: React.FC = () => {
                           borderRadius: '4px',
                           fontSize: '11px'
                         }}>
-                          Margin: {profit > 0 ? '+' : ''}{marginPercent}%
+                          Margin: {profit > 0 ? '+' : ''}{marginPercent.toFixed(1)}%
                         </span>
                       </div>
                     </div>
@@ -3036,16 +3074,23 @@ const StockManagement: React.FC = () => {
 
               {/* SECTION: STRUKTUR HARGA BELI & HARGA JUAL */}
               <div className="ios-section-header" style={{ marginTop: '22px' }}>
-                <span>STRUKTUR HARGA BELI (DISTRIBUTOR) &amp; HARGA JUAL</span>
+                <span>STRUKTUR HARGA BELI &amp; HARGA JUAL POS</span>
                 {(() => {
-                  const m = (Number(sellingPrice) - Number(purchasePrice));
-                  const pct = Number(sellingPrice) > 0 ? (m / Number(sellingPrice)) * 100 : 0;
-                  const color = pct >= 0 ? '#047857' : '#b91c1c';
-                  const bg = pct >= 0 ? '#dcfce7' : '#fee2e2';
+                  const mRetail = (Number(sellingPrice) - Number(purchasePrice));
+                  const pctRetail = Number(sellingPrice) > 0 ? (mRetail / Number(sellingPrice)) * 100 : 0;
+                  const mWholesale = (Number(wholesalePrice) - Number(purchasePrice));
+                  const pctWholesale = Number(wholesalePrice) > 0 ? (mWholesale / Number(wholesalePrice)) * 100 : 0;
                   return (
-                    <span style={{ backgroundColor: bg, color, border: `1px solid ${pct >= 0 ? '#bbf7d0' : '#fecaca'}`, padding: '2px 8px', borderRadius: '999px', fontSize: '11px', fontWeight: 800 }}>
-                      Margin Eceran: {pct > 0 ? '+' : ''}{pct.toFixed(1)}%
-                    </span>
+                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+                      <span style={{ backgroundColor: pctRetail >= 0 ? '#dcfce7' : '#fee2e2', color: pctRetail >= 0 ? '#047857' : '#b91c1c', border: `1px solid ${pctRetail >= 0 ? '#bbf7d0' : '#fecaca'}`, padding: '2px 8px', borderRadius: '999px', fontSize: '11px', fontWeight: 800 }}>
+                        Margin Ecer: {pctRetail > 0 ? '+' : ''}{pctRetail.toFixed(1)}%
+                      </span>
+                      {Number(wholesalePrice) > 0 && (
+                        <span style={{ backgroundColor: pctWholesale >= 0 ? '#eff6ff' : '#fee2e2', color: pctWholesale >= 0 ? '#1d4ed8' : '#b91c1c', border: `1px solid ${pctWholesale >= 0 ? '#bfdbfe' : '#fecaca'}`, padding: '2px 8px', borderRadius: '999px', fontSize: '11px', fontWeight: 800 }}>
+                          Margin Grosir: {pctWholesale > 0 ? '+' : ''}{pctWholesale.toFixed(1)}%
+                        </span>
+                      )}
+                    </div>
                   );
                 })()}
               </div>
@@ -3055,7 +3100,7 @@ const StockManagement: React.FC = () => {
                   <div className="ios-row-horiz" style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
                     <div>
                       <label style={{ color: '#0f172a', fontWeight: 800 }}>Harga Beli Distributor (per Dus / Karton)</label>
-                      <div className="ios-sublabel">Harga nota faktur 1 Dus utuh (isi {boxCapacity} {unit})</div>
+                      <div className="ios-sublabel">Harga faktur supplier 1 Dus utuh (isi {boxCapacity} {unit})</div>
                     </div>
                     <div className="ios-input-prefix" style={{ background: '#f1f5f9' }}>
                       <span style={{ color: '#475569', fontWeight: 700 }}>Rp</span>
@@ -3121,7 +3166,7 @@ const StockManagement: React.FC = () => {
                 <div className="ios-row-horiz" style={{ background: '#fff7f7' }}>
                   <div>
                     <label style={{ color: 'var(--primary)', fontWeight: 800 }}>1. Harga Jual Eceran (per {unit})</label>
-                    <div className="ios-sublabel">Harga standar kasir saat beli satuan/eceran</div>
+                    <div className="ios-sublabel">Harga standar kasir saat transaksi Reguler</div>
                   </div>
                   <div className="ios-input-prefix is-red">
                     <span>Rp</span>
@@ -3129,12 +3174,53 @@ const StockManagement: React.FC = () => {
                   </div>
                 </div>
 
-                {/* 4. Harga Jual Dus / Karton (Hanya jika produk berdus) */}
+                {/* 4. Harga Jual Grosir / Partai (Satuan) */}
+                <div className="ios-row-horiz" style={{ background: '#f0f9ff' }}>
+                  <div>
+                    <label style={{ color: '#0369a1', fontWeight: 800 }}>
+                      2. Harga Jual Grosir / Partai (per {unit})
+                    </label>
+                    <div className="ios-sublabel">
+                      Dipakai di Kasir POS mode <strong>[GROSIR / PARTAI]</strong> atau beli banyak
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div className="ios-input-prefix" style={{ background: '#dbeafe' }}>
+                      <span style={{ color: '#0369a1', fontWeight: 700 }}>Rp</span>
+                      <input 
+                        type="number" 
+                        inputMode="numeric" 
+                        value={wholesalePrice} 
+                        onChange={(e) => setWholesalePrice(e.target.value === '' ? '' : Number(e.target.value))} 
+                        placeholder={sellingPrice ? String(sellingPrice) : ''}
+                        className="ios-input-gray" 
+                        style={{ textAlign: 'right', width: '120px', color: '#0369a1', fontWeight: 800 }} 
+                      />
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748b' }}>Min:</span>
+                      <input 
+                        type="number" 
+                        inputMode="numeric" 
+                        min={1}
+                        value={minWholesaleQty} 
+                        onChange={(e) => setMinWholesaleQty(e.target.value === '' ? '' : Number(e.target.value))} 
+                        placeholder="1"
+                        className="ios-input-gray ios-input-small" 
+                        style={{ textAlign: 'center', width: '50px', fontWeight: 700 }} 
+                        title="Minimal kuantitas pembelian di kasir reguler untuk otomatis dapat harga grosir"
+                      />
+                      <span style={{ fontSize: '11px', color: '#64748b' }}>{unit}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 5. Harga Jual Dus / Karton (Hanya jika produk berdus) */}
                 {Number(boxCapacity) > 1 && (
                   <div className="ios-row-horiz" style={{ background: '#f5f3ff' }}>
                     <div>
-                      <label style={{ color: '#6d28d9', fontWeight: 800 }}>2. Harga Jual Dus / Karton</label>
-                      <div className="ios-sublabel">Harga 1 Dus utuh (isi {boxCapacity} {unit})</div>
+                      <label style={{ color: '#6d28d9', fontWeight: 800 }}>3. Harga Jual Dus / Karton (Utuh)</label>
+                      <div className="ios-sublabel">Harga 1 Dus utuh (isi {boxCapacity} {unit}) saat scan barcode Dus</div>
                     </div>
                     <div className="ios-input-prefix" style={{ background: '#ede9fe' }}>
                       <span style={{ color: '#6d28d9' }}>Rp</span>
@@ -3144,7 +3230,6 @@ const StockManagement: React.FC = () => {
                         value={boxPrice} 
                         onChange={(e) => {
                           setBoxPrice(e.target.value === '' ? '' : Number(e.target.value));
-                          setWholesalePrice(e.target.value === '' ? '' : Number(e.target.value));
                         }} 
                         placeholder={sellingPrice && boxCapacity ? String(Number(sellingPrice) * Number(boxCapacity)) : ''}
                         className="ios-input-gray" 
@@ -3154,11 +3239,11 @@ const StockManagement: React.FC = () => {
                   </div>
                 )}
 
-                {/* 5. Harga Jual Satuan Menengah (Renceng/Lusin) jika aktif */}
+                {/* 6. Harga Jual Satuan Menengah (Renceng/Lusin) jika aktif */}
                 {hasMidTier && (
                   <div className="ios-row-horiz" style={{ background: '#eff6ff' }}>
                     <div>
-                      <label style={{ color: '#1d4ed8', fontWeight: 800 }}>3. Harga Jual {midUnitName || 'Kemasan Menengah'}</label>
+                      <label style={{ color: '#1d4ed8', fontWeight: 800 }}>4. Harga Jual {midUnitName || 'Kemasan Menengah'}</label>
                       <div className="ios-sublabel">Harga 1 {midUnitName || 'Kemasan'} (isi {midCapacity} {unit})</div>
                     </div>
                     <div className="ios-input-prefix" style={{ background: '#dbeafe' }}>
