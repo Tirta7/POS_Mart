@@ -807,8 +807,8 @@ app.post('/api/saas/transactions', async (req, res) => {
     } = data;
     
     if (!receipt_number) throw new ValidationError('Nomor struk wajib diisi.');
-    if (!Array.isArray(items) || items.length === 0) throw new ValidationError('Keranjang kosong.');
-    if (!Number.isFinite(Number(total_amount)) || Number(total_amount) < 0) throw new ValidationError('Total transaksi tidak valid.');
+    if (!Array.isArray(items) || items.length === 0) throw new ValidationError('Keranjang belanja kosong.');
+    if (!Number.isFinite(Number(total_amount)) || Number(total_amount) <= 0) throw new ValidationError('Total tagihan transaksi harus lebih dari Rp 0.');
     if (!payment_method) throw new ValidationError('Metode pembayaran wajib diisi.');
     for (const it of items) {
       if (!it || !it.product_id) throw new ValidationError('Ada item tanpa produk.');
@@ -1026,20 +1026,22 @@ app.put('/api/saas/transactions/:id', async (req, res) => {
 
       // Jika items dikirim untuk diupdate
       if (Array.isArray(items) && items.length > 0) {
-        // Map item lama berdasarkan product_id + variant_id
+        // Map item lama berdasarkan product_id + variant_id (memperhitungkan kemasan bertingkat / tier_multiplier)
         const oldItemsMap = new Map();
         for (const it of existingTx.items) {
           const key = `${it.product_id}_${it.variant_id || 'none'}`;
-          oldItemsMap.set(key, (oldItemsMap.get(key) || 0) + Number(it.quantity));
+          const multiplier = Number(it.tier_multiplier) || 1;
+          oldItemsMap.set(key, (oldItemsMap.get(key) || 0) + (Number(it.quantity) * multiplier));
         }
 
-        // Map item baru
+        // Map item baru (memperhitungkan kemasan bertingkat / tier_multiplier)
         const newItemsMap = new Map();
         let calcTotal = 0;
         for (const it of items) {
           const key = `${it.product_id || it.productId}_${it.variant_id || it.variantId || 'none'}`;
           const qty = round3(it.quantity || it.qty || 1);
-          newItemsMap.set(key, (newItemsMap.get(key) || 0) + qty);
+          const multiplier = Number(it.tier_multiplier || it.tierMultiplier) || 1;
+          newItemsMap.set(key, (newItemsMap.get(key) || 0) + (qty * multiplier));
           const price = Number(it.price || it.price_at_time || 0);
           calcTotal += (price * qty);
         }
@@ -1299,15 +1301,18 @@ app.post('/api/saas/transactions/:id/returns', async (req, res) => {
 
         // Kembalikan ke stok jika kondisi layak jual (return_to_stock = true)
         if (returnToStock) {
+          const multiplier = Number(it.tier_multiplier || it.tierMultiplier) || 1;
+          const stockReturn = round3(qty * multiplier);
+
           if (vId) {
             await tx.productVariant.update({
               where: { id: vId },
-              data: { stock: { increment: qty } }
+              data: { stock: { increment: stockReturn } }
             });
           }
           await tx.product.update({
             where: { id: pId },
-            data: { stock: { increment: qty } }
+            data: { stock: { increment: stockReturn } }
           });
 
           // Catat mutasi stok IN
@@ -1328,7 +1333,7 @@ app.post('/api/saas/transactions/:id/returns', async (req, res) => {
             data: {
               stock_transaction_id: st.id,
               product_id: pId,
-              qty: qty,
+              qty: stockReturn,
               purchase_price: price,
               subtotal: qty * price,
               variant_id: vId,
@@ -1400,17 +1405,18 @@ app.post('/api/saas/transactions/:id/void', async (req, res) => {
     if (txRecord.status === 'VOID') return res.status(400).json({ error: 'Transaksi ini sudah dibatalkan sebelumnya.' });
 
     const result = await prisma.$transaction(async (tx) => {
-      // Kembalikan semua stok barang
+      // Kembalikan semua stok barang (memperhitungkan tier_multiplier jika Dus/Menengah)
       for (const it of txRecord.items) {
+        const stockRestore = round3(Number(it.quantity) * (Number(it.tier_multiplier) || 1));
         if (it.variant_id) {
           await tx.productVariant.update({
             where: { id: it.variant_id },
-            data: { stock: { increment: Number(it.quantity) } }
+            data: { stock: { increment: stockRestore } }
           });
         }
         await tx.product.update({
           where: { id: it.product_id },
-          data: { stock: { increment: Number(it.quantity) } }
+          data: { stock: { increment: stockRestore } }
         });
       }
 
@@ -1429,11 +1435,12 @@ app.post('/api/saas/transactions/:id/void', async (req, res) => {
       });
 
       for (const it of txRecord.items) {
+        const stockRestore = round3(Number(it.quantity) * (Number(it.tier_multiplier) || 1));
         await tx.stockTransactionItem.create({
           data: {
             stock_transaction_id: st.id,
             product_id: it.product_id,
-            qty: it.quantity,
+            qty: stockRestore,
             purchase_price: it.price_at_time,
             subtotal: it.subtotal,
             variant_id: it.variant_id,

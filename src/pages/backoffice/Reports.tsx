@@ -133,8 +133,9 @@ const Reports: React.FC = () => {
       let totalPurchasePrice = 0;
       (sale.items || []).forEach(item => {
         const product = productMap.get(item.productId);
-        const unitCost = product ? product.purchasePrice : 0;
-        totalPurchasePrice += unitCost * item.qty;
+        const unitCost = product ? (Number(product.purchasePrice) || 0) : 0;
+        const multiplier = Number(item.tierMultiplier) || 1;
+        totalPurchasePrice += unitCost * (Number(item.qty) || 1) * multiplier;
       });
 
       const profitMargin = (sale.subtotal || sale.total) - totalPurchasePrice;
