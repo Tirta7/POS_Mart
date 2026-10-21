@@ -11,6 +11,7 @@ import {
   Scissors,
   Zap,
   RefreshCw,
+  Copy,
   FileText,
   Building2,
   CreditCard,
@@ -31,6 +32,7 @@ const PrinterSettings: React.FC = () => {
     autoCut,
     autoPrintOnCheckout,
     autoReconnect,
+    printDoubleCopies,
     lastPrintedAt,
     error,
     connect,
@@ -42,6 +44,7 @@ const PrinterSettings: React.FC = () => {
     setAutoCut,
     setAutoPrintOnCheckout,
     setAutoReconnect,
+    setPrintDoubleCopies,
     clearError
   } = usePrinterStore();
 
@@ -589,6 +592,22 @@ const PrinterSettings: React.FC = () => {
 
                   <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', padding: '10px 14px', borderRadius: '8px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <Copy size={18} color="#8b5cf6" />
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: '13.5px', color: '#0f172a' }}>Cetak Langsung 2x (Struk Rangkap)</div>
+                        <div style={{ fontSize: '11.5px', color: '#64748b' }}>Cetak otomatis 2 lembar (Lembar Pelanggan & Lembar Toko / Arsip)</div>
+                      </div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={printDoubleCopies}
+                      onChange={(e) => setPrintDoubleCopies(e.target.checked)}
+                      style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                    />
+                  </label>
+
+                  <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', padding: '10px 14px', borderRadius: '8px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                       <Scissors size={18} color="#f59e0b" />
                       <div>
                         <div style={{ fontWeight: 700, fontSize: '13.5px', color: '#0f172a' }}>Potong Kertas Otomatis (Auto-Cut)</div>
@@ -613,9 +632,16 @@ const PrinterSettings: React.FC = () => {
                 <div style={{ fontSize: '12px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                   Pratinjau Kertas Struk ({paperWidth})
                 </div>
-                <span style={{ fontSize: '11px', color: '#64748b' }}>
-                  {paperWidth === '58mm' ? '32 Karakter' : '48 Karakter'}
-                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  {printDoubleCopies && (
+                    <span style={{ fontSize: '10.5px', fontWeight: 700, background: '#ede9fe', color: '#6d28d9', padding: '2px 8px', borderRadius: '6px' }}>
+                      2x Rangkap Aktif
+                    </span>
+                  )}
+                  <span style={{ fontSize: '11px', color: '#64748b' }}>
+                    {paperWidth === '58mm' ? '32 Karakter' : '48 Karakter'}
+                  </span>
+                </div>
               </div>
 
               <div style={{
@@ -636,6 +662,13 @@ const PrinterSettings: React.FC = () => {
                   {appName || 'POS MART'}
                 </div>
                 <div style={{ textAlign: 'center', fontSize: '11px', marginBottom: '2px' }}>STRUK PENJUALAN KASIR</div>
+                {printDoubleCopies && (
+                  <div style={{ textAlign: 'center', margin: '3px 0' }}>
+                    <span style={{ fontSize: '9px', fontWeight: 800, background: '#f1f5f9', border: '1px solid #94a3b8', padding: '1px 6px', borderRadius: '3px' }}>
+                      [ LEMBAR 1: PELANGGAN ]
+                    </span>
+                  </div>
+                )}
                 <div style={{ textAlign: 'center', fontSize: '10px', color: '#64748b', marginBottom: '8px' }}>Pusat Perbelanjaan & Swalayan</div>
                 
                 <div style={{ borderBottom: '1px dashed #94a3b8', margin: '8px 0' }} />
@@ -656,38 +689,60 @@ const PrinterSettings: React.FC = () => {
                 <div style={{ borderBottom: '1px dashed #94a3b8', margin: '8px 0' }} />
 
                 <div style={{ marginBottom: '6px' }}>
-                  <div style={{ fontWeight: 'bold' }}>Minyak Goreng 2L</div>
+                  <div style={{ fontWeight: 'bold' }}>1. Indomie Goreng Spesial [DUS]</div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span>2 Pcs x 34.000</span>
-                    <span>68.000</span>
+                    <span>   1 Dus x 128.000</span>
+                    <span>128.000</span>
                   </div>
                 </div>
 
                 <div style={{ marginBottom: '6px' }}>
-                  <div style={{ fontWeight: 'bold' }}>Beras Pandan Wangi 5kg</div>
+                  <div style={{ fontWeight: 'bold' }}>2. Sampoerna A Mild 16 [SLOP]</div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span>1 Sak x 82.000</span>
-                    <span>82.000</span>
+                    <span>   1 Slop x 342.000</span>
+                    <span>342.000</span>
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: '6px' }}>
+                  <div style={{ fontWeight: 'bold' }}>3. Minyak Bimoli 2L [GROSIR]</div>
+                  <div style={{ fontSize: '9.5px', color: '#dc2626' }}>   *Special: Grosir (Normal: 38.000)</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>   3 Pouch x 36.500</span>
+                    <span>109.500</span>
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: '6px' }}>
+                  <div style={{ fontWeight: 'bold' }}>4. Kaos Polos Combed 30s [ECER]</div>
+                  <div style={{ fontSize: '9.5px', color: '#64748b' }}>   Varian: Hitam M</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>   1 Pcs x 45.000</span>
+                    <span>45.000</span>
                   </div>
                 </div>
 
                 <div style={{ borderBottom: '1px dashed #94a3b8', margin: '8px 0' }} />
 
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Total Item</span>
+                  <span>4 jenis / 6 qty</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span>Subtotal</span>
-                  <span>150.000</span>
+                  <span>624.500</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: '13px' }}>
                   <span>TOTAL</span>
-                  <span>150.000</span>
+                  <span>624.500</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span>Tunai</span>
-                  <span>200.000</span>
+                  <span>700.000</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold' }}>
                   <span>Kembalian</span>
-                  <span>50.000</span>
+                  <span>75.500</span>
                 </div>
 
                 <div style={{ borderBottom: '1px dashed #94a3b8', margin: '8px 0' }} />

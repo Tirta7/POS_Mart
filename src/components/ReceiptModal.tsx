@@ -54,7 +54,7 @@ const ReceiptModal: React.FC<Props> = ({
   const [height, setHeight] = useState(480);
   const printed = useRef(false);
 
-  const { isConnected, deviceName, autoPrintOnCheckout, printReceiptBluetooth } = usePrinterStore();
+  const { isConnected, deviceName, autoPrintOnCheckout, printReceiptBluetooth, printDoubleCopies } = usePrinterStore();
   const [isBtPrinting, setIsBtPrinting] = useState(false);
   const [btSuccess, setBtSuccess] = useState(false);
 
@@ -176,6 +176,11 @@ const ReceiptModal: React.FC<Props> = ({
             >
               <Receipt size={15} />
               <span>Struk Kasir (Thermal)</span>
+              {printDoubleCopies && (
+                <span style={{ fontSize: '10px', background: '#ede9fe', color: '#6d28d9', padding: '1px 6px', borderRadius: '4px', fontWeight: 800 }}>
+                  2x Rangkap
+                </span>
+              )}
             </button>
 
             <button
@@ -391,13 +396,13 @@ const ReceiptModal: React.FC<Props> = ({
                     }}
                   >
                     {isBtPrinting ? <RefreshCw size={16} className="spin" /> : <BluetoothConnected size={17} />}
-                    <span>{isBtPrinting ? 'Mencetak...' : 'Cetak Bluetooth'}</span>
+                    <span>{isBtPrinting ? (printDoubleCopies ? 'Mencetak Lembar 1 & 2...' : 'Mencetak...') : (printDoubleCopies ? 'Cetak Bluetooth (2x)' : 'Cetak Bluetooth')}</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => printReceipt(sale, options)}
-                    title="Cetak via Dialog Browser / Thermal USB"
+                    title={printDoubleCopies ? 'Cetak Struk Rangkap 2x via Dialog Browser / Thermal USB' : 'Cetak via Dialog Browser / Thermal USB'}
                     style={{
                       padding: '12px 14px',
                       border: '1px solid #d1d5db',
@@ -433,7 +438,7 @@ const ReceiptModal: React.FC<Props> = ({
                     cursor: 'pointer'
                   }}
                 >
-                  <Printer size={18} /> {printLabel}
+                  <Printer size={18} /> {printDoubleCopies ? `${printLabel} (2x)` : printLabel}
                 </button>
               )}
             </>

@@ -109,6 +109,22 @@ function App() {
     }
   }, [disconnectAlert]);
 
+  // Auto-reconnect printer kasir saat halaman POS dibuka / direfresh
+  useEffect(() => {
+    const autoRec = localStorage.getItem('pos_printer_autoreconnect') !== 'false';
+    const savedName = localStorage.getItem('pos_printer_device_name');
+    const savedId = localStorage.getItem('pos_printer_device_id');
+    if ((savedName || savedId) && autoRec && !isPrinterConnected) {
+      reconnectSavedDevice(true);
+      const timer = setTimeout(() => {
+        if (!usePrinterStore.getState().isConnected) {
+          reconnectSavedDevice(true);
+        }
+      }, 1600);
+      return () => clearTimeout(timer);
+    }
+  }, []);
+
   // Click-outside listener untuk menutup menu popover printer
   useEffect(() => {
     const handleOutsideClick = (e: MouseEvent) => {

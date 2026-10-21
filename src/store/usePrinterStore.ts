@@ -3,14 +3,16 @@ import { buildTestReceiptBytes, buildReceiptEscPos } from '../utils/escpos';
 import type { SalesTransaction } from '../types';
 import type { ReceiptOptions } from '../utils/receipt';
 
-// Layanan Bluetooth GATT standar yang digunakan printer thermal ESC/POS
+// Layanan Bluetooth GATT standar yang digunakan printer thermal ESC/POS (termasuk RPP02N, PT-210, MPT-II, POS-58, dll)
 const THERMAL_PRINTER_SERVICES = [
   '000018f0-0000-1000-8000-00805f9b34fb', // Standard Printer Service
   'e7810a71-73ae-499d-8c15-faa9aef0c3f2', // Pos-58 / VSC / Panda / MPT
   '49535343-fe7d-4ae5-8fa9-9fafd205e455', // ISSC Bluetooth Serial (Micro-printer)
-  '0000ff00-0000-1000-8000-00805f9b34fb', // Custom vendor BLE
+  '0000ff00-0000-1000-8000-00805f9b34fb', // Custom vendor BLE / RPP02N / Xprinter
   '0000fee7-0000-1000-8000-00805f9b34fb', // Jerry / Bluetooth POS
   '0000ffe0-0000-1000-8000-00805f9b34fb', // HM-10 / CC2541 Serial
+  '0000fff0-0000-1000-8000-00805f9b34fb', // Generic Thermal POS BLE
+  '0000ae00-0000-1000-8000-00805f9b34fb', // Common 58mm Mobile POS
 ];
 
 interface PrinterState {
@@ -23,6 +25,7 @@ interface PrinterState {
   autoCut: boolean;
   autoPrintOnCheckout: boolean;
   autoReconnect: boolean;
+  printDoubleCopies: boolean;
   lastPrintedAt: string | null;
   error: string | null;
   disconnectAlert: string | null;
@@ -38,6 +41,7 @@ interface PrinterState {
   setAutoCut: (val: boolean) => void;
   setAutoPrintOnCheckout: (val: boolean) => void;
   setAutoReconnect: (val: boolean) => void;
+  setPrintDoubleCopies: (val: boolean) => void;
   clearError: () => void;
   clearDisconnectAlert: () => void;
 }
@@ -45,46 +49,79 @@ interface PrinterState {
 // Global reference untuk Web Bluetooth handle
 let activeDevice: any = null;
 let activeCharacteristic: any = null;
+let isReconnectingGatt = false;
 
 /**
  * Helper untuk menyambungkan GATT server dan mencari karakteristik tulis ESC/POS
  */
 async function connectDeviceGatt(device: any, onDisconnect: () => void): Promise<{ device: any; characteristic: any }> {
-  // Listener saat koneksi putus
-  device.addEventListener('gattserverdisconnected', onDisconnect);
-
   let server = device.gatt;
-  if (!server.connected) {
-    server = await device.gatt.connect();
+  if (!server) {
+    throw new Error('GATT server tidak tersedia pada perangkat Bluetooth ini.');
   }
+
+  // Jika koneksi sebelumnya masih menggantung (stale dari sebelum refresh), putuskan dulu
+  if (server.connected) {
+    try {
+      server.disconnect();
+      await new Promise(r => setTimeout(r, 150));
+    } catch (e) {}
+  }
+
+  // Sambungkan GATT server dengan toleransi retry saat peripheral masih mereset sesi
+  let connectAttempts = 0;
+  while (!server.connected && connectAttempts < 3) {
+    try {
+      connectAttempts++;
+      server = await device.gatt.connect();
+      break;
+    } catch (err) {
+      if (connectAttempts >= 3) throw err;
+      await new Promise(r => setTimeout(r, 350));
+    }
+  }
+
+  // Pasang listener saat koneksi terputus
+  try {
+    device.removeEventListener('gattserverdisconnected', onDisconnect);
+  } catch (e) {}
+  device.addEventListener('gattserverdisconnected', onDisconnect);
 
   let writeChar: any = null;
 
-  // 1. Coba getPrimaryServices
+  // 1. Coba getPrimaryServices umum (jika diizinkan oleh browser)
   try {
     const services = await server.getPrimaryServices();
-    for (const service of services) {
-      try {
-        const characteristics = await service.getCharacteristics();
-        for (const c of characteristics) {
-          if (c.properties.write || c.properties.writeWithoutResponse) {
-            writeChar = c;
-            break;
+    if (services && services.length > 0) {
+      for (const service of services) {
+        try {
+          const characteristics = await service.getCharacteristics();
+          for (const c of characteristics) {
+            if (c.properties.write || c.properties.writeWithoutResponse) {
+              writeChar = c;
+              break;
+            }
           }
-        }
-      } catch (e) {}
-      if (writeChar) break;
+        } catch (e) {}
+        if (writeChar) break;
+      }
     }
   } catch (e) {
-    // 2. Fallback per UUID
+    // getPrimaryServices tanpa filter UUID bisa memicu exception di Chrome, lanjut ke fallback per UUID
+  }
+
+  // 2. Fallback: periksa setiap UUID layanan thermal printer standar secara spesifik
+  if (!writeChar) {
     for (const uuid of THERMAL_PRINTER_SERVICES) {
       try {
         const service = await server.getPrimaryService(uuid);
-        const chars = await service.getCharacteristics();
-        for (const c of chars) {
-          if (c.properties.write || c.properties.writeWithoutResponse) {
-            writeChar = c;
-            break;
+        if (service) {
+          const characteristics = await service.getCharacteristics();
+          for (const c of characteristics) {
+            if (c.properties.write || c.properties.writeWithoutResponse) {
+              writeChar = c;
+              break;
+            }
           }
         }
       } catch (err) {}
@@ -105,6 +142,7 @@ export const usePrinterStore = create<PrinterState>((set, get) => {
   const savedAutoCut = localStorage.getItem('pos_printer_autocut') === 'true';
   const savedAutoPrint = localStorage.getItem('pos_printer_autoprint') !== 'false'; // default true
   const savedAutoReconnect = localStorage.getItem('pos_printer_autoreconnect') !== 'false'; // default true
+  const savedDoubleCopies = localStorage.getItem('pos_printer_double_copies') === 'true';
   const savedDeviceName = localStorage.getItem('pos_printer_device_name') || null;
   const savedDeviceId = localStorage.getItem('pos_printer_device_id') || null;
 
@@ -120,6 +158,7 @@ export const usePrinterStore = create<PrinterState>((set, get) => {
     autoCut: savedAutoCut,
     autoPrintOnCheckout: savedAutoPrint,
     autoReconnect: savedAutoReconnect,
+    printDoubleCopies: savedDoubleCopies,
     lastPrintedAt: null,
     error: null,
     disconnectAlert: null,
@@ -147,6 +186,11 @@ export const usePrinterStore = create<PrinterState>((set, get) => {
       set({ autoReconnect: val });
     },
 
+    setPrintDoubleCopies: (val) => {
+      localStorage.setItem('pos_printer_double_copies', String(val));
+      set({ printDoubleCopies: val });
+    },
+
     /**
      * Menyambungkan kembali ke perangkat printer yang sudah pernah terdaftar
      * Tanpa perlu memunculkan dialog pencarian perangkat baru jika sudah diizinkan oleh browser
@@ -166,30 +210,61 @@ export const usePrinterStore = create<PrinterState>((set, get) => {
         return false;
       }
 
+      // Jika printer sudah terhubung aktif, jangan sambung ulang
+      if (activeDevice?.gatt?.connected && activeCharacteristic) {
+        set({ isConnected: true, isConnecting: false });
+        return true;
+      }
+
+      // Hindari proses reconnect bersamaan
+      if (isReconnectingGatt) {
+        return false;
+      }
+
+      isReconnectingGatt = true;
       set({ isConnecting: true, error: null });
 
       try {
         let targetDevice: any = null;
 
-        // 1. Coba ambil dari getDevices() (API Web Bluetooth untuk perangkat yang sudah dipasangkan)
+        // 1. Ambil daftar perangkat yang telah diizinkan oleh pengguna sebelumnya
         if (nav.bluetooth.getDevices) {
           try {
             const devices = await nav.bluetooth.getDevices();
             if (devices && devices.length > 0) {
-              targetDevice = devices.find((d: any) => (savedId && d.id === savedId) || (savedName && d.name === savedName)) || devices[0];
+              targetDevice = devices.find((d: any) => 
+                (savedId && d.id === savedId) ||
+                (savedName && d.name && d.name.trim().toLowerCase() === savedName.trim().toLowerCase()) ||
+                (savedName && d.name && d.name.toLowerCase().includes(savedName.toLowerCase()))
+              ) || devices[0];
             }
           } catch (e) {
-            console.warn('getDevices not supported or failed:', e);
+            console.warn('getDevices failed or restricted:', e);
           }
         }
 
-        // 2. Jika tidak ditemukan lewat getDevices() dan bukan silent, fallback ke scan manual
+        // 2. Jika tidak ditemukan lewat getDevices()
         if (!targetDevice) {
+          isReconnectingGatt = false;
           if (silent) {
             set({ isConnecting: false });
             return false;
           }
           return await get().connect();
+        }
+
+        // Aktifkan watchAdvertisements jika browser mendukung, agar bila printer baru dinyalakan otomatis terdeteksi
+        if (targetDevice.watchAdvertisements && !targetDevice._hasAdvListener) {
+          try {
+            targetDevice._hasAdvListener = true;
+            targetDevice.addEventListener('advertisementreceived', async () => {
+              const state = get();
+              if (!state.isConnected && !state.isConnecting) {
+                state.reconnectSavedDevice(true);
+              }
+            });
+            await targetDevice.watchAdvertisements();
+          } catch (e) {}
         }
 
         const onDisconnect = () => {
@@ -206,13 +281,15 @@ export const usePrinterStore = create<PrinterState>((set, get) => {
         activeDevice = device;
         activeCharacteristic = characteristic;
 
-        localStorage.setItem('pos_printer_device_name', device.name || savedName || 'Printer Bluetooth');
+        const effectiveName = device.name || savedName || 'RPP02N';
+        localStorage.setItem('pos_printer_device_name', effectiveName);
         localStorage.setItem('pos_printer_device_id', device.id);
 
+        isReconnectingGatt = false;
         set({
           isConnected: true,
           isConnecting: false,
-          deviceName: device.name || savedName || 'Printer Bluetooth',
+          deviceName: effectiveName,
           deviceId: device.id,
           error: null,
           disconnectAlert: null
@@ -220,15 +297,14 @@ export const usePrinterStore = create<PrinterState>((set, get) => {
 
         return true;
       } catch (err: any) {
-        console.warn('Reconnect error:', err);
+        console.warn('Auto-reconnect attempt failed:', err);
+        isReconnectingGatt = false;
+        set({ isConnecting: false });
         if (!silent) {
           set({
             isConnected: false,
-            isConnecting: false,
             error: `Gagal menyambungkan ke ${savedName || 'printer'}. Pastikan printer menyala dan berada dalam jangkauan.`
           });
-        } else {
-          set({ isConnecting: false });
         }
         return false;
       }
@@ -380,32 +456,70 @@ export const usePrinterStore = create<PrinterState>((set, get) => {
         if (!ok) return false;
       }
 
-      const bytes = await buildReceiptEscPos(sale, options, {
-        paperWidth: get().paperWidth,
-        autoCut: get().autoCut
-      });
+      const isDouble = state.printDoubleCopies;
+      const copies = isDouble ? 2 : 1;
+      let success = true;
 
-      return await get().sendBytes(bytes);
+      for (let c = 0; c < copies; c++) {
+        const copyLabel = isDouble ? (c === 0 ? 'LEMBAR PELANGGAN' : 'LEMBAR TOKO / ARSIP') : undefined;
+        const bytes = await buildReceiptEscPos(sale, options, {
+          paperWidth: state.paperWidth,
+          autoCut: state.autoCut,
+          copyLabel
+        });
+
+        const ok = await state.sendBytes(bytes);
+        if (!ok) {
+          success = false;
+          break;
+        }
+
+        if (c < copies - 1) {
+          // Jeda agar buffer printer selesai mencetak dan memotong lembar pertama
+          await new Promise(resolve => setTimeout(resolve, 800));
+        }
+      }
+
+      return success;
     }
   };
 });
 
 // Auto Reconnect saat halaman pertama kali dibuka / direfresh
 if (typeof window !== 'undefined') {
-  setTimeout(() => {
+  const triggerAutoReconnect = async () => {
     const savedId = localStorage.getItem('pos_printer_device_id');
+    const savedName = localStorage.getItem('pos_printer_device_name');
     const autoRec = localStorage.getItem('pos_printer_autoreconnect') !== 'false';
-    if (savedId && autoRec) {
-      usePrinterStore.getState().reconnectSavedDevice(true);
+    if ((savedId || savedName) && autoRec) {
+      const state = usePrinterStore.getState();
+      if (!state.isConnected && !state.isConnecting) {
+        await state.reconnectSavedDevice(true);
+      }
     }
-  }, 600);
+  };
 
-  // Auto Reconnect saat jendela browser aktif kembali
+  // 1. Percobaan awal setelah render (500ms)
+  setTimeout(triggerAutoReconnect, 500);
+
+  // 2. Percobaan kedua (1800ms) — saat printer BLE telah selesai mereset sesi lama dari sebelum refresh
+  setTimeout(triggerAutoReconnect, 1800);
+
+  // 3. Percobaan ketiga (3500ms) — memastikan koneksi terhubung jika inisialisasi Bluetooth OS sedikit lambat
+  setTimeout(triggerAutoReconnect, 3500);
+
+  // 4. Auto Reconnect saat jendela browser difokuskan kembali (tab aktif lagi)
   window.addEventListener('focus', () => {
-    const state = usePrinterStore.getState();
-    const autoRec = localStorage.getItem('pos_printer_autoreconnect') !== 'false';
-    if (!state.isConnected && state.deviceId && autoRec && !state.isConnecting) {
-      state.reconnectSavedDevice(true);
-    }
+    setTimeout(triggerAutoReconnect, 300);
   });
+
+  // 5. User Gesture fallback: Jika kebijakan browser Chrome membatasi koneksi GATT di latar belakang
+  // sebelum adanya interaksi pertama pengguna, klik/sentuh/tombol PERTAMA kasir di layar akan langsung
+  // menyambungkan ke printer secara instan tanpa dialog scan ulang!
+  const onFirstUserGesture = () => {
+    triggerAutoReconnect();
+  };
+  window.addEventListener('pointerdown', onFirstUserGesture, { once: true, passive: true });
+  window.addEventListener('keydown', onFirstUserGesture, { once: true, passive: true });
+  window.addEventListener('touchstart', onFirstUserGesture, { once: true, passive: true });
 }

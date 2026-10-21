@@ -6,6 +6,7 @@
 import type { SalesTransaction } from '../types';
 import type { ReceiptOptions } from './receipt';
 import { useSettingsStore, DEFAULT_INVOICE_FOOTER, defaultInvoiceHeader } from '../store/useSettingsStore';
+import { useInventoryStore } from '../store/useInventoryStore';
 
 // ESC/POS Command Constants
 const ESC = 0x1B;
@@ -15,6 +16,7 @@ const LF = 0x0A;
 export interface EscPosOptions {
   paperWidth?: '58mm' | '80mm';
   autoCut?: boolean;
+  copyLabel?: string;
 }
 
 export class EscPosBuilder {
@@ -311,6 +313,11 @@ export const buildReceiptEscPos = async (
       builder.textLine(headerLines[i]);
     }
   }
+  if (printerOpts.copyLabel) {
+    builder.textLine(`[ ${printerOpts.copyLabel} ]`);
+  } else {
+    builder.textLine('STRUK PEMBELIAN');
+  }
   builder.bold(false);
 
   // 2. Info Transaksi (Nota, Kasir, Tanggal)
@@ -332,19 +339,49 @@ export const buildReceiptEscPos = async (
 
   // 3. Daftar Item
   builder.alignLeft();
-  for (const item of sale.items) {
-    const itemName = item.variantName ? `${item.name} (${item.variantName})` : item.name;
-    builder.bold(true).textLine(itemName).bold(false);
+  const products = useInventoryStore.getState().products;
+  for (let idx = 0; idx < sale.items.length; idx++) {
+    const item = sale.items[idx];
+    const p = products.find(x => x.id === item.productId);
+    const unit = item.tierUnit || p?.unit || 'Pcs';
+
+    // Tier badge keterangan: [DUS], [SLOP], [GROSIR], [ECER], atau satuan khusus
+    let tierBadge = '';
+    if (item.tierType === 'BOX') {
+      tierBadge = item.tierMultiplier ? ` [DUS (${item.tierMultiplier} ${p?.unit || 'pcs'})]` : ' [DUS]';
+    } else if (item.tierType === 'MID') {
+      const mUnit = (item.tierUnit || 'SLOP').toUpperCase();
+      tierBadge = item.tierMultiplier ? ` [${mUnit} (${item.tierMultiplier} ${p?.unit || 'pcs'})]` : ` [${mUnit}]`;
+    } else if (item.tierType === 'WHOLESALE') {
+      tierBadge = ' [GROSIR]';
+    } else if (item.tierType === 'RETAIL') {
+      tierBadge = ' [ECER]';
+    } else if (item.tierUnit && p?.unit && item.tierUnit.toLowerCase() !== p.unit.toLowerCase()) {
+      tierBadge = ` [${item.tierUnit.toUpperCase()}]`;
+    }
+
+    const itemTitle = `${idx + 1}. ${item.name}${tierBadge}`;
+    builder.bold(true).textLine(itemTitle).bold(false);
+
+    if (item.variantName && !item.variantName.startsWith('[')) {
+      builder.textLine(`   Varian: ${item.variantName}`);
+    }
+
+    if (p?.sku) {
+      builder.textLine(`   SKU: ${p.sku}`);
+    }
+
+    const isCustom = Boolean(item.isCustomPrice || (item.originalPrice && item.originalPrice !== item.price));
+    if (isCustom) {
+      const customLabel = item.customPriceNote ? `*${item.customPriceNote}` : '*Harga Khusus';
+      const origNote = (item.originalPrice && item.originalPrice !== item.price) ? ` (Normal: ${fmtNum(item.originalPrice)})` : '';
+      builder.textLine(`   ${customLabel}${origNote}`);
+    }
 
     const unitPrice = item.price;
-    const qtyStr = `${item.qty} x ${fmtNum(unitPrice)}`;
+    const qtyStr = `${item.qty} ${unit} x ${fmtNum(unitPrice)}`;
     const subtotalStr = fmtNum(item.subtotal);
-    builder.twoColumns(`  ${qtyStr}`, subtotalStr);
-
-    if (item.isCustomPrice) {
-      const note = item.customPriceNote ? `*${item.customPriceNote}` : '*Harga Khusus Manual';
-      builder.textLine(`  ${note}`);
-    }
+    builder.twoColumns(`   ${qtyStr}`, subtotalStr);
   }
 
   // 4. Perhitungan Finansial

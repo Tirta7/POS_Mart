@@ -2,6 +2,7 @@ import JsBarcode from 'jsbarcode';
 import type { SalesTransaction } from '../types';
 import { useInventoryStore } from '../store/useInventoryStore';
 import { useSettingsStore, DEFAULT_INVOICE_FOOTER, defaultInvoiceHeader } from '../store/useSettingsStore';
+import { usePrinterStore } from '../store/usePrinterStore';
 
 export interface ReceiptOptions {
   storeName: string;
@@ -9,6 +10,7 @@ export interface ReceiptOptions {
   orderType?: string;
   taxEnabled?: boolean;
   taxRate?: number;
+  doubleCopies?: boolean;
 }
 
 const esc = (s: string) =>
@@ -42,8 +44,8 @@ const barcodeSvg = (code: string): string => {
   }
 };
 
-/** Bangun dokumen HTML struk (lebar kertas thermal 80mm). Dipakai untuk pratinjau & cetak. */
-export const buildReceiptHtml = (sale: SalesTransaction, opts: ReceiptOptions): string => {
+/** Membangun konten tunggal satu lembar struk */
+export const buildReceiptContent = (sale: SalesTransaction, opts: ReceiptOptions, copyLabel?: string): string => {
   const products = useInventoryStore.getState().products;
   const d = new Date(sale.date);
   const tgl = d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -74,10 +76,25 @@ export const buildReceiptHtml = (sale: SalesTransaction, opts: ReceiptOptions): 
     .map((i, idx) => {
       const p = products.find(x => x.id === i.productId);
       const unit = i.tierUnit || p?.unit || 'Pcs';
-      const tierBadge = i.tierType === 'BOX' ? ' [DUS]' : (i.tierType === 'MID' ? ` [${(i.tierUnit || 'MID').toUpperCase()}]` : (i.tierType === 'WHOLESALE' ? ' [GROSIR]' : ''));
+
+      // Label kemasan / grosir / ecer
+      let tierBadge = '';
+      if (i.tierType === 'BOX') {
+        tierBadge = i.tierMultiplier ? ` [DUS (${i.tierMultiplier} ${p?.unit || 'pcs'})]` : ' [DUS]';
+      } else if (i.tierType === 'MID') {
+        const mUnit = (i.tierUnit || 'SLOP').toUpperCase();
+        tierBadge = i.tierMultiplier ? ` [${mUnit} (${i.tierMultiplier} ${p?.unit || 'pcs'})]` : ` [${mUnit}]`;
+      } else if (i.tierType === 'WHOLESALE') {
+        tierBadge = ' [GROSIR]';
+      } else if (i.tierType === 'RETAIL') {
+        tierBadge = ' [ECER]';
+      } else if (i.tierUnit && p?.unit && i.tierUnit.toLowerCase() !== p.unit.toLowerCase()) {
+        tierBadge = ` [${i.tierUnit.toUpperCase()}]`;
+      }
+
       const isCustom = Boolean(i.isCustomPrice || (i.originalPrice && i.originalPrice !== i.price));
       const customLabel = i.customPriceNote ? `* Special: ${esc(i.customPriceNote)}` : '* Special Price';
-      const origNote = (isCustom && i.originalPrice) ? ` (Normal: ${idr(i.originalPrice)})` : '';
+      const origNote = (isCustom && i.originalPrice && i.originalPrice !== i.price) ? ` (Normal: ${idr(i.originalPrice)})` : '';
       return `
       <div class="item">
         <div class="item-name"><span class="item-num">${idx + 1}.</span> ${esc(i.name)}${tierBadge}</div>
@@ -92,6 +109,88 @@ export const buildReceiptHtml = (sale: SalesTransaction, opts: ReceiptOptions): 
     })
     .join('');
 
+  return `
+  ${logoHtml}
+  <div class="center">
+    <div class="store-name">${esc(storeTitle)}</div>
+    ${storeSubtitleLines.map(l => `<div class="store-sub">${esc(l)}</div>`).join('')}
+    <div><span class="receipt-badge">${copyLabel ? `STRUK PEMBELIAN [${esc(copyLabel)}]` : 'STRUK PEMBELIAN'}</span></div>
+  </div>
+
+  <hr class="dash" />
+
+  <div class="meta-grid">
+    <div class="meta-cell"><span class="meta-k">No. Nota</span><span class="meta-v">${esc(noNota)}</span></div>
+    <div class="meta-cell"><span class="meta-k">Tgl</span><span class="meta-v">${tgl}</span></div>
+    <div class="meta-cell"><span class="meta-k">Kasir</span><span class="meta-v">${esc(sale.employeeName || '-')}</span></div>
+    <div class="meta-cell"><span class="meta-k">Jam</span><span class="meta-v">${jam}</span></div>
+    <div class="meta-cell"><span class="meta-k">Pelanggan</span><span class="meta-v">${esc(customer)}</span></div>
+    <div class="meta-cell"><span class="meta-k">Tipe</span><span class="meta-v">${esc(opts.orderType ? (ORDER_LABEL[opts.orderType] || opts.orderType) : 'Reguler')}</span></div>
+  </div>
+
+  <hr class="dash" />
+  <div class="items-head"><span>ITEM</span><span>JUMLAH (Rp)</span></div>
+  <hr class="dash" />
+
+  ${itemsHtml}
+
+  <hr class="dash" />
+
+  <div class="sum-row"><span>Total Item</span><span style="font-weight:700;">${sale.items.length} jenis / ${num(totalQty)} qty</span></div>
+  <div class="sum-row"><span>Subtotal</span><span>${rp(sale.subtotal)}</span></div>
+  ${sale.tax > 0 ? `<div class="sum-row"><span>PPN (${opts.taxEnabled && opts.taxRate ? `${opts.taxRate}%` : '11%'})</span><span>${rp(sale.tax)}</span></div>` : ''}
+  ${sale.rounding ? `<div class="sum-row"><span>Pembulatan</span><span>${rp(sale.rounding)}</span></div>` : ''}
+
+  <div class="grand-total-box">
+    <span class="gt-label">TOTAL</span>
+    <span class="gt-val">${rp(sale.total)}</span>
+  </div>
+
+  <div class="sum-row"><span>Metode Bayar</span><span style="font-weight:700;">${esc(sale.paymentMethod || 'TUNAI')}</span></div>
+  ${sale.paymentMethod === 'TEMPO' || (sale.paymentStatus && sale.paymentStatus !== 'PAID') ? `
+  <div class="sum-row"><span>Status Pembayaran</span><span style="font-weight:700;color:${sale.paymentStatus === 'PAID' ? '#16a34a' : '#d97706'};">${sale.paymentStatus === 'PAID' ? 'LUNAS' : sale.paymentStatus === 'PARTIAL' ? 'CICILAN (SEBAGIAN)' : 'TEMPO (BELUM DIBAYAR)'}</span></div>
+  <div class="sum-row"><span>Total Terbayar (DP)</span><span style="font-weight:700;">${rp(sale.paidAmount || 0)}</span></div>
+  <div class="sum-row bold" style="font-size:11.5px;color:#dc2626;"><span>Sisa Piutang / Tagihan</span><span style="font-weight:900;">${rp(sale.remainingAmount != null ? sale.remainingAmount : (sale.total - (sale.paidAmount || 0)))}</span></div>
+  ${sale.dueDate ? `<div class="sum-row"><span>Jatuh Tempo</span><span style="font-weight:700;">${new Date(sale.dueDate).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}</span></div>` : ''}
+  ` : `
+  <div class="sum-row"><span>${isCash ? 'Tunai Diterima' : 'Dibayar'}</span><span>${rp(isCash ? (sale.tendered || sale.total) : sale.total)}</span></div>
+  ${isCash ? `<div class="sum-row bold" style="font-size:11.5px;margin-top:1px;"><span>Kembalian</span><span style="font-weight:900;">${rp(sale.change || 0)}</span></div>` : ''}
+  `}
+  ${sale.status === 'VOID' ? `<div style="text-align:center;padding:4px;margin-top:6px;border:1.5px solid #dc2626;color:#dc2626;font-weight:900;font-size:12px;letter-spacing:1.5px;">NOTA DIBATALKAN (VOID)</div>` : ''}
+
+  <hr class="dash" />
+
+  <div class="barcode-wrap">${barcodeSvg(sale.id)}</div>
+  <div class="center nota-code">${esc(sale.id)}</div>
+
+  <hr class="dash" />
+
+  <div class="center footer-msg">
+    ${footerLines.map(l => `<div>${esc(l)}</div>`).join('')}
+    <div class="print-time">Dicetak: ${esc(printedAt)}</div>
+  </div>`;
+};
+
+/** Bangun dokumen HTML struk (lebar kertas thermal 80mm). Dipakai untuk pratinjau & cetak. */
+export const buildReceiptHtml = (sale: SalesTransaction, opts: ReceiptOptions, copyLabel?: string): string => {
+  const isDouble = opts.doubleCopies ?? usePrinterStore.getState().printDoubleCopies;
+
+  const contentHtml = isDouble
+    ? `
+      <div class="receipt-sheet">
+        ${buildReceiptContent(sale, opts, 'LEMBAR PELANGGAN')}
+      </div>
+      <div class="receipt-page-break"></div>
+      <div class="receipt-sheet">
+        ${buildReceiptContent(sale, opts, 'LEMBAR TOKO / ARSIP')}
+      </div>
+    `
+    : `
+      <div class="receipt-sheet">
+        ${buildReceiptContent(sale, opts, copyLabel)}
+      </div>
+    `;
+
   return `<!doctype html>
 <html><head><meta charset="utf-8"><title>Struk ${esc(sale.id)}</title>
 <style>
@@ -100,12 +199,43 @@ export const buildReceiptHtml = (sale: SalesTransaction, opts: ReceiptOptions): 
   html, body { margin: 0; padding: 0; background: #fff; }
   body {
     width: 80mm;
-    padding: 4mm 4mm 6mm;
+    margin: 0 auto;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     line-height: 1.35;
     color: #000;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
+  }
+  .receipt-sheet {
+    padding: 4mm 4mm 6mm;
+  }
+  .receipt-page-break {
+    page-break-after: always;
+    break-after: page;
+    height: 0;
+    margin: 0;
+    padding: 0;
+  }
+  @media screen {
+    .receipt-page-break {
+      border-top: 2px dashed #94a3b8;
+      margin: 18px 0;
+      position: relative;
+      text-align: center;
+      display: block;
+      height: 14px;
+    }
+    .receipt-page-break::after {
+      content: 'POTONG DISINI / LEMBAR KEDUA';
+      background: #f1f5f9;
+      color: #64748b;
+      font-size: 8.5px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 4px;
+      position: relative;
+      top: -10px;
+    }
   }
   .center { text-align: center; }
   img.receipt-logo {
@@ -277,65 +407,7 @@ export const buildReceiptHtml = (sale: SalesTransaction, opts: ReceiptOptions): 
   }
 </style></head>
 <body>
-  ${logoHtml}
-  <div class="center">
-    <div class="store-name">${esc(storeTitle)}</div>
-    ${storeSubtitleLines.map(l => `<div class="store-sub">${esc(l)}</div>`).join('')}
-    <div><span class="receipt-badge">STRUK PEMBELIAN</span></div>
-  </div>
-
-  <hr class="dash" />
-
-  <div class="meta-grid">
-    <div class="meta-cell"><span class="meta-k">No. Nota</span><span class="meta-v">${esc(noNota)}</span></div>
-    <div class="meta-cell"><span class="meta-k">Tgl</span><span class="meta-v">${tgl}</span></div>
-    <div class="meta-cell"><span class="meta-k">Kasir</span><span class="meta-v">${esc(sale.employeeName || '-')}</span></div>
-    <div class="meta-cell"><span class="meta-k">Jam</span><span class="meta-v">${jam}</span></div>
-    <div class="meta-cell"><span class="meta-k">Pelanggan</span><span class="meta-v">${esc(customer)}</span></div>
-    <div class="meta-cell"><span class="meta-k">Tipe</span><span class="meta-v">${esc(opts.orderType ? (ORDER_LABEL[opts.orderType] || opts.orderType) : 'Reguler')}</span></div>
-  </div>
-
-  <hr class="dash" />
-  <div class="items-head"><span>ITEM</span><span>JUMLAH (Rp)</span></div>
-  <hr class="dash" />
-
-  ${itemsHtml}
-
-  <hr class="dash" />
-
-  <div class="sum-row"><span>Total Item</span><span style="font-weight:700;">${sale.items.length} jenis / ${num(totalQty)} qty</span></div>
-  <div class="sum-row"><span>Subtotal</span><span>${rp(sale.subtotal)}</span></div>
-  ${sale.tax > 0 ? `<div class="sum-row"><span>PPN (${opts.taxEnabled && opts.taxRate ? `${opts.taxRate}%` : '11%'})</span><span>${rp(sale.tax)}</span></div>` : ''}
-  ${sale.rounding ? `<div class="sum-row"><span>Pembulatan</span><span>${rp(sale.rounding)}</span></div>` : ''}
-
-  <div class="grand-total-box">
-    <span class="gt-label">TOTAL</span>
-    <span class="gt-val">${rp(sale.total)}</span>
-  </div>
-
-  <div class="sum-row"><span>Metode Bayar</span><span style="font-weight:700;">${esc(sale.paymentMethod || 'TUNAI')}</span></div>
-  ${sale.paymentMethod === 'TEMPO' || (sale.paymentStatus && sale.paymentStatus !== 'PAID') ? `
-  <div class="sum-row"><span>Status Pembayaran</span><span style="font-weight:700;color:${sale.paymentStatus === 'PAID' ? '#16a34a' : '#d97706'};">${sale.paymentStatus === 'PAID' ? 'LUNAS' : sale.paymentStatus === 'PARTIAL' ? 'CICILAN (SEBAGIAN)' : 'TEMPO (BELUM DIBAYAR)'}</span></div>
-  <div class="sum-row"><span>Total Terbayar (DP)</span><span style="font-weight:700;">${rp(sale.paidAmount || 0)}</span></div>
-  <div class="sum-row bold" style="font-size:11.5px;color:#dc2626;"><span>Sisa Piutang / Tagihan</span><span style="font-weight:900;">${rp(sale.remainingAmount != null ? sale.remainingAmount : (sale.total - (sale.paidAmount || 0)))}</span></div>
-  ${sale.dueDate ? `<div class="sum-row"><span>Jatuh Tempo</span><span style="font-weight:700;">${new Date(sale.dueDate).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}</span></div>` : ''}
-  ` : `
-  <div class="sum-row"><span>${isCash ? 'Tunai Diterima' : 'Dibayar'}</span><span>${rp(isCash ? (sale.tendered || sale.total) : sale.total)}</span></div>
-  ${isCash ? `<div class="sum-row bold" style="font-size:11.5px;margin-top:1px;"><span>Kembalian</span><span style="font-weight:900;">${rp(sale.change || 0)}</span></div>` : ''}
-  `}
-  ${sale.status === 'VOID' ? `<div style="text-align:center;padding:4px;margin-top:6px;border:1.5px solid #dc2626;color:#dc2626;font-weight:900;font-size:12px;letter-spacing:1.5px;">NOTA DIBATALKAN (VOID)</div>` : ''}
-
-  <hr class="dash" />
-
-  <div class="barcode-wrap">${barcodeSvg(sale.id)}</div>
-  <div class="center nota-code">${esc(sale.id)}</div>
-
-  <hr class="dash" />
-
-  <div class="center footer-msg">
-    ${footerLines.map(l => `<div>${esc(l)}</div>`).join('')}
-    <div class="print-time">Dicetak: ${esc(printedAt)}</div>
-  </div>
+  ${contentHtml}
 </body></html>`;
 };
 
