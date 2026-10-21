@@ -130,6 +130,41 @@ const StockManagement: React.FC = () => {
   // Cetak label barcode (stiker thermal 40x30mm)
   const [labelProduct, setLabelProduct] = useState<any>(null);
   const [labelCopies, setLabelCopies] = useState(1);
+  const [labelTier, setLabelTier] = useState<'retail' | 'box' | 'mid'>('retail');
+
+  // Helper cetak label barcode langsung dari formulir Drawer Edit / Tambah
+  const handlePrintFormBarcode = (tier: 'retail' | 'box') => {
+    const targetBarcode = tier === 'retail' ? retailBarcode.trim() : (boxBarcode.trim() || productId.trim());
+    if (!targetBarcode) {
+      alert(tier === 'retail' ? 'Barcode Eceran / Bungkus Satuan belum diisi.' : 'Barcode Dus / Karton belum diisi.');
+      return;
+    }
+    const finalBoxCap = Math.max(1, Number(boxCapacity) || 1);
+    const finalSellingPrice = Number(sellingPrice) || 0;
+    const finalBoxPrice = Number(boxPrice) > 0 ? Number(boxPrice) : (finalSellingPrice * finalBoxCap);
+
+    setLabelTier(tier);
+    setLabelCopies(1);
+    setLabelProduct({
+      id: editingId || targetBarcode,
+      barcode: boxBarcode.trim() || productId.trim() || targetBarcode,
+      sku: sku.trim(),
+      name: name.trim() || 'Produk Baru',
+      category,
+      unit: unit || 'Pcs',
+      purchasePrice: Number(purchasePrice) || 0,
+      sellingPrice: finalSellingPrice,
+      stock: (Number(boxQty) || 0) * finalBoxCap,
+      boxBarcode: boxBarcode.trim() || productId.trim(),
+      boxCapacity: finalBoxCap,
+      boxPrice: finalBoxPrice,
+      retailBarcode: retailBarcode.trim(),
+      midUnitName: hasMidTier && midUnitName.trim() ? midUnitName.trim() : undefined,
+      midBarcode: hasMidTier && midBarcode.trim() ? midBarcode.trim() : undefined,
+      midCapacity: hasMidTier ? Math.max(1, Number(midCapacity) || 1) : 0,
+      midPrice: hasMidTier ? (Number(midPrice) || 0) : 0,
+    });
+  };
   
   // Category Modal State
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
@@ -1478,6 +1513,14 @@ const StockManagement: React.FC = () => {
                                     >
                                       {copiedBarcode === dusBarcode ? <Check size={9} /> : <Copy size={9} />}
                                     </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => { setLabelTier('box'); setLabelCopies(1); setLabelProduct(p); }}
+                                      title="Cetak Barcode Dus / Karton"
+                                      style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', display: 'inline-flex', color: '#b45309', marginLeft: '1px' }}
+                                    >
+                                      <Printer size={9} />
+                                    </button>
                                   </div>
                                 )}
 
@@ -1509,16 +1552,24 @@ const StockManagement: React.FC = () => {
                                     >
                                       {copiedBarcode === midBarcode ? <Check size={9} /> : <Copy size={9} />}
                                     </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => { setLabelTier('mid'); setLabelCopies(1); setLabelProduct(p); }}
+                                      title={`Cetak Barcode ${midUnit}`}
+                                      style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', display: 'inline-flex', color: '#0284c7', marginLeft: '1px' }}
+                                    >
+                                      <Printer size={9} />
+                                    </button>
                                   </div>
                                 )}
 
                                 {retailBarcode && retailBarcode !== dusBarcode && (
                                   <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', background: '#f8fafc', border: '1px solid #e2e8f0', padding: '1px 5px', borderRadius: '4px' }}>
-                                    <span style={{ fontSize: '8.5px', fontWeight: 800, color: '#475569', background: '#e2e8f0', padding: '0 2px', borderRadius: '2px' }}>
+                                    <span style={{ fontSize: '8.5px', fontWeight: 800, color: '#6d28d9', background: '#ede9fe', padding: '0 2px', borderRadius: '2px' }}>
                                       ECER
                                     </span>
                                     <span
-                                      title={`Barcode Eceran: ${retailBarcode}`}
+                                      title={`Barcode Eceran / Satuan: ${retailBarcode}`}
                                       style={{
                                         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
                                         fontSize: '10px',
@@ -1539,6 +1590,14 @@ const StockManagement: React.FC = () => {
                                       style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', display: 'inline-flex', color: copiedBarcode === retailBarcode ? '#10b981' : '#94a3b8' }}
                                     >
                                       {copiedBarcode === retailBarcode ? <Check size={9} /> : <Copy size={9} />}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => { setLabelTier('retail'); setLabelCopies(1); setLabelProduct(p); }}
+                                      title="Cetak Barcode Satuan / Eceran"
+                                      style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', display: 'inline-flex', color: '#7c3aed', marginLeft: '1px' }}
+                                    >
+                                      <Printer size={9} />
                                     </button>
                                   </div>
                                 )}
@@ -1752,7 +1811,7 @@ const StockManagement: React.FC = () => {
                                   <button
                                     type="button"
                                     title="Cetak Label Barcode"
-                                    onClick={() => { setLabelCopies(Math.max(1, Math.ceil(Number(p.stock)))); setLabelProduct(p); }}
+                                    onClick={() => { setLabelTier('retail'); setLabelCopies(Math.max(1, Math.ceil(Number(p.stock)))); setLabelProduct(p); }}
                                     style={{
                                       width: '28px', height: '28px', borderRadius: '6px', border: '1px solid #bfdbfe',
                                       background: '#eff6ff', color: '#2563eb', display: 'inline-flex', alignItems: 'center',
@@ -1795,7 +1854,7 @@ const StockManagement: React.FC = () => {
                                   <button
                                     type="button"
                                     title="Cetak Label Barcode"
-                                    onClick={() => { setLabelCopies(1); setLabelProduct(p); }}
+                                    onClick={() => { setLabelTier('retail'); setLabelCopies(1); setLabelProduct(p); }}
                                     style={{
                                       width: '28px', height: '28px', borderRadius: '6px', border: '1px solid #bfdbfe',
                                       background: '#eff6ff', color: '#2563eb', display: 'inline-flex', alignItems: 'center',
@@ -2027,7 +2086,7 @@ const StockManagement: React.FC = () => {
                   <div className="mobile-card-actions">
                     {p.isPending ? (
                       <>
-                        <button className="mobile-action-primary" onClick={() => { setLabelCopies(Math.max(1, Math.ceil(Number(p.stock)))); setLabelProduct(p); }}>
+                        <button className="mobile-action-primary" onClick={() => { setLabelTier('retail'); setLabelCopies(Math.max(1, Math.ceil(Number(p.stock)))); setLabelProduct(p); }}>
                           <Printer size={15} />
                           <span>Cetak Label Barcode</span>
                         </button>
@@ -2049,7 +2108,7 @@ const StockManagement: React.FC = () => {
                           <ArrowDownToLine size={15} />
                           <span>Restock</span>
                         </button>
-                        <button className="mobile-action-icon" onClick={() => { setLabelCopies(1); setLabelProduct(p); }} title="Cetak Barcode">
+                        <button className="mobile-action-icon" onClick={() => { setLabelTier('retail'); setLabelCopies(1); setLabelProduct(p); }} title="Cetak Barcode">
                           <Printer size={16} color="#2563eb" />
                         </button>
                         <button className="mobile-action-icon" onClick={() => handleEditClick(p)} title="Edit">
@@ -2558,6 +2617,7 @@ const StockManagement: React.FC = () => {
         <BarcodeLabelModal
           product={labelProduct}
           initialCopies={labelCopies}
+          initialTier={labelTier}
           onClose={() => setLabelProduct(null)}
         />
       )}
@@ -2680,6 +2740,17 @@ const StockManagement: React.FC = () => {
                     >
                       <Camera size={14} /> Pindai
                     </button>
+                    {(boxBarcode || productId) && (
+                      <button
+                        type="button"
+                        className="ios-btn-pindai"
+                        title="Cetak Label Barcode Dus / Karton"
+                        style={{ background: '#fef3c7', color: '#b45309', borderColor: '#fde68a' }}
+                        onClick={() => handlePrintFormBarcode('box')}
+                      >
+                        <Printer size={14} /> Cetak
+                      </button>
+                    )}
                     {!editingId && (
                       <button 
                         type="button" 
@@ -2727,6 +2798,17 @@ const StockManagement: React.FC = () => {
                     >
                       <Camera size={14} /> Pindai
                     </button>
+                    {retailBarcode && (
+                      <button
+                        type="button"
+                        className="ios-btn-pindai"
+                        title="Cetak Label Barcode Satuan / Eceran"
+                        style={{ background: '#ede9fe', color: '#6d28d9', borderColor: '#ddd6fe', fontWeight: 800 }}
+                        onClick={() => handlePrintFormBarcode('retail')}
+                      >
+                        <Printer size={14} /> Cetak
+                      </button>
+                    )}
                     {!editingId && !retailBarcode && (
                       <button 
                         type="button" 

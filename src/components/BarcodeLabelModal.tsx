@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import JsBarcode from 'jsbarcode';
-import { Printer, X, Bluetooth, CheckCircle2, AlertCircle, RefreshCw, Tag, ChevronLeft, ChevronRight, Layers, FileText } from 'lucide-react';
+import { Printer, X, Bluetooth, CheckCircle2, AlertCircle, RefreshCw, Tag, ChevronLeft, ChevronRight, Layers, FileText, Package } from 'lucide-react';
 import { usePrinterStore } from '../store/usePrinterStore';
 import { useSettingsStore } from '../store/useSettingsStore';
 import { printLabelBluetooth, printBatchLabelsBluetooth } from '../utils/labelPrinter';
@@ -13,6 +13,14 @@ export interface LabelProduct {
   sellingPrice: number;
   unit?: string;
   stock?: number;
+  boxBarcode?: string;
+  boxCapacity?: number;
+  boxPrice?: number;
+  midUnitName?: string;
+  midBarcode?: string;
+  midCapacity?: number;
+  midPrice?: number;
+  retailBarcode?: string;
   variants?: {
     id: string;
     name: string;
@@ -27,6 +35,7 @@ interface Props {
   product?: LabelProduct | null;
   products?: LabelProduct[];
   initialCopies?: number;
+  initialTier?: 'retail' | 'box' | 'mid';
   onClose: () => void;
 }
 
@@ -143,9 +152,46 @@ const buildLabelHtml = (
   `;
 };
 
-const BarcodeLabelModal: React.FC<Props> = ({ product, products, initialCopies = 1, onClose }) => {
+const BarcodeLabelModal: React.FC<Props> = ({ product, products, initialCopies = 1, initialTier = 'retail', onClose }) => {
   const hasProductVariants = !!(product?.variants && product.variants.length > 0);
   const [variantSelection, setVariantSelection] = useState<string>('all_variants');
+  const [selectedTier, setSelectedTier] = useState<'retail' | 'box' | 'mid'>(initialTier);
+
+  // Resolusi data produk spesifik untuk kemasan yang dipilih (Satuan/Eceran vs Dus vs Kemasan Menengah)
+  const resolveProductTier = (p: LabelProduct, tier: 'retail' | 'box' | 'mid'): LabelProduct => {
+    if (tier === 'box') {
+      const code = p.boxBarcode || p.barcode || p.sku || p.id;
+      const boxCap = Math.max(1, p.boxCapacity || 1);
+      const price = (p.boxPrice && Number(p.boxPrice) > 0) ? Number(p.boxPrice) : (p.sellingPrice * boxCap);
+      const unitStr = boxCap > 1 ? `Dus (${boxCap} ${p.unit || 'Pcs'})` : (p.unit || 'Dus');
+      return {
+        ...p,
+        barcode: code,
+        sellingPrice: price,
+        unit: unitStr,
+      };
+    }
+    if (tier === 'mid') {
+      const code = p.midBarcode || p.barcode || p.sku || p.id;
+      const midCap = Math.max(1, p.midCapacity || 1);
+      const price = (p.midPrice && Number(p.midPrice) > 0) ? Number(p.midPrice) : (p.sellingPrice * midCap);
+      const unitStr = midCap > 1 ? `${p.midUnitName || 'Pack'} (${midCap} ${p.unit || 'Pcs'})` : (p.midUnitName || 'Pack');
+      return {
+        ...p,
+        barcode: code,
+        sellingPrice: price,
+        unit: unitStr,
+      };
+    }
+    // tier === 'retail' (Satuan / Eceran)
+    const code = p.retailBarcode || p.barcode || p.sku || p.id;
+    return {
+      ...p,
+      barcode: code,
+      sellingPrice: p.sellingPrice,
+      unit: p.unit || 'Pcs',
+    };
+  };
 
   // Tentukan daftar target produk (bisa satuan, per varian spesifik, atau masal/keseluruhan)
   const targetProducts: LabelProduct[] = useMemo(() => {
@@ -183,10 +229,10 @@ const BarcodeLabelModal: React.FC<Props> = ({ product, products, initialCopies =
           }
         }
       }
-      return [product];
+      return [resolveProductTier(product, selectedTier)];
     }
     return [];
-  }, [product, products, hasProductVariants, variantSelection]);
+  }, [product, products, hasProductVariants, variantSelection, selectedTier]);
 
   const isBulk = targetProducts.length > 1;
 
@@ -436,9 +482,17 @@ const BarcodeLabelModal: React.FC<Props> = ({ product, products, initialCopies =
                 <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#eff6ff', color: '#1d4ed8', padding: '3px 8px', borderRadius: '6px', fontSize: '11.5px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }}>
                   <Layers size={13} /> Cetak Masal / Keseluruhan
                 </div>
+              ) : selectedTier === 'box' ? (
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#fffbeb', color: '#b45309', border: '1px solid #fde68a', padding: '3px 8px', borderRadius: '6px', fontSize: '11.5px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }}>
+                  <Package size={13} /> Cetak Label Dus / Karton
+                </div>
+              ) : selectedTier === 'mid' ? (
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#f0f9ff', color: '#0369a1', border: '1px solid #bae6fd', padding: '3px 8px', borderRadius: '6px', fontSize: '11.5px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }}>
+                  <Layers size={13} /> Cetak Label Kemasan Menengah
+                </div>
               ) : (
-                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#fef2f2', color: '#dc2626', padding: '3px 8px', borderRadius: '6px', fontSize: '11.5px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }}>
-                  <Tag size={13} /> Cetak Label Satuan
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#f5f3ff', color: '#7c3aed', border: '1px solid #ddd6fe', padding: '3px 8px', borderRadius: '6px', fontSize: '11.5px', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }}>
+                  <Tag size={13} /> Cetak Label Satuan / Eceran
                 </div>
               )}
               <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#111827' }}>
@@ -464,6 +518,155 @@ const BarcodeLabelModal: React.FC<Props> = ({ product, products, initialCopies =
           </div>
 
           <div style={{ flex: 1, overflowY: 'auto', paddingRight: '4px' }}>
+            {/* OPSI PILIHAN KEMASAN BARCODE (SATUAN / ECERAN vs DUS / KARTON) */}
+            {!isBulk && product && (product.retailBarcode || (product.boxCapacity && product.boxCapacity > 1) || (product.boxBarcode && product.boxBarcode !== product.retailBarcode)) && (
+              <div
+                style={{
+                  background: '#f8fafc',
+                  border: '1.5px solid #e2e8f0',
+                  borderRadius: '14px',
+                  padding: '12px 14px',
+                  marginBottom: '14px',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '4px' }}>
+                  <div style={{ fontSize: '12.5px', fontWeight: 800, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Layers size={15} color="#7c3aed" /> Pilih Barcode Kemasan yang Dicetak:
+                  </div>
+                  <span style={{ fontSize: '11px', color: selectedTier === 'retail' ? '#7c3aed' : (selectedTier === 'box' ? '#b45309' : '#0369a1'), fontWeight: 700 }}>
+                    {selectedTier === 'retail' ? '🏷️ Mencetak Barcode Satuan / Eceran' : (selectedTier === 'box' ? '📦 Mencetak Barcode Dus / Karton' : '🗂️ Mencetak Kemasan Menengah')}
+                  </span>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: (product.midBarcode || (product.midCapacity && product.midCapacity > 1)) ? 'repeat(3, 1fr)' : 'repeat(2, 1fr)', gap: '8px' }}>
+                  {/* Pilihan 1: Barcode Satuan / Eceran */}
+                  <button
+                    type="button"
+                    onClick={() => { setSelectedTier('retail'); setPreviewIndex(0); }}
+                    style={{
+                      padding: '8px 10px',
+                      borderRadius: '10px',
+                      border: selectedTier === 'retail' ? '2px solid #7c3aed' : '1px solid #cbd5e1',
+                      background: selectedTier === 'retail' ? '#f5f3ff' : '#ffffff',
+                      color: selectedTier === 'retail' ? '#6d28d9' : '#334155',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      transition: 'all 0.15s ease',
+                      boxShadow: selectedTier === 'retail' ? '0 2px 8px rgba(124,58,237,0.18)' : 'none',
+                    }}
+                  >
+                    <div style={{ fontSize: '12px', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span>🏷️ Satuan ({product.unit || 'Pcs'})</span>
+                      {selectedTier === 'retail' && (
+                        <span style={{ fontSize: '9px', fontWeight: 800, background: '#7c3aed', color: '#fff', padding: '1px 5px', borderRadius: '4px' }}>
+                          Dipilih
+                        </span>
+                      )}
+                    </div>
+                    <div style={{
+                      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                      fontSize: '11px',
+                      fontWeight: 800,
+                      color: selectedTier === 'retail' ? '#7c3aed' : '#475569',
+                      marginTop: '3px',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis'
+                    }}>
+                      ||| {product.retailBarcode || product.barcode || product.sku || '-'}
+                    </div>
+                    <div style={{ fontSize: '10.5px', fontWeight: 700, color: '#059669', marginTop: '2px' }}>
+                      Rp {Number(product.sellingPrice || 0).toLocaleString('id-ID')} <span style={{ fontSize: '9.5px', color: '#64748b' }}>/{product.unit || 'Pcs'}</span>
+                    </div>
+                  </button>
+
+                  {/* Pilihan 2: Barcode Dus / Karton */}
+                  <button
+                    type="button"
+                    onClick={() => { setSelectedTier('box'); setPreviewIndex(0); }}
+                    style={{
+                      padding: '8px 10px',
+                      borderRadius: '10px',
+                      border: selectedTier === 'box' ? '2px solid #b45309' : '1px solid #cbd5e1',
+                      background: selectedTier === 'box' ? '#fffbeb' : '#ffffff',
+                      color: selectedTier === 'box' ? '#92400e' : '#334155',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      transition: 'all 0.15s ease',
+                      boxShadow: selectedTier === 'box' ? '0 2px 8px rgba(180,83,9,0.18)' : 'none',
+                    }}
+                  >
+                    <div style={{ fontSize: '12px', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span>📦 Dus ({product.boxCapacity || 1} {product.unit || 'Pcs'})</span>
+                      {selectedTier === 'box' && (
+                        <span style={{ fontSize: '9px', fontWeight: 800, background: '#b45309', color: '#fff', padding: '1px 5px', borderRadius: '4px' }}>
+                          Dipilih
+                        </span>
+                      )}
+                    </div>
+                    <div style={{
+                      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                      fontSize: '11px',
+                      fontWeight: 800,
+                      color: selectedTier === 'box' ? '#b45309' : '#475569',
+                      marginTop: '3px',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis'
+                    }}>
+                      ||| {product.boxBarcode || product.barcode || product.sku || '-'}
+                    </div>
+                    <div style={{ fontSize: '10.5px', fontWeight: 700, color: '#059669', marginTop: '2px' }}>
+                      Rp {Number((product.boxPrice && Number(product.boxPrice) > 0) ? product.boxPrice : ((product.sellingPrice || 0) * (product.boxCapacity || 1))).toLocaleString('id-ID')} <span style={{ fontSize: '9.5px', color: '#64748b' }}>/Dus</span>
+                    </div>
+                  </button>
+
+                  {/* Pilihan 3: Kemasan Menengah (jika ada) */}
+                  {(product.midBarcode || (product.midCapacity && product.midCapacity > 1)) && (
+                    <button
+                      type="button"
+                      onClick={() => { setSelectedTier('mid'); setPreviewIndex(0); }}
+                      style={{
+                        padding: '8px 10px',
+                        borderRadius: '10px',
+                        border: selectedTier === 'mid' ? '2px solid #0284c7' : '1px solid #cbd5e1',
+                        background: selectedTier === 'mid' ? '#f0f9ff' : '#ffffff',
+                        color: selectedTier === 'mid' ? '#0369a1' : '#334155',
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                        transition: 'all 0.15s ease',
+                        boxShadow: selectedTier === 'mid' ? '0 2px 8px rgba(2,132,199,0.18)' : 'none',
+                      }}
+                    >
+                      <div style={{ fontSize: '12px', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <span>🗂️ {product.midUnitName || 'Pack'} ({product.midCapacity || 1} {product.unit || 'Pcs'})</span>
+                        {selectedTier === 'mid' && (
+                          <span style={{ fontSize: '9px', fontWeight: 800, background: '#0284c7', color: '#fff', padding: '1px 5px', borderRadius: '4px' }}>
+                            Dipilih
+                          </span>
+                        )}
+                      </div>
+                      <div style={{
+                        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                        fontSize: '11px',
+                        fontWeight: 800,
+                        color: selectedTier === 'mid' ? '#0284c7' : '#475569',
+                        marginTop: '3px',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis'
+                      }}>
+                        ||| {product.midBarcode || product.barcode || '-'}
+                      </div>
+                      <div style={{ fontSize: '10.5px', fontWeight: 700, color: '#059669', marginTop: '2px' }}>
+                        Rp {Number((product.midPrice && Number(product.midPrice) > 0) ? product.midPrice : ((product.sellingPrice || 0) * (product.midCapacity || 1))).toLocaleString('id-ID')}
+                      </div>
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* OPSI PILIHAN LABEL VARIAN */}
             {hasProductVariants && product?.variants && (
               <div style={{
@@ -906,7 +1109,7 @@ const BarcodeLabelModal: React.FC<Props> = ({ product, products, initialCopies =
                   alignItems: 'center',
                   gap: '8px',
                   background: '#ffffff',
-                  border: '1.5px solid #ddd6fe',
+                  border: selectedTier === 'retail' ? '1.5px solid #ddd6fe' : (selectedTier === 'box' ? '1.5px solid #fde68a' : '1.5px solid #bae6fd'),
                   borderRadius: '20px',
                   padding: '4px 12px',
                   marginBottom: '10px',
@@ -919,7 +1122,7 @@ const BarcodeLabelModal: React.FC<Props> = ({ product, products, initialCopies =
                     fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
                     fontSize: '11px',
                     fontWeight: 800,
-                    background: '#7c3aed',
+                    background: selectedTier === 'retail' ? '#7c3aed' : (selectedTier === 'box' ? '#b45309' : '#0284c7'),
                     color: '#ffffff',
                     padding: '1.5px 7px',
                     borderRadius: '5px',
@@ -929,6 +1132,18 @@ const BarcodeLabelModal: React.FC<Props> = ({ product, products, initialCopies =
                   }}>
                     <span>|||</span> {currentPreviewProd.barcode || currentPreviewProd.sku || currentPreviewProd.id}
                   </span>
+                  {!isBulk && (
+                    <span style={{
+                      fontSize: '10px',
+                      fontWeight: 800,
+                      background: selectedTier === 'retail' ? '#ede9fe' : (selectedTier === 'box' ? '#fef3c7' : '#e0f2fe'),
+                      color: selectedTier === 'retail' ? '#6d28d9' : (selectedTier === 'box' ? '#92400e' : '#0369a1'),
+                      padding: '1.5px 6px',
+                      borderRadius: '4px'
+                    }}>
+                      {selectedTier === 'retail' ? 'Satuan' : (selectedTier === 'box' ? 'Dus' : 'Pack')}
+                    </span>
+                  )}
                 </div>
               )}
 

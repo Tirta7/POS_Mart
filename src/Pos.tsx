@@ -3988,11 +3988,19 @@ function App() {
                             const picked = PRODUCTS.filter(p => selectedLabelProductIds.includes(p.id)).map(p => ({
                               id: p.id,
                               name: p.name,
-                              barcode: p.barcode,
+                              barcode: p.retailBarcode || p.barcode,
                               sku: p.sku,
                               sellingPrice: p.price,
                               unit: p.unit,
                               stock: p.availableStock,
+                              boxBarcode: p.boxBarcode,
+                              boxCapacity: p.boxCapacity,
+                              boxPrice: p.boxPrice,
+                              retailBarcode: p.retailBarcode,
+                              midUnitName: p.midUnitName,
+                              midBarcode: p.midBarcode,
+                              midCapacity: p.midCapacity,
+                              midPrice: p.midPrice,
                             }));
                             setLabelPickerOpen(false);
                             setLabelModalProducts(picked);
@@ -4022,11 +4030,19 @@ function App() {
                           const bulkList = filteredProds.map(p => ({
                             id: p.id,
                             name: p.name,
-                            barcode: p.barcode,
+                            barcode: p.retailBarcode || p.barcode,
                             sku: p.sku,
                             sellingPrice: p.price,
                             unit: p.unit,
                             stock: p.availableStock,
+                            boxBarcode: p.boxBarcode,
+                            boxCapacity: p.boxCapacity,
+                            boxPrice: p.boxPrice,
+                            retailBarcode: p.retailBarcode,
+                            midUnitName: p.midUnitName,
+                            midBarcode: p.midBarcode,
+                            midCapacity: p.midCapacity,
+                            midPrice: p.midPrice,
                           }));
                           setLabelPickerOpen(false);
                           setLabelModalProducts(bulkList);
@@ -4117,6 +4133,14 @@ function App() {
                                   sellingPrice: p.price,
                                   unit: p.unit,
                                   stock: p.availableStock,
+                                  boxBarcode: p.boxBarcode,
+                                  boxCapacity: p.boxCapacity,
+                                  boxPrice: p.boxPrice,
+                                  retailBarcode: p.retailBarcode,
+                                  midUnitName: p.midUnitName,
+                                  midBarcode: p.midBarcode,
+                                  midCapacity: p.midCapacity,
+                                  midPrice: p.midPrice,
                                 });
                               }}
                               style={{
