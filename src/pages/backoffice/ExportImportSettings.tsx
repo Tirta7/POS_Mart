@@ -261,6 +261,13 @@ export const ExportImportSettings: React.FC = () => {
             Unggah file Master Excel atau download template format standar jika ingin mengisi data baru:
           </p>
 
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', fontSize: '12px', color: '#166534' }}>
+            <span>📦</span>
+            <span>
+              <strong>Pola Kemasan Multi-Tier:</strong> Mendukung Barcode Dus (Karton) & Barcode Eceran, Rasio Isi Dus, Satuan Menengah (Slop/Renceng), serta Harga Grosir & Dus otomatis!
+            </span>
+          </div>
+
           {/* TEMPLATE DOWNLOAD BUTTONS */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
@@ -425,41 +432,97 @@ export const ExportImportSettings: React.FC = () => {
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', textAlign: 'left' }}>
                   <thead style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
                     <tr>
-                      <th style={{ padding: '8px 12px' }}>Barcode / SKU</th>
+                      <th style={{ padding: '8px 12px' }}>Barcode (Dus / Eceran)</th>
                       <th style={{ padding: '8px 12px' }}>Nama Produk</th>
-                      <th style={{ padding: '8px 12px' }}>Kategori</th>
-                      <th style={{ padding: '8px 12px' }}>Varian</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'right' }}>Harga Beli</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'right' }}>Harga Jual</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'right' }}>Harga Grosir</th>
+                      <th style={{ padding: '8px 12px' }}>Kategori & Satuan</th>
+                      <th style={{ padding: '8px 12px' }}>Pola Kemasan</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'right' }}>Harga Modal</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'right' }}>Harga Eceran</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'right' }}>Grosir Satuan</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'right' }}>Harga Dus</th>
                       <th style={{ padding: '8px 12px', textAlign: 'center' }}>Total Stok</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {parsedData.products.slice(0, 5).map((p, idx) => (
-                      <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                        <td style={{ padding: '8px 12px', fontFamily: 'monospace' }}>{p.barcode || p.sku || '-'}</td>
-                        <td style={{ padding: '8px 12px', fontWeight: 600 }}>{p.name}</td>
-                        <td style={{ padding: '8px 12px' }}>{p.category || '-'}</td>
-                        <td style={{ padding: '8px 12px' }}>
-                          {p.variants && p.variants.length > 0 ? (
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                              {p.variants.map((v: any, vIdx: number) => (
-                                <span key={vIdx} style={{ fontSize: '10.5px', background: '#f3e8ff', color: '#7e22ce', padding: '1px 6px', borderRadius: '4px', fontWeight: 600 }}>
-                                  {v.name}: {v.stock}
-                                </span>
-                              ))}
-                            </div>
-                          ) : (
-                            <span style={{ color: '#94a3b8' }}>-</span>
-                          )}
-                        </td>
-                        <td style={{ padding: '8px 12px', textAlign: 'right' }}>Rp {Number(p.purchase_price ?? p.purchasePrice ?? 0).toLocaleString('id-ID')}</td>
-                        <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: '#16a34a' }}>Rp {Number(p.selling_price ?? p.sellingPrice ?? 0).toLocaleString('id-ID')}</td>
-                        <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: '#0284c7' }}>Rp {Number(p.wholesale_price ?? p.wholesalePrice ?? 0).toLocaleString('id-ID')}</td>
-                        <td style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 700 }}>{p.stock}</td>
-                      </tr>
-                    ))}
+                    {parsedData.products.slice(0, 5).map((p, idx) => {
+                      const boxBarcode = p.boxBarcode || p.box_barcode;
+                      const retailBarcode = p.retailBarcode || p.retail_barcode || p.barcode;
+                      const boxCap = Number(p.boxCapacity ?? p.box_capacity ?? 1);
+                      const boxPrice = Number(p.boxPrice ?? p.box_price ?? 0);
+                      const minWholesale = Number(p.minWholesaleQty ?? p.min_wholesale_qty ?? 1);
+                      const unit = p.unit || 'Pcs';
+                      const stockVal = Number(p.stock || 0);
+
+                      return (
+                        <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                          <td style={{ padding: '8px 12px', fontSize: '11px' }}>
+                            {boxBarcode && (
+                              <div style={{ display: 'inline-block', background: '#fef3c7', color: '#92400e', padding: '1px 6px', borderRadius: '4px', fontWeight: 700, marginRight: '4px', marginBottom: '2px' }}>
+                                Dus: {boxBarcode}
+                              </div>
+                            )}
+                            {retailBarcode && (
+                              <div style={{ display: 'inline-block', background: '#e0f2fe', color: '#0369a1', padding: '1px 6px', borderRadius: '4px', fontWeight: 600 }}>
+                                Ecer: {retailBarcode}
+                              </div>
+                            )}
+                            {!boxBarcode && !retailBarcode && (
+                              <span style={{ color: '#94a3b8', fontFamily: 'monospace' }}>{p.sku || '-'}</span>
+                            )}
+                          </td>
+                          <td style={{ padding: '8px 12px', fontWeight: 600 }}>{p.name}</td>
+                          <td style={{ padding: '8px 12px' }}>
+                            <div>{p.category || '-'}</div>
+                            <div style={{ fontSize: '11px', color: '#64748b' }}>Satuan: {unit}</div>
+                          </td>
+                          <td style={{ padding: '8px 12px' }}>
+                            {boxCap > 1 ? (
+                              <div style={{ fontSize: '11px', fontWeight: 700, color: '#4338ca' }}>
+                                1 Dus = {boxCap} {unit}
+                              </div>
+                            ) : null}
+                            {p.midUnitName || p.mid_unit_name ? (
+                              <div style={{ fontSize: '11px', color: '#059669', fontWeight: 600 }}>
+                                1 {p.midUnitName || p.mid_unit_name} = {p.midCapacity || p.mid_capacity} {unit}
+                              </div>
+                            ) : null}
+                            {p.variants && p.variants.length > 0 ? (
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px', marginTop: '2px' }}>
+                                {p.variants.map((v: any, vIdx: number) => (
+                                  <span key={vIdx} style={{ fontSize: '10px', background: '#f3e8ff', color: '#7e22ce', padding: '1px 5px', borderRadius: '4px', fontWeight: 600 }}>
+                                    {v.name}: {v.stock}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : null}
+                            {boxCap <= 1 && !p.midUnitName && !p.mid_unit_name && (!p.variants || p.variants.length === 0) && (
+                              <span style={{ color: '#94a3b8', fontSize: '11px' }}>Eceran Murni</span>
+                            )}
+                          </td>
+                          <td style={{ padding: '8px 12px', textAlign: 'right' }}>
+                            Rp {Number(p.purchase_price ?? p.purchasePrice ?? 0).toLocaleString('id-ID')}
+                          </td>
+                          <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: '#16a34a' }}>
+                            Rp {Number(p.selling_price ?? p.sellingPrice ?? 0).toLocaleString('id-ID')}
+                          </td>
+                          <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: '#0284c7' }}>
+                            <div>Rp {Number(p.wholesale_price ?? p.wholesalePrice ?? 0).toLocaleString('id-ID')}</div>
+                            {minWholesale > 1 && (
+                              <div style={{ fontSize: '10px', color: '#64748b', fontWeight: 500 }}>Min {minWholesale} {unit}</div>
+                            )}
+                          </td>
+                          <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: '#d97706' }}>
+                            {boxPrice > 0 ? `Rp ${boxPrice.toLocaleString('id-ID')}` : '-'}
+                          </td>
+                          <td style={{ padding: '8px 12px', textAlign: 'center' }}>
+                            <div style={{ fontWeight: 800 }}>{stockVal} {unit}</div>
+                            {boxCap > 1 && (
+                              <div style={{ fontSize: '10.5px', color: '#64748b' }}>±{Math.floor(stockVal / boxCap)} Dus</div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

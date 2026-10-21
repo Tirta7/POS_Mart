@@ -131,12 +131,20 @@ export const exportMasterExcel = (data: ExportDataPayload, customName?: string) 
     const buyPrice = parseNumber(p.purchasePrice ?? p.purchase_price, 0);
     const sellPrice = parseNumber(p.sellingPrice ?? p.selling_price, 0);
     const wholesalePrice = parseNumber(p.wholesalePrice ?? p.wholesale_price, sellPrice);
+    const boxCapacity = parseNumber(p.boxCapacity ?? p.box_capacity, 1);
+    const minWholesaleQty = parseNumber(p.minWholesaleQty ?? p.min_wholesale_qty, 1);
+    const boxPriceVal = parseNumber(p.boxPrice ?? p.box_price, 0);
+    const boxPrice = boxPriceVal > 0 ? boxPriceVal : (boxCapacity > 1 ? sellPrice * boxCapacity : '');
+    const boxCost = boxCapacity > 1 ? (buyPrice * boxCapacity) : '';
+    const estBoxStock = boxCapacity > 1 ? Math.floor(stock / boxCapacity) : '-';
+    const remRetailStock = boxCapacity > 1 ? (stock % boxCapacity) : stock;
 
     let status = 'Aman';
     if (stock <= 0) status = 'Habis';
     else if (stock <= minStock) status = 'Menipis';
 
-    const barcodeVal = p.barcode || p.id || '';
+    const boxBarcodeVal = p.boxBarcode || p.box_barcode || '';
+    const retailBarcodeVal = p.retailBarcode || p.retail_barcode || p.barcode || p.id || '';
     const skuVal = p.sku || '';
     const categoryName = typeof p.category === 'object' ? (p.category?.name || '-') : (p.category || p.category_name || '-');
 
@@ -147,16 +155,27 @@ export const exportMasterExcel = (data: ExportDataPayload, customName?: string) 
     return {
       'No': idx + 1,
       'ID Produk': p.id,
-      'Barcode': barcodeVal,
-      'SKU': skuVal,
+      'Barcode Dus (Karton)': boxBarcodeVal,
+      'Barcode Eceran (Satuan)': retailBarcodeVal,
+      'SKU / Kode Rak': skuVal,
       'Nama Produk': p.name,
       'Kategori': categoryName,
-      'Satuan': p.unit || 'Pcs',
-      'Harga Beli (Modal)': buyPrice,
-      'Harga Jual (Eceran)': sellPrice,
-      'Harga Grosir': wholesalePrice,
-      'Stok Saat Ini': stock,
-      'Min. Stok': minStock,
+      'Satuan Eceran': p.unit || 'Pcs',
+      'Isi per 1 Dus (Pcs)': boxCapacity > 1 ? boxCapacity : (boxBarcodeVal ? 1 : ''),
+      'Modal Satuan (Rp)': buyPrice,
+      'Modal per 1 Dus (Rp)': boxCost,
+      'Harga Jual Eceran (Rp)': sellPrice,
+      'Harga Grosir Satuan (Rp)': wholesalePrice,
+      'Min. Beli Grosir (Pcs)': minWholesaleQty > 1 ? minWholesaleQty : 1,
+      'Harga Jual per 1 Dus (Rp)': boxPrice,
+      'Satuan Menengah': p.midUnitName || p.mid_unit_name || '',
+      'Isi Satuan Menengah': p.midCapacity || p.mid_capacity || '',
+      'Harga Satuan Menengah (Rp)': p.midPrice || p.mid_price || '',
+      'Barcode Satuan Menengah': p.midBarcode || p.mid_barcode || '',
+      'Total Stok Fisik (Satuan)': stock,
+      'Estimasi Stok Dus': estBoxStock,
+      'Sisa Satuan Ecer': remRetailStock,
+      'Min. Stok (Alert Tipis)': minStock,
       'Status Stok': status,
       'Daftar Varian': variantSummary,
       'Total Nilai Modal (Rp)': stock * buyPrice,
@@ -165,7 +184,7 @@ export const exportMasterExcel = (data: ExportDataPayload, customName?: string) 
   });
 
   const wsProducts = XLSX.utils.json_to_sheet(productRows);
-  setSheetCols(wsProducts, [6, 20, 20, 18, 32, 18, 10, 18, 18, 18, 14, 12, 14, 25, 22, 22]);
+  setSheetCols(wsProducts, [6, 20, 22, 22, 18, 32, 18, 14, 16, 18, 18, 20, 20, 18, 20, 16, 18, 22, 22, 22, 16, 16, 16, 14, 25, 22, 22]);
   XLSX.utils.book_append_sheet(wb, wsProducts, 'Manajemen Stok');
 
   // 2b. SHEET: VARIAN PRODUK (RINCIAN VARIAN PER ITEM)
@@ -476,41 +495,105 @@ export const parseExcelFile = async (file: File): Promise<ParsedImportData> => {
               const name = n.nama_produk || n.nama || n.name || n.product_name || n.deskripsi || n.namaproduk;
               if (!name) return;
 
-              const buyPrice = parseNumber(
-                n.harga_beli_modal ?? n.harga_beli ?? n.modal ?? n.harga_modal ?? n.beli ?? n.purchase_price ?? n.hpp ?? n.hargabelimodal ?? n.hargabeli,
-                0
-              );
-              const sellPrice = parseNumber(
-                n.harga_jual_eceran ?? n.harga_jual ?? n.selling_price ?? n.harga ?? n.jual ?? n.eceran ?? n.hargajualeceran ?? n.hargajual,
-                0
-              );
-              const wholesalePrice = parseNumber(
-                n.harga_grosir_partai ?? n.harga_grosir ?? n.wholesale_price ?? n.grosir ?? n.partai ?? n.hargagrosirpartai ?? n.hargagrosir,
-                sellPrice
-              );
-              const stock = parseNumber(
-                n.stok_awal ?? n.stok_saat_ini ?? n.stok ?? n.stock ?? n.qty ?? n.jumlah_stok ?? n.stokawal ?? n.stoksaatini,
-                0
-              );
-              const minStock = parseNumber(
-                n.min_stok_alert_tipis ?? n.min_stok ?? n.minimum_stok ?? n.min_stock ?? n.stok_minimum ?? n.min_stok_peringatan_tipis ?? n.minstokalerttipis ?? n.minstok,
-                0
-              );
+              // Barcode Dus & Eceran
+              const boxBarcodeRaw = String(
+                n.barcode_dus_karton_luar ?? n.barcode_dus_karton ?? n.barcode_dus ?? n.barcodedus ?? n.barcode_karton ?? n.box_barcode ?? n.boxbarcode ?? ''
+              ).trim();
+              const boxBarcode = (boxBarcodeRaw === '-' || boxBarcodeRaw === '0') ? '' : boxBarcodeRaw;
 
-              const barcodeRaw = String(n.barcode_scan_angka ?? n.barcode ?? n.kode_barcode ?? n.barcode_sku ?? n.kode_barang ?? n.kode ?? '').trim();
-              const barcode = (barcodeRaw === '-' || barcodeRaw === '0') ? '' : barcodeRaw;
+              const retailBarcodeRaw = String(
+                n.barcode_eceran_bungkus_satuan ?? n.barcode_eceran_satuan ?? n.barcode_eceran ?? n.barcode_satuan ?? n.barcodeeceran ??
+                n.retail_barcode ?? n.retailbarcode ?? n.barcode_scan_angka ?? n.barcode ?? n.kode_barcode ?? n.barcode_sku ?? n.kode_barang ?? n.kode ?? ''
+              ).trim();
+              const retailBarcode = (retailBarcodeRaw === '-' || retailBarcodeRaw === '0') ? '' : retailBarcodeRaw;
 
-              const skuRaw = String(n.sku_kode_unik_rak ?? n.sku ?? (n.barcode_sku && !n.barcode ? n.barcode_sku : '') ?? '').trim();
+              // Barcode utama (fallback jika salah satu ada)
+              const barcode = retailBarcode || boxBarcode || '';
+
+              const skuRaw = String(n.sku_kode_unik_rak ?? n.sku ?? (n.barcode_sku && !barcode ? n.barcode_sku : '') ?? '').trim();
               const sku = skuRaw === '-' ? '' : skuRaw;
 
               const idRaw = String(n.id_produk_opsional ?? n.id_produk ?? n.id ?? '').trim();
               const id = idRaw === '-' ? '' : idRaw;
 
+              // Isi per 1 Dus / Box capacity
+              const boxCapacity = parseNumber(
+                n.isi_per_1_dus_pcs ?? n.isi_per_dus_pcs ?? n.isi_per_1_dus ?? n.isi_per_dus ?? n.isi_dus ?? n.isidus ?? n.box_capacity ?? n.boxcapacity ?? n.isi_karton ?? n.kapasitas_dus,
+                1
+              );
+
+              // Modal per dus
+              const boxCost = parseNumber(
+                n.modal_per_1_dus_rp ?? n.modal_per_dus_rp ?? n.modal_per_dus ?? n.modal_dus ?? n.harga_beli_dus ?? n.modaldus,
+                0
+              );
+
+              // Harga Beli / Modal Satuan
+              let buyPrice = parseNumber(
+                n.modal_satuan_rp ?? n.harga_beli_modal ?? n.harga_beli ?? n.modal ?? n.harga_modal ?? n.beli ?? n.purchase_price ?? n.hpp ?? n.hargabelimodal ?? n.hargabeli,
+                0
+              );
+              if (buyPrice === 0 && boxCost > 0 && boxCapacity > 0) {
+                buyPrice = Math.round(boxCost / boxCapacity);
+              }
+
+              // Harga Jual Eceran Satuan
+              const sellPrice = parseNumber(
+                n.harga_jual_eceran_rp ?? n.harga_jual_eceran ?? n.harga_jual ?? n.selling_price ?? n.harga ?? n.jual ?? n.eceran ?? n.hargajualeceran ?? n.hargajual,
+                0
+              );
+
+              // Harga Grosir Satuan
+              const wholesalePrice = parseNumber(
+                n.harga_grosir_satuan_rp ?? n.harga_grosir_partai ?? n.harga_grosir ?? n.wholesale_price ?? n.grosir ?? n.partai ?? n.hargagrosirpartai ?? n.hargagrosir,
+                sellPrice
+              );
+
+              // Min. Beli Grosir (Pcs)
+              const minWholesaleQty = parseNumber(
+                n.min_beli_grosir_pcs ?? n.min_beli_grosir_qty ?? n.min_beli_grosir ?? n.min_grosir_qty ?? n.min_wholesale_qty ?? n.min_grosir ?? n.minimal_grosir ?? n.mingrosir,
+                1
+              );
+
+              // Harga Jual per Dus
+              let boxPrice = parseNumber(
+                n.harga_jual_per_1_dus_rp ?? n.harga_jual_per_1_dus ?? n.harga_jual_per_dus_rp ?? n.harga_jual_per_dus ?? n.harga_jual_dus ?? n.harga_dus ?? n.box_price ?? n.boxprice ?? n.hargadus,
+                0
+              );
+              if (boxPrice === 0 && boxCapacity > 1 && sellPrice > 0) {
+                boxPrice = sellPrice * boxCapacity;
+              }
+
+              // Kemasan Menengah (Renceng/Slop/Pack)
+              const midUnitName = String(n.satuan_menengah_opsional ?? n.satuan_menengah ?? n.nama_satuan_menengah ?? n.mid_unit_name ?? n.midunitname ?? n.unit_menengah ?? '').trim();
+              const midCapacity = parseNumber(n.isi_satuan_menengah ?? n.isi_menengah ?? n.mid_capacity ?? n.midcapacity, 0);
+              const midPrice = parseNumber(n.harga_satuan_menengah_rp ?? n.harga_satuan_menengah ?? n.harga_menengah ?? n.mid_price ?? n.midprice, 0);
+              const midBarcode = String(n.barcode_satuan_menengah ?? n.barcode_menengah ?? n.mid_barcode ?? n.midbarcode ?? '').trim();
+
+              // Stok Fisik Satuan & Estimasi Dus
+              const stokDus = parseNumber(n.estimasi_stok_dus ?? n.stok_dus ?? n.jumlah_dus, 0);
+              const sisaEcer = parseNumber(n.sisa_satuan_ecer ?? n.sisa_satuan ?? n.sisa_eceran, 0);
+              let stock = parseNumber(
+                n.total_stok_fisik_satuan ?? n.stok_saat_ini ?? n.stok_awal ?? n.stok ?? n.stock ?? n.qty ?? n.jumlah_stok ?? n.stokawal ?? n.stoksaatini,
+                0
+              );
+              if (stock === 0 && stokDus > 0 && boxCapacity > 0) {
+                stock = (stokDus * boxCapacity) + sisaEcer;
+              }
+
+              const minStock = parseNumber(
+                n.min_stok_alert_tipis ?? n.min_stok ?? n.minimum_stok ?? n.min_stock ?? n.stok_minimum ?? n.min_stok_peringatan_tipis ?? n.minstokalerttipis ?? n.minstok,
+                0
+              );
+
               const statusRaw = String(n.status ?? n.status_produk ?? n.status_aktif_non_aktif ?? n.aktif ?? n.is_active ?? 'Aktif').toLowerCase().trim();
               const isActive = !(statusRaw.includes('non') || statusRaw.includes('tidak') || statusRaw === 'false' || statusRaw === '0');
 
               const existingIdx = products.findIndex(p => 
-                (barcode && p.barcode === barcode) || 
+                (id && p.id === id) ||
+                (boxBarcode && (p.boxBarcode === boxBarcode || p.box_barcode === boxBarcode)) ||
+                (retailBarcode && (p.retailBarcode === retailBarcode || p.retail_barcode === retailBarcode || p.barcode === retailBarcode)) ||
+                (barcode && (p.barcode === barcode || p.retailBarcode === barcode || p.retail_barcode === barcode)) || 
                 (sku && p.sku === sku) || 
                 (p.name.toLowerCase() === String(name).trim().toLowerCase())
               );
@@ -556,9 +639,27 @@ export const parseExcelFile = async (file: File): Promise<ParsedImportData> => {
                 id: id || undefined,
                 name: String(name).trim(),
                 barcode: barcode,
+                box_barcode: boxBarcode || undefined,
+                boxBarcode: boxBarcode || undefined,
+                retail_barcode: retailBarcode || barcode || undefined,
+                retailBarcode: retailBarcode || barcode || undefined,
+                box_capacity: boxCapacity > 0 ? boxCapacity : 1,
+                boxCapacity: boxCapacity > 0 ? boxCapacity : 1,
+                box_price: boxPrice > 0 ? boxPrice : undefined,
+                boxPrice: boxPrice > 0 ? boxPrice : undefined,
+                min_wholesale_qty: minWholesaleQty > 0 ? minWholesaleQty : 1,
+                minWholesaleQty: minWholesaleQty > 0 ? minWholesaleQty : 1,
+                mid_unit_name: midUnitName || undefined,
+                midUnitName: midUnitName || undefined,
+                mid_barcode: midBarcode || undefined,
+                midBarcode: midBarcode || undefined,
+                mid_capacity: midCapacity > 0 ? midCapacity : undefined,
+                midCapacity: midCapacity > 0 ? midCapacity : undefined,
+                mid_price: midPrice > 0 ? midPrice : undefined,
+                midPrice: midPrice > 0 ? midPrice : undefined,
                 sku: sku,
                 category: String(n.kategori || n.category || 'Umum').trim(),
-                unit: String(n.satuan || n.unit || 'Pcs').trim(),
+                unit: String(n.satuan_eceran || n.satuan || n.unit || 'Pcs').trim(),
                 purchase_price: buyPrice,
                 selling_price: sellPrice,
                 wholesale_price: wholesalePrice,
@@ -578,6 +679,24 @@ export const parseExcelFile = async (file: File): Promise<ParsedImportData> => {
                 products[existingIdx] = {
                   ...cur,
                   ...itemObj,
+                  box_barcode: boxBarcode || cur.box_barcode || cur.boxBarcode,
+                  boxBarcode: boxBarcode || cur.box_barcode || cur.boxBarcode,
+                  retail_barcode: retailBarcode || cur.retail_barcode || cur.retailBarcode || cur.barcode,
+                  retailBarcode: retailBarcode || cur.retail_barcode || cur.retailBarcode || cur.barcode,
+                  box_capacity: boxCapacity > 1 ? boxCapacity : (cur.box_capacity || cur.boxCapacity || 1),
+                  boxCapacity: boxCapacity > 1 ? boxCapacity : (cur.box_capacity || cur.boxCapacity || 1),
+                  box_price: boxPrice > 0 ? boxPrice : (cur.box_price || cur.boxPrice),
+                  boxPrice: boxPrice > 0 ? boxPrice : (cur.box_price || cur.boxPrice),
+                  min_wholesale_qty: minWholesaleQty > 1 ? minWholesaleQty : (cur.min_wholesale_qty || cur.minWholesaleQty || 1),
+                  minWholesaleQty: minWholesaleQty > 1 ? minWholesaleQty : (cur.min_wholesale_qty || cur.minWholesaleQty || 1),
+                  mid_unit_name: midUnitName || cur.mid_unit_name || cur.midUnitName,
+                  midUnitName: midUnitName || cur.mid_unit_name || cur.midUnitName,
+                  mid_barcode: midBarcode || cur.mid_barcode || cur.midBarcode,
+                  midBarcode: midBarcode || cur.mid_barcode || cur.midBarcode,
+                  mid_capacity: midCapacity > 0 ? midCapacity : (cur.mid_capacity || cur.midCapacity),
+                  midCapacity: midCapacity > 0 ? midCapacity : (cur.mid_capacity || cur.midCapacity),
+                  mid_price: midPrice > 0 ? midPrice : (cur.mid_price || cur.midPrice),
+                  midPrice: midPrice > 0 ? midPrice : (cur.mid_price || cur.midPrice),
                   purchase_price: buyPrice > 0 ? buyPrice : cur.purchase_price,
                   selling_price: sellPrice > 0 ? sellPrice : cur.selling_price,
                   wholesale_price: wholesalePrice > 0 ? wholesalePrice : cur.wholesale_price,
@@ -789,41 +908,107 @@ export const parseExcelFile = async (file: File): Promise<ParsedImportData> => {
             if (n.nama_produk || n.harga_jual || n.harga_jual_eceran || n.harga_beli || n.stok || n.barcode || n.namaproduk) {
               const name = n.nama_produk || n.nama || n.name || n.namaproduk;
               if (name) {
-                const buyPrice = parseNumber(
-                  n.harga_beli_modal ?? n.harga_beli ?? n.modal ?? n.harga_modal ?? n.purchase_price ?? n.hargabelimodal ?? n.hargabeli,
-                  0
-                );
-                const sellPrice = parseNumber(
-                  n.harga_jual_eceran ?? n.harga_jual ?? n.selling_price ?? n.harga ?? n.hargajualeceran ?? n.hargajual ?? n.jual,
-                  0
-                );
-                const wholesalePrice = parseNumber(
-                  n.harga_grosir_partai ?? n.harga_grosir ?? n.wholesale_price ?? n.grosir ?? n.hargagrosir,
-                  sellPrice
-                );
-                const stock = parseNumber(
-                  n.stok_awal ?? n.stok_saat_ini ?? n.stok ?? n.stock ?? n.qty ?? n.stoksaatini,
-                  0
-                );
-                const minStock = parseNumber(
-                  n.min_stok_alert_tipis ?? n.min_stok ?? n.minimum_stok ?? n.min_stock ?? n.stok_minimum ?? n.minstok,
-                  0
-                );
+                // Barcode Dus & Eceran
+                const boxBarcodeRaw = String(
+                  n.barcode_dus_karton_luar ?? n.barcode_dus_karton ?? n.barcode_dus ?? n.barcodedus ?? n.barcode_karton ?? n.box_barcode ?? n.boxbarcode ?? ''
+                ).trim();
+                const boxBarcode = (boxBarcodeRaw === '-' || boxBarcodeRaw === '0') ? '' : boxBarcodeRaw;
 
-                const barcodeRaw = String(n.barcode_scan_angka || n.barcode || n.barcode_sku || n.kode_barang || n.kode || '').trim();
-                const barcode = barcodeRaw === '-' ? '' : barcodeRaw;
+                const retailBarcodeRaw = String(
+                  n.barcode_eceran_bungkus_satuan ?? n.barcode_eceran_satuan ?? n.barcode_eceran ?? n.barcode_satuan ?? n.barcodeeceran ??
+                  n.retail_barcode ?? n.retailbarcode ?? n.barcode_scan_angka ?? n.barcode ?? n.kode_barcode ?? n.barcode_sku ?? n.kode_barang ?? n.kode ?? ''
+                ).trim();
+                const retailBarcode = (retailBarcodeRaw === '-' || retailBarcodeRaw === '0') ? '' : retailBarcodeRaw;
+
+                const barcode = retailBarcode || boxBarcode || '';
                 const skuRaw = String(n.sku_kode_unik_rak || n.sku || '').trim();
                 const sku = skuRaw === '-' ? '' : skuRaw;
                 const idRaw = String(n.id_produk_opsional || n.id_produk || n.id || '').trim();
                 const id = idRaw === '-' ? '' : idRaw;
 
+                const boxCapacity = parseNumber(
+                  n.isi_per_1_dus_pcs ?? n.isi_per_dus_pcs ?? n.isi_per_1_dus ?? n.isi_per_dus ?? n.isi_dus ?? n.isidus ?? n.box_capacity ?? n.boxcapacity ?? n.isi_karton,
+                  1
+                );
+                const boxCost = parseNumber(
+                  n.modal_per_1_dus_rp ?? n.modal_per_dus_rp ?? n.modal_per_dus ?? n.modal_dus ?? n.harga_beli_dus ?? n.modaldus,
+                  0
+                );
+
+                let buyPrice = parseNumber(
+                  n.modal_satuan_rp ?? n.harga_beli_modal ?? n.harga_beli ?? n.modal ?? n.harga_modal ?? n.purchase_price ?? n.hargabelimodal ?? n.hargabeli,
+                  0
+                );
+                if (buyPrice === 0 && boxCost > 0 && boxCapacity > 0) {
+                  buyPrice = Math.round(boxCost / boxCapacity);
+                }
+
+                const sellPrice = parseNumber(
+                  n.harga_jual_eceran_rp ?? n.harga_jual_eceran ?? n.harga_jual ?? n.selling_price ?? n.harga ?? n.hargajualeceran ?? n.hargajual ?? n.jual,
+                  0
+                );
+                const wholesalePrice = parseNumber(
+                  n.harga_grosir_satuan_rp ?? n.harga_grosir_partai ?? n.harga_grosir ?? n.wholesale_price ?? n.grosir ?? n.hargagrosir,
+                  sellPrice
+                );
+                const minWholesaleQty = parseNumber(
+                  n.min_beli_grosir_pcs ?? n.min_beli_grosir_qty ?? n.min_beli_grosir ?? n.min_wholesale_qty ?? n.minimal_grosir,
+                  1
+                );
+
+                let boxPrice = parseNumber(
+                  n.harga_jual_per_1_dus_rp ?? n.harga_jual_per_1_dus ?? n.harga_jual_per_dus_rp ?? n.harga_jual_per_dus ?? n.harga_jual_dus ?? n.harga_dus ?? n.box_price ?? n.boxprice,
+                  0
+                );
+                if (boxPrice === 0 && boxCapacity > 1 && sellPrice > 0) {
+                  boxPrice = sellPrice * boxCapacity;
+                }
+
+                const midUnitName = String(n.satuan_menengah_opsional ?? n.satuan_menengah ?? n.mid_unit_name ?? n.midunitname ?? '').trim();
+                const midCapacity = parseNumber(n.isi_satuan_menengah ?? n.mid_capacity ?? n.midcapacity, 0);
+                const midPrice = parseNumber(n.harga_satuan_menengah_rp ?? n.harga_satuan_menengah ?? n.mid_price ?? n.midprice, 0);
+                const midBarcode = String(n.barcode_satuan_menengah ?? n.mid_barcode ?? n.midbarcode ?? '').trim();
+
+                const stokDus = parseNumber(n.estimasi_stok_dus ?? n.stok_dus ?? n.jumlah_dus, 0);
+                const sisaEcer = parseNumber(n.sisa_satuan_ecer ?? n.sisa_satuan ?? n.sisa_eceran, 0);
+                let stock = parseNumber(
+                  n.total_stok_fisik_satuan ?? n.stok_awal ?? n.stok_saat_ini ?? n.stok ?? n.stock ?? n.qty ?? n.stoksaatini,
+                  0
+                );
+                if (stock === 0 && stokDus > 0 && boxCapacity > 0) {
+                  stock = (stokDus * boxCapacity) + sisaEcer;
+                }
+
+                const minStock = parseNumber(
+                  n.min_stok_alert_tipis ?? n.min_stok ?? n.minimum_stok ?? n.min_stock ?? n.stok_minimum ?? n.minstok,
+                  0
+                );
+
                 products.push({
                   id: id || undefined,
                   name: String(name).trim(),
                   barcode: barcode,
+                  box_barcode: boxBarcode || undefined,
+                  boxBarcode: boxBarcode || undefined,
+                  retail_barcode: retailBarcode || barcode || undefined,
+                  retailBarcode: retailBarcode || barcode || undefined,
+                  box_capacity: boxCapacity > 0 ? boxCapacity : 1,
+                  boxCapacity: boxCapacity > 0 ? boxCapacity : 1,
+                  box_price: boxPrice > 0 ? boxPrice : undefined,
+                  boxPrice: boxPrice > 0 ? boxPrice : undefined,
+                  min_wholesale_qty: minWholesaleQty > 0 ? minWholesaleQty : 1,
+                  minWholesaleQty: minWholesaleQty > 0 ? minWholesaleQty : 1,
+                  mid_unit_name: midUnitName || undefined,
+                  midUnitName: midUnitName || undefined,
+                  mid_barcode: midBarcode || undefined,
+                  midBarcode: midBarcode || undefined,
+                  mid_capacity: midCapacity > 0 ? midCapacity : undefined,
+                  midCapacity: midCapacity > 0 ? midCapacity : undefined,
+                  mid_price: midPrice > 0 ? midPrice : undefined,
+                  midPrice: midPrice > 0 ? midPrice : undefined,
                   sku: sku,
                   category: String(n.kategori || n.category || 'Umum').trim(),
-                  unit: String(n.satuan || n.unit || 'Pcs').trim(),
+                  unit: String(n.satuan_eceran || n.satuan || n.unit || 'Pcs').trim(),
                   purchase_price: buyPrice,
                   selling_price: sellPrice,
                   wholesale_price: wholesalePrice,
@@ -888,32 +1073,36 @@ export const downloadExcelTemplate = (type: 'MASTER' | 'PRODUCT' | 'CUSTOMER' | 
       'PANDUAN & ATURAN PENGISIAN': 'Template Excel ini disiapkan secara presisi untuk sistem POS Mart. Anda dapat mengisi data baru atau mengupdate data yang sudah ada secara massal.'
     },
     {
-      'BAGIAN / MODUL': '1. FORMAT ANGKA & HARGA',
+      'BAGIAN / MODUL': '1. BARCODE DUS & BARCODE ECERAN',
+      'PANDUAN & ATURAN PENGISIAN': 'POS Mart mendukung scan 2 barcode berbeda: "Barcode Dus (Karton)" untuk scan saat kulakan/penjualan kartonan, dan "Barcode Eceran (Satuan)" untuk scan penjualan per bungkus/pcs. Jika barang tidak memiliki barcode dus, cukup isi Barcode Eceran.'
+    },
+    {
+      'BAGIAN / MODUL': '2. POLA KEMASAN (ISI PER 1 DUS)',
+      'PANDUAN & ATURAN PENGISIAN': 'Kolom "Isi per 1 Dus (Pcs)" diisi rasio satuan eceran dalam 1 karton (contoh: rokok isi 80 bks, minyak goreng isi 6 pouch, mi instan isi 40 bks, teh botol isi 24 kotak). Jika barang eceran murni, isi 1.'
+    },
+    {
+      'BAGIAN / MODUL': '3. HARGA MULTI-TIER (ECER, GROSIR, DUS)',
+      'PANDUAN & ATURAN PENGISIAN': 'POS Mart mendukung 3 tingkat harga sekaligus: (1) Harga Jual Eceran per bungkus/pcs, (2) Harga Grosir Satuan (berlaku otomatis jika qty >= Min. Beli Grosir), dan (3) Harga Jual per 1 Dus (berlaku otomatis saat scan Barcode Dus).'
+    },
+    {
+      'BAGIAN / MODUL': '4. KEMASAN MENENGAH (RENCENG/SLOP/PACK)',
+      'PANDUAN & ATURAN PENGISIAN': 'Opsional: Untuk rokok per slop, kopi/shampoo sachet per renceng, atau biskuit per pack. Isi nama satuan (misal: "Slop"), rasio isi (misal: 10), dan harga jual menengahnya.'
+    },
+    {
+      'BAGIAN / MODUL': '5. STOK FISIK SATUAN & ESTIMASI DUS',
+      'PANDUAN & ATURAN PENGISIAN': 'Stok utama selalu dihitung dalam satuan eceran terkecil (bungkus/pcs). Anda dapat mengisi "Total Stok Fisik (Satuan)", atau sistem otomatis menghitung jika Anda mengisi Estimasi Dus x Isi Dus.'
+    },
+    {
+      'BAGIAN / MODUL': '6. FORMAT ANGKA & HARGA',
       'PANDUAN & ATURAN PENGISIAN': 'Ketik harga dan stok HANYA dengan angka murni tanpa simbol Rp, tanpa titik, dan tanpa koma (Contoh yang benar: 25000. JANGAN ketik Rp 25.000 atau 25,000).'
     },
     {
-      'BAGIAN / MODUL': '2. KOLOM ID (BARU vs UPDATE)',
+      'BAGIAN / MODUL': '7. KOLOM ID (BARU vs UPDATE)',
       'PANDUAN & ATURAN PENGISIAN': 'KOSONGKAN kolom ID jika Anda ingin menambahkan data baru. Isi kolom ID HANYA jika Anda ingin memperbarui (update) produk/pelanggan/supplier yang sudah ada di database.'
     },
     {
-      'BAGIAN / MODUL': '3. BARCODE & SKU',
-      'PANDUAN & ATURAN PENGISIAN': 'Barcode dapat diisi dari hasil tembak barcode scanner fisik atau diketik manual (Code128 / EAN13). Kolom SKU adalah kode penataan rak toko (opsional).'
-    },
-    {
-      'BAGIAN / MODUL': '4. PRODUK BERVARIAN',
-      'PANDUAN & ATURAN PENGISIAN': 'Ada 2 cara: (A) Tulis ringkas di kolom "Daftar Varian Ringkas" (contoh: Kemasan 5Kg: 20, Kemasan 10Kg: 15), ATAU (B) Isi sheet "Varian Produk" untuk mengatur harga & stok per varian secara terpisah.'
-    },
-    {
-      'BAGIAN / MODUL': '5. DATA PELANGGAN',
-      'PANDUAN & ATURAN PENGISIAN': 'Nama pelanggan wajib diisi. Tipe pelanggan didukung: "Retail (Eceran)" atau "Pelanggan Grosir". Nomor HP diawali 08xxx untuk kemudahan WhatsApp.'
-    },
-    {
-      'BAGIAN / MODUL': '6. DATA SUPPLIER & HUTANG',
-      'PANDUAN & ATURAN PENGISIAN': 'Termin Pembayaran dalam satuan Hari (contoh: 0 = Tunai/Lunas, 14 = Tempo 2 minggu, 30 = Tempo 1 bulan). Saldo Hutang Awal diisi jika ada hutang berjalan yang belum lunas.'
-    },
-    {
-      'BAGIAN / MODUL': '7. DATA KARYAWAN & KASIR',
-      'PANDUAN & ATURAN PENGISIAN': 'Role didukung: Admin, Supervisor, Cashier. PIN Kasir (6 digit) digunakan kasir untuk login instan di layar POS. Shift didukung: A (Pagi), B (Siang), C (Malam), AUTO.'
+      'BAGIAN / MODUL': '8. DATA PELANGGAN, SUPPLIER, KARYAWAN',
+      'PANDUAN & ATURAN PENGISIAN': 'Gunakan sheet "Data Pelanggan", "Data Supplier", dan "Data Karyawan" untuk melengkapi seluruh master data toko Anda secara serentak.'
     }
   ];
   const wsGuide = XLSX.utils.json_to_sheet(guideRows);
@@ -925,79 +1114,25 @@ export const downloadExcelTemplate = (type: 'MASTER' | 'PRODUCT' | 'CUSTOMER' | 
     const sampleProducts = [
       {
         'ID Produk (Opsional)': '',
-        'Barcode': '8992772000155',
-        'SKU': 'SKU-SM-001',
-        'Nama Produk': 'Minyak Goreng Bimoli Spesial 2 Liter',
-        'Kategori': 'Sembako',
-        'Satuan': 'Pouch',
-        'Harga Beli (Modal)': 33500,
-        'Harga Jual (Eceran)': 37500,
-        'Harga Grosir (Partai)': 36000,
-        'Stok Awal': 48,
-        'Min. Stok (Alert Tipis)': 10,
-        'Status': 'Aktif',
-        'Daftar Varian Ringkas': '-',
-        'Lokasi Rak': 'Rak A1 - Sembako'
-      },
-      {
-        'ID Produk (Opsional)': '',
-        'Barcode': '8991002105432',
-        'SKU': 'SKU-BR-001',
-        'Nama Produk': 'Beras Premium Ramos Wangi',
-        'Kategori': 'Beras',
-        'Satuan': 'Kg',
-        'Harga Beli (Modal)': 12000,
-        'Harga Jual (Eceran)': 14500,
-        'Harga Grosir (Partai)': 13800,
-        'Stok Awal': 250,
-        'Min. Stok (Alert Tipis)': 25,
-        'Status': 'Aktif',
-        'Daftar Varian Ringkas': '5Kg: 20, 10Kg: 15',
-        'Lokasi Rak': 'Palet Sembako B'
-      },
-      {
-        'ID Produk (Opsional)': '',
-        'Barcode': '8999999001234',
-        'SKU': 'SKU-MN-001',
-        'Nama Produk': 'Teh Botol Sosro Kotak 250ml',
-        'Kategori': 'Minuman',
-        'Satuan': 'Kotak',
-        'Harga Beli (Modal)': 3200,
-        'Harga Jual (Eceran)': 4000,
-        'Harga Grosir (Partai)': 3600,
-        'Stok Awal': 120,
-        'Min. Stok (Alert Tipis)': 24,
-        'Status': 'Aktif',
-        'Daftar Varian Ringkas': '-',
-        'Lokasi Rak': 'Chiller 1'
-      },
-      {
-        'ID Produk (Opsional)': '',
-        'Barcode': '8992753112004',
-        'SKU': 'SKU-SN-001',
-        'Nama Produk': 'Oreo Sandwich Vanilla 119g',
-        'Kategori': 'Biskuit & Snack',
-        'Satuan': 'Bks',
-        'Harga Beli (Modal)': 8500,
-        'Harga Jual (Eceran)': 10500,
-        'Harga Grosir (Partai)': 9800,
-        'Stok Awal': 60,
-        'Min. Stok (Alert Tipis)': 12,
-        'Status': 'Aktif',
-        'Daftar Varian Ringkas': '-',
-        'Lokasi Rak': 'Rak C2'
-      },
-      {
-        'ID Produk (Opsional)': '',
-        'Barcode': '8999909013278',
-        'SKU': 'SKU-RK-001',
+        'Barcode Dus (Karton)': '8999909013278DUS',
+        'Barcode Eceran (Satuan)': '8999909013278',
+        'SKU / Kode Rak': 'SKU-RK-001',
         'Nama Produk': 'Sampoerna A Mild 16 Batang',
         'Kategori': 'Rokok',
-        'Satuan': 'Bks',
-        'Harga Beli (Modal)': 31500,
-        'Harga Jual (Eceran)': 34500,
-        'Harga Grosir (Partai)': 33800,
-        'Stok Awal': 100,
+        'Satuan Eceran': 'Bks',
+        'Isi per 1 Dus (Pcs)': 80,
+        'Modal Satuan (Rp)': 31500,
+        'Modal per 1 Dus (Rp)': 2520000,
+        'Harga Jual Eceran (Rp)': 35000,
+        'Harga Grosir Satuan (Rp)': 34000,
+        'Min. Beli Grosir (Pcs)': 10,
+        'Harga Jual per 1 Dus (Rp)': 2680000,
+        'Satuan Menengah (Opsional)': 'Slop',
+        'Isi Satuan Menengah': 10,
+        'Harga Satuan Menengah (Rp)': 342000,
+        'Barcode Satuan Menengah': '8999909013278SLP',
+        'Total Stok Fisik (Satuan)': 160,
+        'Estimasi Stok Dus': 2,
         'Min. Stok (Alert Tipis)': 20,
         'Status': 'Aktif',
         'Daftar Varian Ringkas': '-',
@@ -1005,23 +1140,137 @@ export const downloadExcelTemplate = (type: 'MASTER' | 'PRODUCT' | 'CUSTOMER' | 
       },
       {
         'ID Produk (Opsional)': '',
-        'Barcode': '8997001005541',
-        'SKU': 'SKU-KP-001',
-        'Nama Produk': 'Kaos Polos Cotton Combed 30s',
-        'Kategori': 'Pakaian',
-        'Satuan': 'Pcs',
-        'Harga Beli (Modal)': 28000,
-        'Harga Jual (Eceran)': 45000,
-        'Harga Grosir (Partai)': 38000,
-        'Stok Awal': 75,
-        'Min. Stok (Alert Tipis)': 10,
+        'Barcode Dus (Karton)': '8992772000155DUS',
+        'Barcode Eceran (Satuan)': '8992772000155',
+        'SKU / Kode Rak': 'SKU-SM-001',
+        'Nama Produk': 'Minyak Goreng Bimoli Spesial 2 Liter',
+        'Kategori': 'Sembako',
+        'Satuan Eceran': 'Pouch',
+        'Isi per 1 Dus (Pcs)': 6,
+        'Modal Satuan (Rp)': 33500,
+        'Modal per 1 Dus (Rp)': 201000,
+        'Harga Jual Eceran (Rp)': 38000,
+        'Harga Grosir Satuan (Rp)': 36500,
+        'Min. Beli Grosir (Pcs)': 3,
+        'Harga Jual per 1 Dus (Rp)': 216000,
+        'Satuan Menengah (Opsional)': '',
+        'Isi Satuan Menengah': '',
+        'Harga Satuan Menengah (Rp)': '',
+        'Barcode Satuan Menengah': '',
+        'Total Stok Fisik (Satuan)': 48,
+        'Estimasi Stok Dus': 8,
+        'Min. Stok (Alert Tipis)': 12,
         'Status': 'Aktif',
-        'Daftar Varian Ringkas': 'Hitam M: 25, Hitam L: 30, Putih L: 20',
-        'Lokasi Rak': 'Gantungan Display'
+        'Daftar Varian Ringkas': '-',
+        'Lokasi Rak': 'Rak A1 - Sembako'
+      },
+      {
+        'ID Produk (Opsional)': '',
+        'Barcode Dus (Karton)': '89686010010DUS',
+        'Barcode Eceran (Satuan)': '89686010010',
+        'SKU / Kode Rak': 'SKU-MI-001',
+        'Nama Produk': 'Indomie Goreng Spesial 85g',
+        'Kategori': 'Mie Instan',
+        'Satuan Eceran': 'Bks',
+        'Isi per 1 Dus (Pcs)': 40,
+        'Modal Satuan (Rp)': 2900,
+        'Modal per 1 Dus (Rp)': 116000,
+        'Harga Jual Eceran (Rp)': 3500,
+        'Harga Grosir Satuan (Rp)': 3250,
+        'Min. Beli Grosir (Pcs)': 10,
+        'Harga Jual per 1 Dus (Rp)': 128000,
+        'Satuan Menengah (Opsional)': '',
+        'Isi Satuan Menengah': '',
+        'Harga Satuan Menengah (Rp)': '',
+        'Barcode Satuan Menengah': '',
+        'Total Stok Fisik (Satuan)': 200,
+        'Estimasi Stok Dus': 5,
+        'Min. Stok (Alert Tipis)': 40,
+        'Status': 'Aktif',
+        'Daftar Varian Ringkas': '-',
+        'Lokasi Rak': 'Rak M1'
+      },
+      {
+        'ID Produk (Opsional)': '',
+        'Barcode Dus (Karton)': '8999999001234DUS',
+        'Barcode Eceran (Satuan)': '8999999001234',
+        'SKU / Kode Rak': 'SKU-MN-001',
+        'Nama Produk': 'Teh Botol Sosro Kotak 250ml',
+        'Kategori': 'Minuman',
+        'Satuan Eceran': 'Kotak',
+        'Isi per 1 Dus (Pcs)': 24,
+        'Modal Satuan (Rp)': 3200,
+        'Modal per 1 Dus (Rp)': 76800,
+        'Harga Jual Eceran (Rp)': 4000,
+        'Harga Grosir Satuan (Rp)': 3600,
+        'Min. Beli Grosir (Pcs)': 6,
+        'Harga Jual per 1 Dus (Rp)': 84000,
+        'Satuan Menengah (Opsional)': '',
+        'Isi Satuan Menengah': '',
+        'Harga Satuan Menengah (Rp)': '',
+        'Barcode Satuan Menengah': '',
+        'Total Stok Fisik (Satuan)': 120,
+        'Estimasi Stok Dus': 5,
+        'Min. Stok (Alert Tipis)': 24,
+        'Status': 'Aktif',
+        'Daftar Varian Ringkas': '-',
+        'Lokasi Rak': 'Chiller 1'
+      },
+      {
+        'ID Produk (Opsional)': '',
+        'Barcode Dus (Karton)': '',
+        'Barcode Eceran (Satuan)': '8992753112004',
+        'SKU / Kode Rak': 'SKU-SN-001',
+        'Nama Produk': 'Oreo Sandwich Vanilla 119g',
+        'Kategori': 'Biskuit & Snack',
+        'Satuan Eceran': 'Bks',
+        'Isi per 1 Dus (Pcs)': 1,
+        'Modal Satuan (Rp)': 8500,
+        'Modal per 1 Dus (Rp)': '',
+        'Harga Jual Eceran (Rp)': 10500,
+        'Harga Grosir Satuan (Rp)': 9800,
+        'Min. Beli Grosir (Pcs)': 5,
+        'Harga Jual per 1 Dus (Rp)': '',
+        'Satuan Menengah (Opsional)': '',
+        'Isi Satuan Menengah': '',
+        'Harga Satuan Menengah (Rp)': '',
+        'Barcode Satuan Menengah': '',
+        'Total Stok Fisik (Satuan)': 60,
+        'Estimasi Stok Dus': '-',
+        'Min. Stok (Alert Tipis)': 12,
+        'Status': 'Aktif',
+        'Daftar Varian Ringkas': '-',
+        'Lokasi Rak': 'Rak C2'
+      },
+      {
+        'ID Produk (Opsional)': '',
+        'Barcode Dus (Karton)': '',
+        'Barcode Eceran (Satuan)': '8991002105432',
+        'SKU / Kode Rak': 'SKU-BR-001',
+        'Nama Produk': 'Beras Premium Ramos Wangi',
+        'Kategori': 'Beras',
+        'Satuan Eceran': 'Kg',
+        'Isi per 1 Dus (Pcs)': 1,
+        'Modal Satuan (Rp)': 12000,
+        'Modal per 1 Dus (Rp)': '',
+        'Harga Jual Eceran (Rp)': 14500,
+        'Harga Grosir Satuan (Rp)': 13800,
+        'Min. Beli Grosir (Pcs)': 10,
+        'Harga Jual per 1 Dus (Rp)': '',
+        'Satuan Menengah (Opsional)': '',
+        'Isi Satuan Menengah': '',
+        'Harga Satuan Menengah (Rp)': '',
+        'Barcode Satuan Menengah': '',
+        'Total Stok Fisik (Satuan)': 250,
+        'Estimasi Stok Dus': '-',
+        'Min. Stok (Alert Tipis)': 25,
+        'Status': 'Aktif',
+        'Daftar Varian Ringkas': '5Kg: 20, 10Kg: 15',
+        'Lokasi Rak': 'Palet Sembako B'
       }
     ];
     const wsProd = XLSX.utils.json_to_sheet(sampleProducts);
-    setSheetCols(wsProd, [18, 18, 16, 36, 16, 10, 18, 18, 18, 14, 20, 12, 32, 22]);
+    setSheetCols(wsProd, [18, 22, 22, 16, 36, 16, 12, 16, 16, 18, 18, 18, 16, 18, 18, 16, 18, 22, 20, 16, 16, 12, 28, 20]);
     XLSX.utils.book_append_sheet(wb, wsProd, 'Manajemen Stok');
 
     // 2b. SHEET VARIAN PRODUK (DETAIL VARIAN)

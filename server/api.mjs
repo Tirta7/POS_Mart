@@ -2298,8 +2298,19 @@ app.post('/api/saas/import/master', async (req, res) => {
         const pSellPrice = Number(p.selling_price ?? p.sellingPrice ?? p.harga_jual ?? p.hargaJual ?? 0);
         const pBuyPrice = Number(p.purchase_price ?? p.purchasePrice ?? p.harga_beli ?? p.hargaBeli ?? 0);
         const pWholesalePrice = Number(p.wholesale_price ?? p.wholesalePrice ?? p.harga_grosir ?? p.hargaGrosir ?? pSellPrice);
+        const pMinWholesaleQty = Number(p.min_wholesale_qty ?? p.minWholesaleQty ?? 0) || 0;
         const pStock = Number(p.stock ?? p.stok ?? 0);
         const pMinStock = Number(p.min_stock ?? p.minStock ?? p.min_stok ?? 0);
+
+        const pBoxBarcode = (p.box_barcode ?? p.boxBarcode) ? String(p.box_barcode ?? p.boxBarcode).trim() : (pBarcode || null);
+        const pRetailBarcode = (p.retail_barcode ?? p.retailBarcode) ? String(p.retail_barcode ?? p.retailBarcode).trim() : null;
+        const pBoxCapacity = Number(p.box_capacity ?? p.boxCapacity ?? 1) || 1;
+        const pBoxPrice = Number(p.box_price ?? p.boxPrice ?? 0) || 0;
+
+        const pMidUnitName = (p.mid_unit_name ?? p.midUnitName) ? String(p.mid_unit_name ?? p.midUnitName).trim() : null;
+        const pMidBarcode = (p.mid_barcode ?? p.midBarcode) ? String(p.mid_barcode ?? p.midBarcode).trim() : null;
+        const pMidCapacity = Number(p.mid_capacity ?? p.midCapacity ?? 0) || 0;
+        const pMidPrice = Number(p.mid_price ?? p.midPrice ?? 0) || 0;
 
         let categoryId = null;
         if (pCategory) {
@@ -2321,10 +2332,30 @@ app.post('/api/saas/import/master', async (req, res) => {
             where: { tenant_id: tenantId, deleted_at: null, id: pId }
           });
         }
-        // Priority 2: Match by Barcode
+        // Priority 2: Match by Barcode (Dus atau Satuan)
         if (!existing && pBarcode) {
           existing = await prisma.product.findFirst({
-            where: { tenant_id: tenantId, deleted_at: null, barcode: pBarcode }
+            where: {
+              tenant_id: tenantId,
+              deleted_at: null,
+              OR: [
+                { barcode: pBarcode },
+                { box_barcode: pBarcode },
+                { retail_barcode: pBarcode }
+              ]
+            }
+          });
+        }
+        if (!existing && pRetailBarcode) {
+          existing = await prisma.product.findFirst({
+            where: {
+              tenant_id: tenantId,
+              deleted_at: null,
+              OR: [
+                { retail_barcode: pRetailBarcode },
+                { barcode: pRetailBarcode }
+              ]
+            }
           });
         }
         // Priority 3: Match by SKU
@@ -2362,6 +2393,15 @@ app.post('/api/saas/import/master', async (req, res) => {
               selling_price: pSellPrice > 0 ? pSellPrice : existing.selling_price,
               purchase_price: pBuyPrice > 0 ? pBuyPrice : existing.purchase_price,
               wholesale_price: pWholesalePrice > 0 ? pWholesalePrice : existing.wholesale_price,
+              min_wholesale_qty: pMinWholesaleQty > 0 ? pMinWholesaleQty : existing.min_wholesale_qty,
+              box_barcode: pBoxBarcode || existing.box_barcode,
+              box_capacity: pBoxCapacity > 0 ? pBoxCapacity : existing.box_capacity,
+              box_price: pBoxPrice > 0 ? pBoxPrice : existing.box_price,
+              retail_barcode: pRetailBarcode || existing.retail_barcode,
+              mid_unit_name: pMidUnitName || existing.mid_unit_name,
+              mid_barcode: pMidBarcode || existing.mid_barcode,
+              mid_capacity: pMidCapacity > 0 ? pMidCapacity : existing.mid_capacity,
+              mid_price: pMidPrice > 0 ? pMidPrice : existing.mid_price,
               // Produk bervarian: stok dihitung dari total varian, jangan ditimpa lewat import
               stock: (await prisma.productVariant.count({ where: { product_id: existing.id } })) > 0
                 ? existing.stock
@@ -2390,6 +2430,15 @@ app.post('/api/saas/import/master', async (req, res) => {
               selling_price: !isNaN(pSellPrice) && pSellPrice >= 0 ? pSellPrice : 0,
               purchase_price: !isNaN(pBuyPrice) && pBuyPrice >= 0 ? pBuyPrice : 0,
               wholesale_price: !isNaN(pWholesalePrice) && pWholesalePrice >= 0 ? pWholesalePrice : pSellPrice,
+              min_wholesale_qty: !isNaN(pMinWholesaleQty) && pMinWholesaleQty >= 0 ? pMinWholesaleQty : 0,
+              box_barcode: pBoxBarcode,
+              box_capacity: pBoxCapacity,
+              box_price: pBoxPrice,
+              retail_barcode: pRetailBarcode,
+              mid_unit_name: pMidUnitName,
+              mid_barcode: pMidBarcode,
+              mid_capacity: pMidCapacity,
+              mid_price: pMidPrice,
               stock: !isNaN(pStock) ? pStock : 0,
               min_stock: !isNaN(pMinStock) ? pMinStock : 0
             }
