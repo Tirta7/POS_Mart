@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<title>Buku Panduan Pengguna POS MART</title>
+<meta name="description" content="Buku panduan pengguna aplikasi kasir dan stok POS MART, dijelaskan dengan bahasa yang sangat sederhana.">
+<style>
+  @page { size: A4; margin: 16mm 15mm 18mm 15mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "Helvetica Neue", "Segoe UI", Arial, sans-serif;
+    color: #1e293b; font-size: 11.5pt; line-height: 1.6; margin: 0;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  h1, h2, h3, h4 { color: #0f172a; line-height: 1.25; }
+  h2 {
+    font-size: 21pt; margin: 0 0 6px 0; padding: 14px 18px; border-radius: 12px;
+    background: linear-gradient(135deg, #dc2626, #f97316); color: #fff;
+  }
+  h2 .num { opacity: .75; font-weight: 600; margin-right: 8px; }
+  h3 { font-size: 14pt; margin: 22px 0 8px; padding-left: 10px; border-left: 5px solid #ef4444; }
+  h4 { font-size: 12pt; margin: 16px 0 6px; color: #b91c1c; }
+  p { margin: 6px 0 10px; }
+  .chapter { page-break-before: always; }
+  .subtitle { color: #64748b; font-size: 11pt; margin: 4px 0 14px 4px; }
+  .avoid { page-break-inside: avoid; }
+  ul, ol { margin: 6px 0 12px; padding-left: 22px; }
+  li { margin: 3px 0; }
+  code, .kbd {
+    font-family: Menlo, Consolas, monospace; font-size: 10pt; background: #f1f5f9;
+    border: 1px solid #e2e8f0; border-radius: 5px; padding: 1px 6px;
+  }
+  .kbd { background: #0f172a; color: #fff; border-color: #0f172a; font-weight: 700; }
+  table { width: 100%; border-collapse: collapse; margin: 8px 0 14px; font-size: 10.5pt; page-break-inside: avoid; }
+  th { background: #0f172a; color: #fff; text-align: left; padding: 7px 9px; }
+  td { border-bottom: 1px solid #e2e8f0; padding: 7px 9px; vertical-align: top; }
+  tr:nth-child(even) td { background: #f8fafc; }
+  .box { border-radius: 12px; padding: 12px 16px; margin: 12px 0; page-break-inside: avoid; }
+  .baby { background: #fef9c3; border: 2px dashed #eab308; }
+  .baby::before { content: "🍼 Bahasa Bayinya:"; display: block; font-weight: 800; color: #a16207; margin-bottom: 4px; }
+  .tip { background: #ecfdf5; border-left: 6px solid #10b981; }
+  .tip::before { content: "💡 Tips"; display: block; font-weight: 800; color: #047857; margin-bottom: 2px; }
+  .warn { background: #fef2f2; border-left: 6px solid #ef4444; }
+  .warn::before { content: "⚠️ Hati-hati"; display: block; font-weight: 800; color: #b91c1c; margin-bottom: 2px; }
+  .info { background: #eff6ff; border-left: 6px solid #3b82f6; }
+  .info::before { content: "ℹ️ Catatan"; display: block; font-weight: 800; color: #1d4ed8; margin-bottom: 2px; }
+  .calc { background: #f5f3ff; border: 1px solid #c4b5fd; font-family: Menlo, Consolas, monospace; font-size: 10pt; white-space: pre-wrap; }
+  figure { margin: 12px 0 16px; text-align: center; page-break-inside: avoid; }
+  figure img { width: 100%; border-radius: 10px; border: 1px solid #cbd5e1; box-shadow: 0 4px 14px rgba(0,0,0,.08); }
+  figcaption { font-size: 9.5pt; color: #64748b; margin-top: 6px; font-style: italic; }
+  .tag { display: inline-block; font-size: 9pt; font-weight: 800; padding: 1px 7px; border-radius: 5px; font-family: Menlo, monospace; }
+  .t-dus { background: #fef3c7; color: #92400e; }
+  .t-ecer { background: #ede9fe; color: #6d28d9; }
+  .t-slop { background: #dbeafe; color: #1d4ed8; }
+  .t-bc { background: #fef3c7; color: #a16207; }
+  .t-sku { background: #e2e8f0; color: #334155; }
+  .t-red { background: #fee2e2; color: #b91c1c; }
+  .t-blue { background: #dbeafe; color: #1e40af; }
+  .t-purple { background: #ede9fe; color: #6d28d9; }
+  .t-green { background: #dcfce7; color: #166534; }
+  .steps { counter-reset: s; list-style: none; padding-left: 0; }
+  .steps > li { counter-increment: s; position: relative; padding: 8px 10px 8px 46px; margin: 6px 0;
+    background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; page-break-inside: avoid; }
+  .steps > li::before { content: counter(s); position: absolute; left: 10px; top: 8px; width: 26px; height: 26px;
+    border-radius: 50%; background: #ef4444; color: #fff; font-weight: 800; text-align: center; line-height: 26px; font-size: 10.5pt; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .card { border: 1px solid #e2e8f0; border-radius: 12px; padding: 10px 14px; background: #fff; page-break-inside: avoid; }
+  .card b.t { display: block; color: #b91c1c; margin-bottom: 2px; }
+
+  /* COVER */
+  .cover {
+    height: 262mm; display: flex; flex-direction: column; justify-content: space-between;
+    background: linear-gradient(150deg, #7f1d1d 0%, #dc2626 45%, #f97316 100%);
+    color: #fff; border-radius: 18px; padding: 34mm 18mm 18mm;
+  }
+  .cover .logo { width: 70px; height: 70px; border-radius: 18px; background: #fff; color: #dc2626;
+    font-size: 40pt; font-weight: 900; display: flex; align-items: center; justify-content: center; }
+  .cover h1 { color: #fff; font-size: 40pt; margin: 22px 0 6px; letter-spacing: -1px; }
+  .cover .sub { font-size: 16pt; opacity: .92; }
+  .cover .pill { display: inline-block; background: rgba(255,255,255,.18); border: 1px solid rgba(255,255,255,.35);
+    padding: 6px 14px; border-radius: 30px; margin: 4px 6px 0 0; font-size: 10.5pt; }
+  .cover .foot { font-size: 10pt; opacity: .85; }
+
+  /* TOC */
+  .toc { list-style: none; padding: 0; }
+  .toc li { display: flex; justify-content: space-between; border-bottom: 1px dotted #cbd5e1; padding: 6px 2px; font-size: 11.5pt; }
+  .toc li span:first-child b { color: #dc2626; margin-right: 8px; }
+</style>
+</head>
+<body>
+
+<!-- ============ COVER ============ -->
+<section class="cover">
+  <div>
+    <div class="logo">P</div>
+    <h1>Buku Panduan<br>POS MART</h1>
+    <div class="sub">Aplikasi Kasir &amp; Stok Toko — dijelaskan pelan-pelan,<br>pakai bahasa yang gampang banget 🍼</div>
+    <div style="margin-top:22px">
+      <span class="pill">📦 Stok Dus &amp; Eceran</span>
+      <span class="pill">🏷️ Barcode</span>
+      <span class="pill">💰 Harga Ecer / Grosir / Dus</span>
+      <span class="pill">🧾 Kasir</span>
+      <span class="pill">📊 Laporan</span>
+      <span class="pill">📥 Excel</span>
+    </div>
+  </div>
+  <div class="foot">
+    Untuk: Pemilik Toko, Admin Gudang, dan Kasir<br>
+    Versi Panduan 1.0 · Oktober 2026
+  </div>
+</section>
+
+<!-- ============ DAFTAR ISI ============ -->
+<section class="chapter">
+  <h2>Daftar Isi</h2>
+  <p class="subtitle">Bingung mau mulai dari mana? Kalau baru pertama kali, baca Bab 1 sampai Bab 5 dulu ya.</p>
+  <ul class="toc">
+    <li><span><b>1</b>Kenalan Dulu: POS MART itu apa?</span><span>Pemula</span></li>
+    <li><span><b>2</b>Kamus Mini: Arti kata-kata di aplikasi</span><span>Wajib baca</span></li>
+    <li><span><b>3</b>Menyalakan, Mematikan &amp; Masuk (Login)</span><span>Pemula</span></li>
+    <li><span><b>4</b>Peta Layar Back-Office (menu sebelah kiri)</span><span>Pemula</span></li>
+    <li><span><b>5</b>Cara Membaca Halaman Manajemen Stok</span><span>Penting ⭐</span></li>
+    <li><span><b>6</b>Cara Membaca Formulir “Edit Stok Barang” (bagian per bagian)</span><span>Penting ⭐</span></li>
+    <li><span><b>7</b>Resep Cepat: Memasukkan 3 Jenis Barang</span><span>Praktik</span></li>
+    <li><span><b>8</b>Mesin Kasir (POS): Jualan sampai cetak struk</span><span>Kasir</span></li>
+    <li><span><b>9</b>Barang Datang, Mutasi Stok &amp; Pembelian</span><span>Gudang</span></li>
+    <li><span><b>10</b>Pelanggan, Supplier, Karyawan, Laporan &amp; Pengaturan</span><span>Admin</span></li>
+    <li><span><b>11</b>Cetak Label Barcode</span><span>Gudang</span></li>
+    <li><span><b>12</b>Export &amp; Import Excel (isi barang banyak sekaligus)</span><span>Admin</span></li>
+    <li><span><b>13</b>Reset Pabrik (mengosongkan database)</span><span>Pemilik</span></li>
+    <li><span><b>14</b>Kalau Ada Masalah (Tanya-Jawab)</span><span>Semua</span></li>
+    <li><span><b>15</b>Ceklis Harian Toko</span><span>Semua</span></li>
+  </ul>
+
+  <div class="box baby">
+    Bayangkan POS MART itu seperti <b>buku catatan ajaib</b> milik toko. Buku ini ingat semua barang yang
+    kamu punya, berapa harganya, berapa sisanya, dan siapa saja yang sudah belanja. Bedanya dengan buku biasa:
+    buku ajaib ini bisa <b>menghitung sendiri</b>, jadi kamu tidak perlu pakai kalkulator lagi.
+  </div>
+</section>
+
+<!-- ============ BAB 1 ============ -->
+<section class="chapter">
+  <h2><span class="num">Bab 1</span>Kenalan Dulu</h2>
+  <p class="subtitle">POS MART itu apa, dan siapa yang memakainya?</p>
+
+  <p><b>POS MART</b> adalah aplikasi untuk toko / swalayan / grosir. Aplikasi ini punya <b>dua “ruangan”</b>:</p>
+
+  <div class="grid2">
+    <div class="card"><b class="t">🧾 Ruangan 1: Kasir (POS)</b>
+      Tempat menjual barang ke pembeli. Kasir tinggal <i>scan</i> (tembak) barcode, terima uang, lalu cetak struk.
+    </div>
+    <div class="card"><b class="t">🏢 Ruangan 2: Back-Office</b>
+      “Kantor belakang” toko. Tempat mengatur daftar barang, harga, stok, supplier, karyawan, dan melihat laporan untung-rugi.
+    </div>
+  </div>
+
+  <h3>Siapa memakai apa?</h3>
+  <table>
+    <tr><th>Peran</th><th>Biasanya mengerjakan</th></tr>
+    <tr><td><b>Pemilik / Admin</b></td><td>Mengatur harga, melihat laporan, mengelola karyawan, pengaturan toko, export/import Excel.</td></tr>
+    <tr><td><b>Supervisor</b></td><td>Membantu admin, menyetujui hal-hal penting di kasir (misalnya ubah harga khusus).</td></tr>
+    <tr><td><b>Admin Gudang</b></td><td>Memasukkan barang baru, mencatat barang datang, cetak barcode.</td></tr>
+    <tr><td><b>Kasir</b></td><td>Melayani pembeli di layar Kasir (POS).</td></tr>
+  </table>
+
+  <div class="box baby">
+    Back-Office itu seperti <b>dapur</b> rumah makan: tempat menyiapkan semuanya.
+    Kasir itu seperti <b>meja depan</b>: tempat melayani tamu. Kalau dapurnya rapi (data barang benar),
+    meja depannya pasti lancar.
+  </div>
+
+  <h3>Aturan paling penting di seluruh aplikasi</h3>
+  <div class="box info">
+    <b>Stok selalu dihitung dalam satuan yang PALING KECIL</b> (bungkus / pcs / sachet / batang / kg).<br>
+    Contoh: rokok disimpan sebagai <b>160 Bungkus</b>, bukan “2 Dus”. Aplikasi yang nanti
+    menerjemahkan sendiri: “160 bungkus = 2 dus”.
+  </div>
+</section>
+
+<!-- ============ BAB 2 ============ -->
+<section class="chapter">
+  <h2><span class="num">Bab 2</span>Kamus Mini</h2>
+  <p class="subtitle">Kata-kata yang sering muncul di layar, dijelaskan seperti ke anak kecil.</p>
+
+  <table>
+    <tr><th style="width:26%">Kata</th><th>Artinya (bahasa bayi)</th></tr>
+    <tr><td><b>Dus / Karton</b></td><td>Kardus besar dari pabrik/supplier. Di dalamnya ada banyak barang kecil. Contoh: 1 dus rokok isinya 80 bungkus.</td></tr>
+    <tr><td><b>Eceran / Satuan</b></td><td>Barang yang paling kecil yang dijual satu-satu. Contoh: 1 bungkus rokok, 1 bungkus Indomie, 1 sachet kopi.</td></tr>
+    <tr><td><b>Kemasan Menengah</b></td><td>Ukuran tengah-tengah antara dus dan eceran. Contoh: <b>Slop</b> (10 bungkus rokok), <b>Renceng</b> (10 sachet kopi), <b>Pack</b>, <b>Lusin</b> (12).</td></tr>
+    <tr><td><b>Barcode</b></td><td>Garis-garis hitam putih di bungkus barang. Kalau ditembak alat scanner, aplikasi langsung tahu itu barang apa.</td></tr>
+    <tr><td><b>Barcode Dus</b></td><td>Barcode yang ada di <b>kardus luar</b>. Biasanya beda dengan barcode di bungkus kecilnya.</td></tr>
+    <tr><td><b>Barcode Eceran</b></td><td>Barcode yang ada di <b>bungkus kecil</b> (yang dijual satuan).</td></tr>
+    <tr><td><b>Pindai</b></td><td>Membaca barcode pakai kamera HP/laptop (kalau tidak punya alat scanner).</td></tr>
+    <tr><td><b>SKU</b></td><td>Kode toko sendiri untuk barang (seperti nomor rak). Dibuat otomatis, boleh dibiarkan.</td></tr>
+    <tr><td><b>Kategori</b></td><td>Kelompok barang, misalnya Rokok, Sembako, Minuman. Biar gampang dicari.</td></tr>
+    <tr><td><b>Harga Beli Distributor</b></td><td>Harga yang kamu bayar ke supplier untuk <b>1 dus utuh</b>.</td></tr>
+    <tr><td><b>HPP / Harga Pokok Modal</b></td><td>Modal untuk <b>1 barang eceran</b>. Kalau beli 1 dus Rp 2.520.000 isinya 80, berarti modal 1 bungkus = Rp 31.500.</td></tr>
+    <tr><td><b>Harga Jual Eceran</b></td><td>Harga normal kalau pembeli beli satu-satu.</td></tr>
+    <tr><td><b>Harga Grosir / Partai</b></td><td>Harga lebih murah per satuan kalau pembeli beli <b>banyak</b> (minimal jumlah tertentu).</td></tr>
+    <tr><td><b>Harga Jual Dus</b></td><td>Harga kalau pembeli membeli <b>satu dus utuh</b>.</td></tr>
+    <tr><td><b>Margin</b></td><td>Persen untung dari harga jual. Rumus: (Harga Jual − Modal) ÷ Harga Jual × 100%.</td></tr>
+    <tr><td><b>Stok Fisik</b></td><td>Jumlah barang yang benar-benar ada di toko (dalam satuan eceran).</td></tr>
+    <tr><td><b>Stok Tipis (Min)</b></td><td>Batas “alarm”. Kalau stok turun sampai angka ini, aplikasi memberi tanda supaya kamu cepat belanja lagi.</td></tr>
+    <tr><td><b>Mutasi Stok</b></td><td>Catatan barang <b>masuk</b> dan <b>keluar</b> (selain penjualan kasir).</td></tr>
+    <tr><td><b>Hold</b></td><td>Menunda / “memarkir” belanjaan pembeli sebentar di kasir, lalu dilanjutkan nanti.</td></tr>
+    <tr><td><b>Tempo / Piutang</b></td><td>Pembeli bayar belakangan (ngutang). Aplikasi mencatat sisa utangnya.</td></tr>
+    <tr><td><b>Hutang Supplier</b></td><td>Kebalikan tempo: <b>toko</b> yang belum lunas bayar ke supplier.</td></tr>
+  </table>
+</section>
+
+<!-- ============ BAB 3 ============ -->
+<section class="chapter">
+  <h2><span class="num">Bab 3</span>Menyalakan, Mematikan &amp; Login</h2>
+  <p class="subtitle">Di folder aplikasi ada beberapa file “tombol ajaib” berakhiran <code>.command</code>. Cukup klik 2 kali.</p>
+
+  <table>
+    <tr><th>Nama File</th><th>Gunanya</th></tr>
+    <tr><td><code>JALANKAN_SERVER.command</code></td><td>🟢 Menyalakan aplikasi. Browser akan terbuka sendiri ke <code>http://localhost:5173</code>.</td></tr>
+    <tr><td><code>RESTART_SERVER.command</code></td><td>🔄 Mematikan lalu menyalakan lagi (kalau aplikasi terasa macet).</td></tr>
+    <tr><td><code>BERHENTIKAN_SERVER.command</code></td><td>🔴 Mematikan aplikasi.</td></tr>
+    <tr><td><code>RESET_FACTORY_DATABASE.command</code></td><td>🧹 Menghapus semua data, kembali seperti baru (lihat Bab 13). <b>Hati-hati!</b></td></tr>
+  </table>
+
+  <h3>Langkah menyalakan</h3>
+  <ol class="steps">
+    <li>Buka folder <b>POS_Mart</b> di Finder.</li>
+    <li>Klik 2 kali <code>JALANKAN_SERVER.command</code>. Akan muncul jendela hitam (Terminal).</li>
+    <li><b>Jangan tutup jendela hitam itu</b> selama toko buka. Itu “mesin”-nya aplikasi.</li>
+    <li>Tunggu ±3 detik, browser terbuka sendiri dan muncul halaman Login.</li>
+  </ol>
+
+  <div class="box warn">
+    Kalau jendela hitam ditutup, aplikasi ikut mati. Kalau muncul peringatan dari macOS “tidak bisa dibuka”,
+    klik kanan file → <b>Open</b> → <b>Open</b> sekali saja.
+  </div>
+
+  <h3>Login (masuk)</h3>
+  <p>Ada 2 cara masuk:</p>
+  <ul>
+    <li><b>Username + Password</b> — biasa dipakai Admin di Back-Office.</li>
+    <li><b>PIN 6 angka</b> — cepat, biasa dipakai Kasir.</li>
+  </ul>
+  <table>
+    <tr><th>Akun bawaan (setelah reset pabrik)</th><th>Username</th><th>Password</th><th>PIN</th></tr>
+    <tr><td>Administrator</td><td><code>admin</code></td><td><code>admin</code></td><td><code>123456</code></td></tr>
+    <tr><td>Kasir 1</td><td><code>kasir</code></td><td><code>kasir</code></td><td><code>111111</code></td></tr>
+  </table>
+  <div class="box tip">Segera ganti password &amp; PIN bawaan di menu <b>Data Karyawan</b> supaya orang lain tidak bisa masuk sembarangan.</div>
+
+  <h3>Membaca bagian atas layar</h3>
+  <ul>
+    <li><span class="tag t-green">● ONLINE</span> = aplikasi tersambung ke server. Kalau bukan Online, data belum tersimpan ke pusat.</li>
+    <li><b>Shift B (Siang)</b> = giliran kerja yang sedang berjalan (A Pagi, B Siang, C Malam).</li>
+    <li><b>Admin Mode</b> = kamu sedang masuk sebagai Admin.</li>
+    <li><span class="tag t-green">● Live Synced</span> di judul halaman = data otomatis ter-update kalau ada perubahan dari komputer lain.</li>
+  </ul>
+</section>
+
+<!-- ============ BAB 4 ============ -->
+<section class="chapter">
+  <h2><span class="num">Bab 4</span>Peta Layar Back-Office</h2>
+  <p class="subtitle">Menu di sebelah kiri layar itu seperti pintu-pintu ke ruangan berbeda.</p>
+
+  <table>
+    <tr><th style="width:28%">Menu</th><th>Isinya apa?</th></tr>
+    <tr><td><b>STOCK → Manajemen Stok</b></td><td>Daftar semua barang: nama, barcode, stok, harga. Tempat tambah/edit barang. (Bab 5–7)</td></tr>
+    <tr><td><b>STOCK → Mutasi Stok</b></td><td>Catatan barang masuk, keluar, dan penyesuaian (stok opname). (Bab 9)</td></tr>
+    <tr><td><b>Pembelian</b></td><td>Mencatat belanja ke supplier &amp; penerimaan barang. (Bab 9)</td></tr>
+    <tr><td><b>Data Pelanggan</b></td><td>Daftar pembeli langganan, riwayat belanja, dan piutang tempo.</td></tr>
+    <tr><td><b>Data Supplier</b></td><td>Daftar pemasok, termin bayar, dan hutang toko.</td></tr>
+    <tr><td><b>Data Karyawan</b></td><td>Akun admin/kasir, password, PIN, shift.</td></tr>
+    <tr><td><b>Laporan &amp; Analitik</b></td><td>Omzet, untung, barang terlaris, metode bayar.</td></tr>
+    <tr><td><b>Pengaturan</b></td><td>Nama toko, logo, pajak, pembulatan, kepala/kaki struk, Export/Import Excel.</td></tr>
+  </table>
+
+  <div class="box baby">
+    Kalau bingung, ingat saja: <b>barang</b> → menu STOCK. <b>Orang</b> → Pelanggan / Supplier / Karyawan.
+    <b>Uang &amp; untung</b> → Laporan. <b>Setelan toko</b> → Pengaturan.
+  </div>
+</section>
+
+<!-- ============ BAB 5 ============ -->
+<section class="chapter">
+  <h2><span class="num">Bab 5</span>Membaca Halaman Manajemen Stok</h2>
+  <p class="subtitle">Ini halaman yang paling sering dibuka. Kita baca dari atas ke bawah, pelan-pelan.</p>
+
+  <figure>
+    <img src="img/03_identitas_sampoerna.png" alt="Halaman Manajemen Stok dan Katalog">
+    <figcaption>Gambar 5.1 — Sebelah kiri: tabel daftar barang. Sebelah kanan: formulir Edit Stok Barang (dibahas di Bab 6).</figcaption>
+  </figure>
+
+  <h3>5.1 Tiga kotak ringkasan di paling atas</h3>
+  <table>
+    <tr><th style="width:24%">Kotak</th><th>Contoh</th><th>Artinya</th></tr>
+    <tr><td><b>TOTAL PRODUK</b></td><td>7 Item · 7 aktif · 7 kategori</td><td>Ada 7 jenis barang di toko, semuanya aktif (tampil di kasir), terbagi ke 7 kelompok.</td></tr>
+    <tr><td><b>NILAI ASET (MODAL)</b></td><td>Rp 11.062.000 · Total fisik 733 unit</td><td>Kalau semua barang di toko dihitung pakai <b>harga modal</b>, nilainya Rp 11 juta. Total ada 733 barang eceran.</td></tr>
+    <tr><td><b>POTENSI OMZET</b></td><td>Rp 13.624.000 · Est. margin +Rp 2.562.000</td><td>Kalau semua barang <b>laku terjual</b> dengan harga eceran, uang yang masuk Rp 13,6 juta, dan untungnya kira-kira Rp 2,5 juta.</td></tr>
+  </table>
+  <div class="calc box">Potensi Omzet − Nilai Aset = Perkiraan Untung
+Rp 13.624.000 − Rp 11.062.000 = Rp 2.562.000 ✅</div>
+
+  <h3>5.2 Tombol kategori (SEMUA, UMUM, ROKOK, SEMBAKO, ...)</h3>
+  <p>Seperti <b>laci-laci</b>. Klik “ROKOK” → yang tampil hanya rokok. Angka kecil di sebelahnya = jumlah barang di laci itu.
+     Klik “SEMUA” untuk melihat semua lagi.</p>
+
+  <h3>5.3 Kolom-kolom di tabel</h3>
+  <table>
+    <tr><th style="width:22%">Kolom</th><th>Cara membacanya</th></tr>
+    <tr><td><b>Nama Produk &amp; Spesifikasi</b></td><td>Nama barang + label-label kecil berwarna (lihat 5.4).</td></tr>
+    <tr><td><b>Kategori</b></td><td>Kelompok barangnya.</td></tr>
+    <tr><td><b>Stok Fisik &amp; Dus</b></td><td>Baris hijau = stok dalam eceran (misal <b>160 Bks</b>). Baris bawah = terjemahan ke dus (misal <b>2 Dus (Pas)</b>).</td></tr>
+    <tr><td><b>Harga Beli</b></td><td>Modal. Barang ber-dus: tampil per Dus (Rp 2.520.000/Dus) + di bawahnya modal per eceran [Rp 31.500 /Bks] + modal per Slop kalau ada.</td></tr>
+    <tr><td><b>Harga Ecer</b></td><td>Harga jual normal per satuan kecil (hijau).</td></tr>
+    <tr><td><b>Harga Grosir</b></td><td>Harga grosir per satuan + syarat minimal. Contoh “Rp 34.000 per Bks (≥10)” = berlaku kalau beli 10 bungkus atau lebih.</td></tr>
+  </table>
+
+  <h3>5.4 Arti label kecil berwarna</h3>
+  <table>
+    <tr><th style="width:24%">Label</th><th>Artinya</th></tr>
+    <tr><td><span class="tag t-dus">DUS 89999...</span></td><td>Barcode kardus luar.</td></tr>
+    <tr><td><span class="tag t-ecer">ECER 89999...</span></td><td>Barcode bungkus satuan (eceran).</td></tr>
+    <tr><td><span class="tag t-slop">SLOP 89999...</span></td><td>Barcode kemasan menengah (slop/renceng/pack).</td></tr>
+    <tr><td><span class="tag t-bc">BC 89927...</span></td><td>Barcode biasa untuk barang yang <b>tidak punya dus</b> (dijual satuan saja).</td></tr>
+    <tr><td><span class="tag t-sku">SKU-KP-001</span></td><td>Kode toko (barang tanpa barcode pabrik).</td></tr>
+    <tr><td><span class="tag t-dus">📦 1 Dus = 80 Bks</span></td><td>Isi 1 kardus.</td></tr>
+    <tr><td><span class="tag t-slop">1 Slop = 10 Bks</span></td><td>Isi 1 kemasan menengah.</td></tr>
+    <tr><td>Ikon 🖨 / ⧉ di sebelah barcode</td><td>Cetak label barcode / salin angka barcode.</td></tr>
+  </table>
+
+  <h3>5.5 Contoh membaca 1 baris lengkap</h3>
+  <div class="box baby">
+    <b>Sampoerna A Mild 16 Batang</b> — kategori Rokok.<br>
+    Stok <b>160 Bks</b> = <b>2 Dus (Pas)</b> → “Pas” artinya pas 2 dus, tidak ada bungkus sisa.<br>
+    Modal 1 dus <b>Rp 2.520.000</b>, jadi modal 1 bungkus <b>Rp 31.500</b>, modal 1 slop <b>Rp 315.000</b>.<br>
+    Dijual ecer <b>Rp 35.000</b>/bungkus. Kalau beli 10 bungkus atau lebih, jadi <b>Rp 34.000</b>/bungkus.
+  </div>
+  <div class="box info">
+    Kalau stoknya tidak pas, misalnya 170 Bks dengan isi dus 80, maka tertulis kira-kira
+    <b>2 Dus + 10 Bks</b> (2 × 80 = 160, sisa 10).
+  </div>
+</section>
+
+<!-- ============ BAB 6 ============ -->
+<section class="chapter">
+  <h2><span class="num">Bab 6</span>Membaca Formulir “Edit Stok Barang”</h2>
+  <p class="subtitle">Formulir ini muncul di kanan layar saat kamu klik sebuah barang atau tombol tambah barang. Isinya ada 5 bagian, dari atas ke bawah.</p>
+
+  <div class="box baby">
+    Formulir ini seperti <b>KTP untuk barang</b>. Bagian A = nama &amp; nomor identitas (barcode).
+    Bagian B = barangnya ada berapa. Bagian C = ukuran tengah (slop). Bagian D = harganya berapa.
+    Bagian E = fotonya. Terakhir tekan tombol merah <b>Simpan Perubahan</b>.
+  </div>
+
+  <h3>Bagian A — Informasi Dus &amp; Identitas Produk</h3>
+  <figure>
+    <img src="img/03_identitas_sampoerna.png" alt="Bagian identitas produk Sampoerna">
+    <figcaption>Gambar 6.1 — Contoh barang yang punya dus (Sampoerna A Mild): barcode dus dan barcode eceran BERBEDA.</figcaption>
+  </figure>
+
+  <table>
+    <tr><th style="width:28%">Kolom</th><th>Isinya apa &amp; contoh</th></tr>
+    <tr><td><b>Barcode Dus / Karton Luar</b></td><td>Tembak barcode di <b>kardus besarnya</b>. Contoh <code>8999909013278DUS</code>. Kalau barang tidak dijual per dus, <b>biarkan kosong</b>.</td></tr>
+    <tr><td><b>Barcode Eceran / Bungkus Satuan</b></td><td>Tembak barcode di <b>bungkus kecilnya</b>. Contoh <code>8999909013278</code>. <b>Ini yang paling penting</b>, karena ini yang paling sering di-scan kasir.</td></tr>
+    <tr><td>Tombol <b>Pindai</b></td><td>Pakai kamera untuk membaca barcode kalau tidak punya alat scanner.</td></tr>
+    <tr><td>Tombol <b>Cetak</b></td><td>Mencetak stiker barcode (Bab 11). Ada untuk dus dan untuk eceran.</td></tr>
+    <tr><td>Tanda <b>×</b></td><td>Menghapus isi kolom barcode.</td></tr>
+    <tr><td><b>Nama Dus / Produk</b></td><td>Nama barang yang akan tampil di kasir dan struk. Tulis jelas: merek + ukuran. Contoh “Sampoerna A Mild 16 Batang”.</td></tr>
+    <tr><td><b>SKU Toko</b> <span class="tag t-green">Otomatis</span></td><td>Dibuat sendiri oleh aplikasi. Tidak perlu diubah.</td></tr>
+    <tr><td><b>Kategori</b> + <span style="color:#dc2626">+ Baru</span></td><td>Pilih kelompok barang. Kalau belum ada, klik “+ Baru” untuk membuat kategori baru.</td></tr>
+  </table>
+
+  <figure>
+    <img src="img/01_identitas_oreo.png" alt="Bagian identitas produk Oreo">
+    <figcaption>Gambar 6.2 — Contoh barang eceran (Oreo). Perhatikan: di gambar ini barcode dus diisi angka yang sama dengan barcode eceran.</figcaption>
+  </figure>
+  <div class="box warn">
+    <b>Jangan isi Barcode Dus dengan angka yang sama dengan Barcode Eceran</b> (seperti Gambar 6.2).
+    Kalau sama, saat kasir scan, aplikasi bisa bingung: ini mau dijual 1 bungkus atau 1 dus?
+    Untuk barang yang tidak punya kardus (atau tidak dijual per dus), <b>kosongkan Barcode Dus</b> dan isi <b>Isi per Dus = 1</b>.
+  </div>
+
+  <h3>Bagian B — Pengaturan Isi Dus &amp; Stok Fisik</h3>
+  <figure>
+    <img src="img/02_stok_harga_oreo.png" alt="Bagian isi dus dan stok fisik">
+    <figcaption>Gambar 6.3 — Bagian isi dus, satuan, stok, dan harga (contoh Oreo).</figcaption>
+  </figure>
+  <table>
+    <tr><th style="width:30%">Kolom</th><th>Isinya apa &amp; contoh</th></tr>
+    <tr><td><b>Isi Produk per 1 Dus / Karton</b></td><td>Ada berapa barang kecil di dalam 1 kardus. Rokok = <b>80</b>, Indomie = <b>40</b>, Teh kotak = <b>24</b>, Minyak 2L = <b>6</b>. Barang tanpa dus = <b>1</b>.</td></tr>
+    <tr><td><b>Satuan Eceran (Terkecil)</b></td><td>Nama satuan kecilnya. Klik salah satu: <b>Pcs</b>, <b>Bungkus</b>, <b>Sachet</b>, <b>Batang</b>, atau pilih yang lain dari daftar “Pilih satuan lain...” (Kg, Liter, Kotak, Pouch, dll).</td></tr>
+    <tr><td><b>Jumlah Dus yang Diterima (Masuk)</b></td><td>Tombol <b>−</b> dan <b>+</b> untuk menghitung berapa kardus yang datang. Aplikasi otomatis mengalikan dengan isi dus.</td></tr>
+    <tr><td><b>Total Stok Fisik (Bks)</b> <span class="tag t-green">kotak hijau</span></td><td>Jumlah barang yang <b>benar-benar ada</b>, dalam satuan kecil. Di bawahnya ada keterangan, misal “2 Dus × 80 Bks”.</td></tr>
+    <tr><td><b>Peringatan Stok Tipis (Min)</b> ⚠️</td><td>Angka alarm. Contoh <b>20</b>: kalau stok tinggal 20 bungkus atau kurang, barang ditandai “Menipis” supaya kamu segera belanja.</td></tr>
+  </table>
+  <div class="calc box">Contoh Sampoerna:
+Isi per Dus      = 80 bungkus
+Dus diterima     = 2 dus
+Total Stok Fisik = 2 × 80 = 160 bungkus ✅</div>
+  <div class="box tip">
+    Untuk mencatat barang datang dari supplier sehari-hari, lebih rapi lewat menu <b>Pembelian</b> atau
+    <b>Mutasi Stok → Masuk</b>, karena ada catatan riwayatnya (siapa, kapan, dari supplier mana).
+    Ubah stok langsung di formulir ini cocok untuk <b>barang baru</b> atau <b>membetulkan salah hitung</b>.
+  </div>
+
+  <h3>Bagian C — Kemasan Menengah / Grosir Kecil (boleh tidak dipakai)</h3>
+  <figure>
+    <img src="img/04_slop_harga_sampoerna.png" alt="Bagian kemasan menengah dan harga">
+    <figcaption>Gambar 6.4 — Kemasan menengah aktif: 1 Slop = 10 bungkus rokok, punya barcode slop sendiri.</figcaption>
+  </figure>
+  <p>Centang <b>“Aktifkan Satuan Menengah”</b> kalau barangmu juga dijual dalam ukuran tengah. Kalau tidak, biarkan tidak dicentang.</p>
+  <table>
+    <tr><th style="width:30%">Kolom</th><th>Isinya apa &amp; contoh</th></tr>
+    <tr><td><b>Nama Satuan</b></td><td>Pilih: Slop (rokok), Renceng (sachet), Pack, Lusin, dll.</td></tr>
+    <tr><td><b>Isi per Slop</b></td><td>Berapa barang kecil di 1 kemasan menengah. Contoh <b>10</b>.</td></tr>
+    <tr><td><b>Barcode Slop (Opsional)</b></td><td>Barcode di bungkus slop-nya, kalau ada. Contoh <code>8999909013278SLP</code>.</td></tr>
+  </table>
+  <div class="box baby">
+    Rokok itu seperti <b>boneka matryoshka</b>: 1 Dus isinya 8 Slop, 1 Slop isinya 10 Bungkus.
+    Jadi 1 Dus = 8 × 10 = 80 Bungkus. Aplikasi menyimpan semuanya dalam <b>bungkus</b>.
+  </div>
+
+  <h3>Bagian D — Struktur Harga Beli &amp; Harga Jual POS</h3>
+  <figure>
+    <img src="img/05_harga_lengkap_sampoerna.png" alt="Struktur harga lengkap">
+    <figcaption>Gambar 6.5 — Empat tingkat harga jual: Eceran (merah), Grosir (biru), Dus (ungu), Slop (biru muda).</figcaption>
+  </figure>
+
+  <h4>Badge margin di bagian atas</h4>
+  <p><span class="tag t-green">Margin Ecer: +10.0%</span> dan <span class="tag t-blue">Margin Grosir: +7.4%</span> = persen untung kalau dijual ecer dan grosir. Dihitung otomatis.</p>
+
+  <h4>Harga modal (berapa kamu beli)</h4>
+  <table>
+    <tr><th style="width:34%">Kolom</th><th>Isinya apa &amp; contoh</th></tr>
+    <tr><td><b>Harga Beli Distributor (per Dus / Karton)</b></td><td>Harga di faktur supplier untuk <b>1 dus utuh</b>. Contoh Rp 2.520.000. (Hanya muncul kalau isi dus lebih dari 1.)</td></tr>
+    <tr><td><b>Harga Pokok Modal (HPP per Bks)</b></td><td>Modal 1 barang kecil. <b>Dihitung otomatis</b>: harga dus ÷ isi dus. Untuk barang tanpa dus, isi langsung di sini.</td></tr>
+    <tr><td><b>Modal per 1 Slop</b> (baris biru tipis)</td><td>Info otomatis: HPP × isi slop. Contoh Rp 31.500 × 10 = Rp 315.000.</td></tr>
+  </table>
+
+  <h4>Empat harga jual (berapa kamu jual)</h4>
+  <table>
+    <tr><th style="width:34%">Harga</th><th>Kapan dipakai kasir?</th><th style="width:18%">Contoh</th></tr>
+    <tr><td><span class="tag t-red">1. Harga Jual Eceran (per Bks)</span></td><td>Harga normal. Dipakai saat kasir scan <b>barcode eceran</b> di mode <b>Reguler</b>.</td><td>Rp 35.000</td></tr>
+    <tr><td><span class="tag t-blue">2. Harga Jual Grosir / Partai (per Bks)</span> + <b>Min</b></td><td>Dipakai saat kasir memakai mode <b>GROSIR / PARTAI</b>, atau pembeli beli sebanyak angka <b>Min</b> atau lebih.</td><td>Rp 34.000, Min 10</td></tr>
+    <tr><td><span class="tag t-purple">3. Harga Jual Dus / Karton (Utuh)</span></td><td>Dipakai saat kasir scan <b>barcode dus</b>. Stok berkurang sebanyak isi dus (80 bungkus) sekaligus.</td><td>Rp 2.680.000</td></tr>
+    <tr><td><span class="tag t-slop">4. Harga Jual Slop</span></td><td>Dipakai saat kasir scan <b>barcode slop</b> atau memilih kemasan slop. Stok berkurang 10 bungkus.</td><td>Rp 342.000</td></tr>
+  </table>
+
+  <div class="calc box">Hitungan lengkap Sampoerna A Mild (biar paham asal angkanya):
+
+Modal 1 bungkus  = 2.520.000 ÷ 80        = Rp 31.500
+Modal 1 slop     = 31.500 × 10           = Rp 315.000
+
+Untung ecer      = 35.000 − 31.500       = Rp 3.500 / bungkus
+Margin ecer      = 3.500 ÷ 35.000        = 10,0 %  ✅ (sama dengan badge)
+
+Untung grosir    = 34.000 − 31.500       = Rp 2.500 / bungkus
+Margin grosir    = 2.500 ÷ 34.000        = 7,4 %   ✅
+
+Beli 1 dus       = Rp 2.680.000  (kalau ecer 80 × 35.000 = 2.800.000 → pembeli hemat Rp 120.000)
+Untung 1 dus     = 2.680.000 − 2.520.000 = Rp 160.000
+
+Beli 1 slop      = Rp 342.000    (kalau ecer 10 × 35.000 = 350.000 → hemat Rp 8.000)
+Untung 1 slop    = 342.000 − 315.000     = Rp 27.000</div>
+
+  <div class="box warn">
+    Aturan aman supaya tidak rugi: <b>Modal &lt; Grosir &lt; Eceran</b>.
+    Dan harga Dus sebaiknya <b>di bawah</b> (Eceran × Isi Dus) tapi tetap <b>di atas</b> Harga Beli Distributor.
+    Kalau harga jual lebih kecil dari modal, margin akan tampil minus — itu tandanya rugi.
+  </div>
+
+  <h4>Contoh barang tanpa dus (Oreo)</h4>
+  <div class="calc box">Modal 8.500 · Ecer 10.500 · Grosir 9.800 (Min 5)
+Margin ecer   = (10.500 − 8.500) ÷ 10.500 = 19,0 %  ✅
+Margin grosir = (9.800 − 8.500) ÷ 9.800   = 13,3 %  ✅</div>
+
+  <h3>Bagian E — Gambar Produk (Opsional)</h3>
+  <p>Tempel alamat gambar (URL) atau klik tombol biru <b>Kamera</b> untuk memotret barang. Foto akan tampil di kartu produk di layar kasir, jadi kasir lebih cepat mengenali barang. Boleh dikosongkan.</p>
+
+  <h3>Tombol paling bawah</h3>
+  <ul>
+    <li><b>Batal</b> — tutup formulir, perubahan <b>tidak</b> disimpan.</li>
+    <li><span class="tag t-red">💾 Simpan Perubahan</span> — simpan semua isian. Wajib ditekan!</li>
+  </ul>
+  <div class="box tip">Setelah menyimpan, buka lagi barangnya (klik Edit) dan cek angka-angkanya. Kalau sudah tampil sama, berarti tersimpan dengan benar.</div>
+</section>
+
+<!-- ============ BAB 7 ============ -->
+<section class="chapter">
+  <h2><span class="num">Bab 7</span>Resep Cepat: Memasukkan 3 Jenis Barang</h2>
+  <p class="subtitle">Ikuti seperti resep masak. Pilih resep sesuai jenis barangmu.</p>
+
+  <h3>Resep A — Barang eceran biasa (tanpa dus). Contoh: Oreo</h3>
+  <ol class="steps">
+    <li>Menu <b>STOCK → Manajemen Stok</b> → klik tombol tambah barang.</li>
+    <li><b>Barcode Dus</b>: kosongkan. <b>Barcode Eceran</b>: scan bungkus Oreo.</li>
+    <li>Isi <b>Nama</b> “Oreo Sandwich Vanilla 119g”, pilih <b>Kategori</b> “Biskuit &amp; Snack”.</li>
+    <li><b>Isi per Dus</b> = 1. <b>Satuan</b> = Bungkus/Pcs.</li>
+    <li><b>Total Stok Fisik</b> = 60. <b>Stok Tipis</b> = 12.</li>
+    <li><b>HPP</b> = 8500, <b>Ecer</b> = 10500, <b>Grosir</b> = 9800 dengan <b>Min</b> = 5.</li>
+    <li>Tekan <b>Simpan Perubahan</b>. Selesai! 🎉</li>
+  </ol>
+
+  <h3>Resep B — Barang dengan dus. Contoh: Indomie (1 dus = 40)</h3>
+  <ol class="steps">
+    <li>Scan <b>Barcode Dus</b> di kardus, lalu scan <b>Barcode Eceran</b> di bungkusnya.</li>
+    <li>Isi Nama &amp; Kategori.</li>
+    <li><b>Isi per Dus</b> = 40, <b>Satuan</b> = Bungkus.</li>
+    <li>Jumlah dus diterima = 5 → <b>Total Stok Fisik</b> jadi 200.</li>
+    <li><b>Harga Beli Distributor per Dus</b> = 116000 → HPP otomatis 2.900.</li>
+    <li><b>Ecer</b> 3500, <b>Grosir</b> 3250 (Min 10), <b>Harga Dus</b> 128000.</li>
+    <li>Simpan.</li>
+  </ol>
+
+  <h3>Resep C — Barang dus + slop. Contoh: Rokok</h3>
+  <ol class="steps">
+    <li>Scan Barcode Dus dan Barcode Eceran.</li>
+    <li>Isi per Dus = 80, Satuan = Bungkus, Stok Tipis = 20.</li>
+    <li>Centang <b>Aktifkan Satuan Menengah</b> → Nama: Slop, Isi: 10, scan Barcode Slop.</li>
+    <li>Harga Beli per Dus 2520000 → HPP otomatis 31.500.</li>
+    <li>Ecer 35000 · Grosir 34000 (Min 10) · Dus 2680000 · Slop 342000.</li>
+    <li>Simpan, lalu cek tabel: harus muncul label <span class="tag t-dus">DUS</span> <span class="tag t-ecer">ECER</span> <span class="tag t-slop">SLOP</span>.</li>
+  </ol>
+
+  <h3>Ringkasan pilihan isian</h3>
+  <table>
+    <tr><th>Jenis barang</th><th>Barcode Dus</th><th>Isi per Dus</th><th>Satuan Menengah</th><th>Harga Dus</th></tr>
+    <tr><td>Eceran saja</td><td>Kosong</td><td>1</td><td>Tidak</td><td>Kosong</td></tr>
+    <tr><td>Ada dus</td><td>Diisi</td><td>&gt; 1</td><td>Tidak</td><td>Diisi</td></tr>
+    <tr><td>Dus + slop/renceng</td><td>Diisi</td><td>&gt; 1</td><td>Ya</td><td>Diisi</td></tr>
+    <tr><td>Barang timbang (beras, gula)</td><td>Kosong</td><td>1</td><td>Tidak</td><td>Kosong · Satuan = Kg</td></tr>
+  </table>
+</section>
+
+<!-- ============ BAB 8 ============ -->
+<section class="chapter">
+  <h2><span class="num">Bab 8</span>Mesin Kasir (POS)</h2>
+  <p class="subtitle">Dari pembeli datang sampai struk keluar.</p>
+
+  <h3>8.1 Dua mode kasir</h3>
+  <div class="grid2">
+    <div class="card"><b class="t">🛒 REGULER</b>Untuk pembeli biasa. Harga yang dipakai: <b>Harga Eceran</b>. Kalau jumlahnya mencapai Min Grosir, aplikasi bisa menawarkan harga grosir.</div>
+    <div class="card"><b class="t">🛍️ GROSIR / PARTAI</b>Untuk pembeli borongan / pedagang. Harga yang dipakai: <b>Harga Grosir</b>.</div>
+  </div>
+
+  <h3>8.2 Barcode yang di-scan menentukan harganya</h3>
+  <table>
+    <tr><th>Yang di-scan kasir</th><th>Masuk keranjang sebagai</th><th>Stok berkurang</th></tr>
+    <tr><td>Barcode <b>Eceran</b></td><td>1 bungkus, harga ecer (atau grosir di mode Grosir)</td><td>1 bungkus</td></tr>
+    <tr><td>Barcode <b>Slop</b></td><td>1 slop, Harga Jual Slop</td><td>10 bungkus</td></tr>
+    <tr><td>Barcode <b>Dus</b></td><td>1 dus, Harga Jual Dus</td><td>80 bungkus</td></tr>
+  </table>
+  <p>Kalau produk punya beberapa kemasan, kadang muncul jendela <b>pilihan kemasan</b> (DUS / SLOP / GROSIR / ECERAN). Kasir tinggal klik yang diminta pembeli.</p>
+
+  <h3>8.3 Langkah jualan</h3>
+  <ol class="steps">
+    <li>Pilih mode <b>Reguler</b> atau <b>Grosir/Partai</b>.</li>
+    <li>Scan barcode barang (atau cari nama barang lalu klik). Ulangi untuk semua barang.</li>
+    <li>Cek keranjang: jumlah, harga, total. Ubah jumlah dengan tombol +/− bila perlu.</li>
+    <li>(Opsional) Pilih nama <b>pelanggan</b> kalau pembeli langganan.</li>
+    <li>Pilih cara bayar: <b>TUNAI</b>, <b>QRIS</b>, kartu, atau <b>TEMPO (Grosir)</b>.</li>
+    <li>Untuk tunai: ketik uang yang diterima → aplikasi menghitung <b>kembalian</b>.</li>
+    <li>Tekan <b>BAYAR &amp; CETAK STRUK</b>. Selesai! Stok otomatis berkurang.</li>
+  </ol>
+
+  <h3>8.4 Fitur bantu</h3>
+  <table>
+    <tr><th>Fitur</th><th>Gunanya</th></tr>
+    <tr><td><span class="kbd">F5</span> Hold</td><td>Memarkir belanjaan (misal pembeli lupa dompet). Buka lagi lewat tombol daftar Hold di atas.</td></tr>
+    <tr><td><span class="kbd">Enter</span></td><td>Konfirmasi / lanjut setelah scan atau isi angka.</td></tr>
+    <tr><td><b>TEMPO</b></td><td>Pembeli bayar belakangan, bisa pakai DP (uang muka). Sisa utang tercatat di Data Pelanggan.</td></tr>
+    <tr><td><b>Harga khusus</b></td><td>Mengubah harga 1 barang untuk transaksi tertentu (bisa butuh PIN Supervisor/Admin).</td></tr>
+    <tr><td><b>Barang tidak terdaftar</b></td><td>Kalau barcode belum ada di data, muncul jendela untuk mendaftarkannya cepat.</td></tr>
+  </table>
+  <div class="box baby">
+    Kasir itu seperti <b>timbangan pintar</b>: taruh barang (scan), dia langsung tahu harganya, kamu tinggal terima uang.
+    Kalau harga yang keluar salah, yang dibetulkan bukan di kasir, tapi di <b>Back-Office → Manajemen Stok</b> (Bab 6).
+  </div>
+</section>
+
+<!-- ============ BAB 9 ============ -->
+<section class="chapter">
+  <h2><span class="num">Bab 9</span>Barang Datang, Mutasi Stok &amp; Pembelian</h2>
+
+  <h3>9.1 Pembelian (belanja ke supplier)</h3>
+  <ol class="steps">
+    <li>Menu <b>Pembelian</b> → buat penerimaan baru.</li>
+    <li>Pilih <b>Supplier</b>.</li>
+    <li>Scan / pilih barang yang datang, isi jumlah dan harga beli.</li>
+    <li>Pilih bayar <b>Tunai</b> (lunas) atau <b>Tempo</b> (menambah hutang ke supplier).</li>
+    <li>Simpan. Stok bertambah otomatis dan tercatat di Mutasi Stok.</li>
+  </ol>
+
+  <h3>9.2 Mutasi Stok</h3>
+  <table>
+    <tr><th>Jenis</th><th>Contoh kejadian</th></tr>
+    <tr><td><span class="tag t-green">MASUK (IN)</span></td><td>Barang datang, kiriman dari cabang, bonus dari supplier.</td></tr>
+    <tr><td><span class="tag t-red">KELUAR (OUT)</span></td><td>Barang rusak, kedaluwarsa, dipakai sendiri, dikirim ke cabang.</td></tr>
+    <tr><td><span class="tag t-blue">PENYESUAIAN</span></td><td>Stok opname: hitung barang di rak, lalu samakan dengan angka di aplikasi.</td></tr>
+  </table>
+  <div class="box baby">
+    Mutasi Stok itu seperti <b>buku harian barang</b>. Setiap barang masuk atau keluar, ditulis di sini.
+    Jadi kalau stok tiba-tiba berkurang, kamu bisa cari tahu kenapa.
+  </div>
+</section>
+
+<!-- ============ BAB 10 ============ -->
+<section class="chapter">
+  <h2><span class="num">Bab 10</span>Pelanggan, Supplier, Karyawan, Laporan &amp; Pengaturan</h2>
+
+  <h3>Data Pelanggan</h3>
+  <ul>
+    <li>Tambah pelanggan: nama, nomor HP/WA (awali 08...), alamat.</li>
+    <li>Tipe: <b>Retail (Eceran)</b> atau <b>Pelanggan Grosir</b>.</li>
+    <li>Lihat riwayat belanja dan <b>sisa piutang tempo</b>, lalu catat pembayaran cicilannya.</li>
+  </ul>
+
+  <h3>Data Supplier</h3>
+  <ul>
+    <li>Nama supplier, kontak person, telepon.</li>
+    <li><b>Termin Pembayaran (hari)</b>: 0 = tunai, 14 = 2 minggu, 30 = 1 bulan.</li>
+    <li><b>Hutang</b>: berapa yang toko belum bayar. Catat pembayaran supaya hutang berkurang.</li>
+  </ul>
+
+  <h3>Data Karyawan</h3>
+  <ul>
+    <li>Role: <b>Admin</b>, <b>Supervisor</b>, <b>Cashier</b>.</li>
+    <li>Atur username, password, <b>PIN 6 angka</b>, dan <b>Shift</b> (A Pagi, B Siang, C Malam, AUTO ikut jam).</li>
+    <li>Nonaktifkan karyawan yang sudah keluar (jangan dihapus kalau masih ada riwayat transaksi).</li>
+  </ul>
+
+  <h3>Laporan &amp; Analitik</h3>
+  <ul>
+    <li><b>Omzet</b> = total uang penjualan. <b>Jumlah transaksi</b> = berapa kali orang bayar.</li>
+    <li><b>Rata-rata belanja</b> = omzet ÷ jumlah transaksi.</li>
+    <li><b>Barang terlaris</b>, <b>metode bayar</b>, nilai aset stok, hutang supplier.</li>
+    <li>Bisa di-export ke Excel.</li>
+  </ul>
+
+  <h3>Pengaturan</h3>
+  <ul>
+    <li>Nama toko &amp; logo (tampil di struk dan aplikasi).</li>
+    <li>Pajak (PPN) aktif/tidak dan persennya.</li>
+    <li>Pembulatan total (misal ke Rp 100 / Rp 500).</li>
+    <li>Kepala struk (alamat, telepon) dan kaki struk (ucapan terima kasih).</li>
+    <li>Export / Import Excel (Bab 12).</li>
+  </ul>
+</section>
+
+<!-- ============ BAB 11 ============ -->
+<section class="chapter">
+  <h2><span class="num">Bab 11</span>Cetak Label Barcode</h2>
+  <p class="subtitle">Untuk barang yang tidak punya barcode pabrik, atau barcode-nya rusak.</p>
+  <ol class="steps">
+    <li>Buka <b>Manajemen Stok</b>, klik barang → formulir Edit terbuka.</li>
+    <li>Di samping <b>Barcode Dus</b> atau <b>Barcode Eceran</b>, klik tombol <b>Cetak</b> (ikon printer). Bisa juga dari ikon 🖨 kecil di tabel.</li>
+    <li>Atur jumlah stiker dan ukuran label, lihat pratinjau.</li>
+    <li>Klik cetak → pilih printer label/thermal.</li>
+    <li>Tempel stiker <b>barcode eceran</b> di bungkus kecil, dan <b>barcode dus</b> di kardus.</li>
+  </ol>
+  <div class="box tip">Setelah ditempel, coba scan sekali di layar kasir untuk memastikan barangnya terbaca dengan benar.</div>
+</section>
+
+<!-- ============ BAB 12 ============ -->
+<section class="chapter">
+  <h2><span class="num">Bab 12</span>Export &amp; Import Excel</h2>
+  <p class="subtitle">Cara cepat memasukkan ratusan barang sekaligus, atau menyimpan cadangan data.</p>
+
+  <h3>12.1 Export (mengeluarkan data ke Excel)</h3>
+  <p>Menu <b>Pengaturan → Export/Import</b> → klik Export. Akan terunduh 1 file Excel berisi banyak sheet:
+  Laporan &amp; Analitik, Manajemen Stok, Varian Produk, Mutasi Stok, Pembelian Supplier, Data Pelanggan, Riwayat Order, Data Supplier, Data Karyawan, Transaksi Kasir.</p>
+
+  <h3>12.2 Import (memasukkan data dari Excel)</h3>
+  <ol class="steps">
+    <li>Klik <b>Template Master</b> atau <b>Template Produk &amp; Varian</b> untuk mengunduh contoh file.</li>
+    <li>Baca sheet <b>Panduan Pengisian</b> di dalam file itu.</li>
+    <li>Isi sheet <b>Manajemen Stok</b> (satu baris = satu barang).</li>
+    <li>Simpan, lalu unggah file di halaman Import.</li>
+    <li>Periksa tabel <b>Pratinjau Data Siap Diimpor</b> (barcode dus/ecer, pola kemasan, harga, stok).</li>
+    <li>Kalau sudah benar, klik <b>Mulai Proses Import</b>.</li>
+  </ol>
+
+  <h3>12.3 Arti kolom di sheet Manajemen Stok</h3>
+  <table>
+    <tr><th style="width:34%">Kolom Excel</th><th>Isi</th></tr>
+    <tr><td>ID Produk (Opsional)</td><td><b>Kosongkan</b> untuk barang baru. Isi hanya untuk meng-update barang lama (dari file hasil export).</td></tr>
+    <tr><td>Barcode Dus (Karton)</td><td>Barcode kardus. Kosongkan kalau tidak ada.</td></tr>
+    <tr><td>Barcode Eceran (Satuan)</td><td>Barcode bungkus kecil.</td></tr>
+    <tr><td>SKU / Kode Rak · Nama Produk · Kategori</td><td>Identitas barang.</td></tr>
+    <tr><td>Satuan Eceran</td><td>Bks, Pcs, Sachet, Kg, Kotak, Pouch, dll.</td></tr>
+    <tr><td>Isi per 1 Dus (Pcs)</td><td>Isi kardus. Barang eceran = 1.</td></tr>
+    <tr><td>Modal Satuan (Rp)</td><td>HPP per eceran. Boleh kosong kalau Modal per 1 Dus diisi (dihitung otomatis).</td></tr>
+    <tr><td>Modal per 1 Dus (Rp)</td><td>Harga beli 1 dus.</td></tr>
+    <tr><td>Harga Jual Eceran (Rp)</td><td>Harga normal.</td></tr>
+    <tr><td>Harga Grosir Satuan (Rp) + Min. Beli Grosir (Pcs)</td><td>Harga grosir dan syarat jumlah minimalnya.</td></tr>
+    <tr><td>Harga Jual per 1 Dus (Rp)</td><td>Harga dus utuh. Kalau kosong, dihitung Ecer × Isi Dus.</td></tr>
+    <tr><td>Satuan Menengah · Isi · Harga · Barcode</td><td>Untuk slop/renceng. Boleh kosong.</td></tr>
+    <tr><td>Total Stok Fisik (Satuan)</td><td>Stok dalam satuan kecil. Kalau kosong tapi “Estimasi Stok Dus” diisi, dihitung Dus × Isi.</td></tr>
+    <tr><td>Min. Stok (Alert Tipis) · Status</td><td>Batas alarm, dan Aktif / Non-Aktif.</td></tr>
+    <tr><td>Daftar Varian Ringkas</td><td>Contoh “5Kg: 20, 10Kg: 15” (nama varian: stok). Isi “-” kalau tidak ada.</td></tr>
+  </table>
+  <div class="box warn">
+    Tulis angka <b>tanpa</b> “Rp”, titik, atau koma. Benar: <code>35000</code>. Salah: <code>Rp 35.000</code>.
+    (Aplikasi sudah mencoba membersihkan sendiri, tapi angka polos paling aman.)
+  </div>
+  <div class="box tip">File Excel lama (format sebelum ada kolom dus) <b>masih bisa</b> di-import. Kolom yang tidak ada akan diisi nilai standar.</div>
+</section>
+
+<!-- ============ BAB 13 ============ -->
+<section class="chapter">
+  <h2><span class="num">Bab 13</span>Reset Pabrik (Mengosongkan Database)</h2>
+  <div class="box warn">
+    Ini <b>menghapus SEMUA</b> barang, transaksi, mutasi, pelanggan, supplier, retur, dan draft.
+    Hanya untuk mulai dari nol (misal toko baru, atau selesai uji coba).
+  </div>
+  <ol class="steps">
+    <li>Klik 2 kali <code>RESET_FACTORY_DATABASE.command</code>.</li>
+    <li>Baca peringatannya. Ketik <b>YA</b> lalu Enter. (Tekan Enter saja = batal.)</li>
+    <li>Aplikasi otomatis membuat <b>cadangan</b> di folder <code>backups/</code> (file <code>.sql</code>).</li>
+    <li>Server dihentikan, database dikosongkan, lalu dibuatkan data awal: toko POS MART, akun admin &amp; kasir, kategori “Umum”, pelanggan “Umum (Retail)”.</li>
+    <li>Pilih <b>Y</b> untuk langsung menyalakan aplikasi lagi.</li>
+    <li>Di browser tekan <span class="kbd">Cmd</span> + <span class="kbd">Shift</span> + <span class="kbd">R</span> supaya tampilan lama hilang.</li>
+  </ol>
+</section>
+
+<!-- ============ BAB 14 ============ -->
+<section class="chapter">
+  <h2><span class="num">Bab 14</span>Kalau Ada Masalah (Tanya-Jawab)</h2>
+  <table>
+    <tr><th style="width:38%">Masalahnya</th><th>Coba lakukan ini</th></tr>
+    <tr><td>Halaman tidak bisa dibuka / “This site can’t be reached”.</td><td>Aplikasi belum menyala. Klik 2 kali <code>JALANKAN_SERVER.command</code>, tunggu jendela hitam muncul.</td></tr>
+    <tr><td>Aplikasi terasa macet / data tidak berubah.</td><td>Klik <code>RESTART_SERVER.command</code>, lalu di browser tekan Cmd+Shift+R.</td></tr>
+    <tr><td>Scan barcode, barang tidak ketemu.</td><td>Barcode belum didaftarkan. Cek di Manajemen Stok apakah angka barcode eceran/dus sudah benar (tanpa spasi).</td></tr>
+    <tr><td>Scan bungkus kecil tapi yang masuk harga dus.</td><td>Barcode Dus dan Barcode Eceran diisi angka yang sama. Kosongkan/ubah Barcode Dus (lihat Bab 6, Bagian A).</td></tr>
+    <tr><td>Stok “Dus” tampil aneh (misal 0 Dus padahal banyak).</td><td>Periksa <b>Isi per Dus</b>. Kalau barang tidak ber-dus, isi 1.</td></tr>
+    <tr><td>Margin tampil minus / merah.</td><td>Harga jual lebih kecil dari modal. Periksa HPP dan harga jual.</td></tr>
+    <tr><td>Harga grosir tidak keluar di kasir.</td><td>Pastikan harga grosir diisi, jumlah beli ≥ Min, atau kasir memakai mode GROSIR/PARTAI.</td></tr>
+    <tr><td>Sudah klik Simpan tapi saat Edit lagi angkanya kosong.</td><td>Pastikan status <b>ONLINE</b>. Simpan ulang, lalu restart server dan cek lagi.</td></tr>
+    <tr><td>Lupa password admin.</td><td>Masuk pakai akun Admin lain dan ubah di Data Karyawan. Kalau tidak ada sama sekali, hubungi teknisi.</td></tr>
+    <tr><td>Import Excel: jumlah barang terbaca 0.</td><td>Pastikan nama sheet “Manajemen Stok” dan ada kolom “Nama Produk”. Pakai template resmi.</td></tr>
+  </table>
+</section>
+
+<!-- ============ BAB 15 ============ -->
+<section class="chapter">
+  <h2><span class="num">Bab 15</span>Ceklis Harian Toko</h2>
+
+  <h3>☀️ Pagi (buka toko)</h3>
+  <ul>
+    <li>☐ Nyalakan aplikasi (<code>JALANKAN_SERVER.command</code>).</li>
+    <li>☐ Kasir login dengan PIN masing-masing; cek status <b>ONLINE</b> &amp; shift benar.</li>
+    <li>☐ Cek barang berstatus <b>Menipis / Habis</b> di Manajemen Stok.</li>
+  </ul>
+
+  <h3>🌤️ Siang (selama jualan)</h3>
+  <ul>
+    <li>☐ Barang datang → catat lewat <b>Pembelian</b>.</li>
+    <li>☐ Barang rusak/kedaluwarsa → <b>Mutasi Stok → Keluar</b>.</li>
+    <li>☐ Pembeli tempo → pastikan nama pelanggan dipilih.</li>
+  </ul>
+
+  <h3>🌙 Malam (tutup toko)</h3>
+  <ul>
+    <li>☐ Lihat <b>Laporan</b>: omzet hari ini &amp; metode bayar. Cocokkan uang laci dengan laporan Tunai.</li>
+    <li>☐ Seminggu sekali: <b>Export Excel</b> sebagai cadangan, simpan di flashdisk/Google Drive.</li>
+    <li>☐ Matikan aplikasi (<code>BERHENTIKAN_SERVER.command</code>) bila komputer akan dimatikan.</li>
+  </ul>
+
+  <div class="box baby" style="margin-top:22px">
+    Tiga kalimat yang perlu diingat:<br>
+    1️⃣ <b>Stok selalu dihitung dalam satuan kecil.</b><br>
+    2️⃣ <b>Barcode dus dan barcode eceran harus berbeda.</b><br>
+    3️⃣ <b>Modal &lt; Grosir &lt; Eceran</b>, supaya toko selalu untung. 🎉
+  </div>
+
+  <p style="text-align:center; color:#94a3b8; margin-top:30px; font-size:10pt">— Selamat berjualan bersama POS MART —</p>
+</section>
+
+</body>
+</html>
