@@ -30,4 +30,6 @@ server/data
 
 .env
 INSTALLER_*/
+backups/
+*.db
 
