@@ -343,14 +343,46 @@ const StockManagement: React.FC = () => {
           midCapacity: finalMidCap,
           midPrice: finalMidPrice,
           retailBarcode: finalRetailBarcode,
-          variants: []
+          variants: namedVariants.map(v => ({
+            id: v.id || makeVariantId(),
+            name: v.name.trim(),
+            barcode: v.barcode ? v.barcode.trim() : null,
+            stock: v.qty !== '' ? Number(v.qty) : 0,
+            sellingPrice: v.sellingPrice !== '' && Number(v.sellingPrice) > 0 ? Number(v.sellingPrice) : null,
+            wholesalePrice: v.wholesalePrice !== '' && Number(v.wholesalePrice) > 0 ? Number(v.wholesalePrice) : null,
+            image: v.image ? v.image.trim() : null,
+          }))
         } as any);
 
         // Mutasi stok jika ada selisih
-        const diffQty = totalQty - original.stock;
-        if (diffQty !== 0) {
-          const lines: MutationLine[] = [{ productId: original.id, qty: diffQty, purchasePrice: baseCost, name, unit }];
-          await recordStockMutation('ADJUSTMENT', docNo, lines, `Koreksi stok via Edit Master Data (${original.stock} → ${totalQty} ${unit})`);
+        if (hasVariants) {
+          const varLines: MutationLine[] = [];
+          for (const nv of namedVariants) {
+            const origV = origVariants.find((ov: any) => ov.id === nv.id || ov.name.trim().toLowerCase() === nv.name.trim().toLowerCase());
+            const origStock = origV ? (Number(origV.stock) || 0) : 0;
+            const newStock = Number(nv.qty) || 0;
+            const vDiff = newStock - origStock;
+            if (vDiff !== 0) {
+              varLines.push({
+                productId: original.id,
+                variantId: nv.id,
+                variantName: nv.name,
+                qty: vDiff,
+                purchasePrice: baseCost,
+                name,
+                unit
+              });
+            }
+          }
+          if (varLines.length > 0) {
+            await recordStockMutation('ADJUSTMENT', docNo, varLines, `Koreksi stok varian via Edit Master Data`);
+          }
+        } else {
+          const diffQty = totalQty - original.stock;
+          if (diffQty !== 0) {
+            const lines: MutationLine[] = [{ productId: original.id, qty: diffQty, purchasePrice: baseCost, name, unit }];
+            await recordStockMutation('ADJUSTMENT', docNo, lines, `Koreksi stok via Edit Master Data (${original.stock} → ${totalQty} ${unit})`);
+          }
         }
         setEditingId(null);
       }
@@ -401,7 +433,18 @@ const StockManagement: React.FC = () => {
         midCapacity: finalMidCap,
         midPrice: finalMidPrice,
         retailBarcode: finalRetailBarcode || undefined,
-        variants: []
+        variants: namedVariants.map(v => ({
+          id: v.id || makeVariantId(),
+          name: v.name.trim(),
+          barcode: v.barcode ? v.barcode.trim() : undefined,
+          sku: v.sku ? v.sku.trim() : undefined,
+          stock: v.qty !== '' ? Number(v.qty) : 0,
+          qty: v.qty !== '' ? Number(v.qty) : 0,
+          purchasePrice: (v as any).purchasePrice ? Number((v as any).purchasePrice) : Number(purchasePrice),
+          sellingPrice: v.sellingPrice !== '' && Number(v.sellingPrice) > 0 ? Number(v.sellingPrice) : undefined,
+          wholesalePrice: v.wholesalePrice !== '' && Number(v.wholesalePrice) > 0 ? Number(v.wholesalePrice) : undefined,
+          image: v.image ? v.image.trim() : undefined,
+        }))
       };
       const nextItems = [...draftItems, newItem];
       
@@ -420,7 +463,7 @@ const StockManagement: React.FC = () => {
           sku: finalSku,
           name,
           sellingPrice: Number(sellingPrice),
-          variants: []
+          variants: namedVariants
         });
       }
     }
@@ -688,7 +731,19 @@ const StockManagement: React.FC = () => {
     setMinWholesaleQty(p.minWholesaleQty ? p.minWholesaleQty : '');
     setMinStock(p.minStock || 0);
     setImage(p.image || '');
-    setVariants([]);
+    if (p.variants && Array.isArray(p.variants) && p.variants.length > 0) {
+      setVariants(p.variants.map((v: any) => ({
+        id: v.id || makeVariantId(),
+        name: v.name || '',
+        barcode: v.barcode || '',
+        qty: v.stock !== undefined ? v.stock : (v.qty || ''),
+        sellingPrice: v.sellingPrice !== undefined ? v.sellingPrice : (v.selling_price || ''),
+        wholesalePrice: v.wholesalePrice !== undefined ? v.wholesalePrice : (v.wholesale_price || ''),
+        image: v.image || v.image_url || ''
+      })));
+    } else {
+      setVariants([]);
+    }
     setIsFormOpen(true); // Buka popup
   };
 
@@ -2881,6 +2936,34 @@ const StockManagement: React.FC = () => {
                 </div>
               </div>
 
+              {/* SECTION: VARIAN PRODUK (OPSIONAL) */}
+              <div className="ios-section-header" style={{ marginTop: '22px' }}>
+                <span>VARIAN PRODUK (OPSIONAL)</span>
+                <span className="ios-hint-gray">Warna / Ukuran / Rasa</span>
+              </div>
+              <div style={{ padding: '0 4px', marginBottom: '8px' }}>
+                <VariantEditor
+                  variants={variants}
+                  onChange={(next) => {
+                    setVariants(next);
+                    const named = next.filter(v => v.name.trim());
+                    if (named.length > 0) {
+                      const totalVQty = sumVariantQty(named);
+                      setQty(totalVQty);
+                      const bCap = Math.max(1, Number(boxCapacity) || 40);
+                      if (bCap > 1) {
+                        setBoxQty(Math.floor(totalVQty / bCap));
+                      }
+                    }
+                  }}
+                  parentBarcode={retailBarcode || boxBarcode || productId}
+                  title="Varian Produk"
+                  qtyLabel={editingId ? 'Stok Fisik' : 'Qty Masuk'}
+                  showPrices={true}
+                  hint="Tambahkan varian jika produk memiliki pilihan warna, ukuran, atau rasa berbeda (cth: Hitam M, Hitam L, Putih L). Barcode & harga varian akan otomatis mengikuti harga induk jika dikosongkan."
+                />
+              </div>
+
               {/* SECTION: PENGATURAN ISI DUS & STOK FISIK */}
               <div className="ios-section-header" style={{ marginTop: '20px' }}>
                 <span>PENGATURAN ISI DUS &amp; STOK FISIK</span>
@@ -2955,7 +3038,9 @@ const StockManagement: React.FC = () => {
                       onClick={() => {
                         const next = Math.max(0, (Number(boxQty) || 0) - 1);
                         setBoxQty(next);
-                        setQty(next * (Number(boxCapacity) || 40));
+                        if (!variants.some(v => v.name.trim())) {
+                          setQty(next * (Number(boxCapacity) || 40));
+                        }
                       }}
                     >
                       -
@@ -2969,7 +3054,7 @@ const StockManagement: React.FC = () => {
                       onChange={(e) => {
                         const val = e.target.value === '' ? '' : Number(e.target.value);
                         setBoxQty(val);
-                        if (val !== '') {
+                        if (val !== '' && !variants.some(v => v.name.trim())) {
                           setQty(Number(val) * (Number(boxCapacity) || 40));
                         }
                       }} 
@@ -2979,7 +3064,9 @@ const StockManagement: React.FC = () => {
                       onClick={() => {
                         const next = (Number(boxQty) || 0) + 1;
                         setBoxQty(next);
-                        setQty(next * (Number(boxCapacity) || 40));
+                        if (!variants.some(v => v.name.trim())) {
+                          setQty(next * (Number(boxCapacity) || 40));
+                        }
                       }}
                     >
                       +
@@ -2992,9 +3079,11 @@ const StockManagement: React.FC = () => {
                   <div>
                     <label style={{ color: '#065f46' }}>Total Stok Fisik ({unit})</label>
                     <div className="ios-sublabel">
-                      {boxQty && Number(boxQty) > 0 
-                        ? `${boxQty} Dus × ${boxCapacity} ${unit}`
-                        : 'Kuantitas fisik satuan dihitung per ' + unit}
+                      {variants.some(v => v.name.trim())
+                        ? `Dihitung otomatis dari total ${variants.filter(v => v.name.trim()).length} varian`
+                        : boxQty && Number(boxQty) > 0 
+                          ? `${boxQty} Dus × ${boxCapacity} ${unit}`
+                          : 'Kuantitas fisik satuan dihitung per ' + unit}
                     </div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -3002,10 +3091,21 @@ const StockManagement: React.FC = () => {
                       type="number" 
                       step="any" 
                       inputMode="decimal" 
-                      value={qty} 
+                      value={variants.some(v => v.name.trim()) ? sumVariantQty(variants.filter(v => v.name.trim())) : qty} 
+                      readOnly={variants.some(v => v.name.trim())}
                       onChange={(e) => setQty(e.target.value === '' ? '' : Number(e.target.value))} 
                       className="ios-input-gray ios-input-small"
-                      style={{ width: '80px', textAlign: 'right', fontWeight: 800, fontSize: '16px', color: '#065f46', background: '#ecfdf5', borderColor: '#a7f3d0' }}
+                      style={{ 
+                        width: '80px', 
+                        textAlign: 'right', 
+                        fontWeight: 800, 
+                        fontSize: '16px', 
+                        color: '#065f46', 
+                        background: variants.some(v => v.name.trim()) ? '#f0fdf4' : '#ecfdf5', 
+                        borderColor: '#a7f3d0',
+                        cursor: variants.some(v => v.name.trim()) ? 'not-allowed' : 'text'
+                      }}
+                      title={variants.some(v => v.name.trim()) ? 'Stok dihitung otomatis dari total seluruh varian di atas' : undefined}
                       required 
                     />
                     <span style={{ fontSize: '13px', fontWeight: 700, color: '#065f46' }}>{unit}</span>
