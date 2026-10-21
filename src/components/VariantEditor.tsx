@@ -120,108 +120,144 @@ const VariantEditor: React.FC<Props> = ({ variants, onChange, title = 'Varian Pr
           {variants.map((v, index) => (
             <div key={v.id} style={{ border: '1px solid #e2e8f0', borderRadius: '10px', padding: '10px', background: '#f8fafc', display: 'flex', flexDirection: 'column', gap: '6px' }}>
               {/* Row 1: Nama Varian & Qty */}
-              <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                <input
-                  type="text"
-                  value={v.name}
-                  onChange={e => update(v.id, { name: e.target.value })}
-                  placeholder="Nama varian (cth: Surya 16)"
-                  style={{ ...cellInput, flex: 1, fontWeight: 700, background: '#ffffff' }}
-                />
-                <input
-                  type="number"
-                  step="any"
-                  inputMode="decimal"
-                  value={v.qty}
-                  onChange={e => update(v.id, { qty: e.target.value === '' ? '' : Number(e.target.value) })}
-                  placeholder={qtyLabel}
-                  aria-label={`${qtyLabel} varian ${v.name}`}
-                  style={{ ...cellInput, width: '78px', textAlign: 'center', fontWeight: 700, background: '#ffffff' }}
-                />
-                <button type="button" onClick={() => onChange(variants.filter(x => x.id !== v.id))} title="Hapus varian" style={{ width: '32px', height: '34px', border: '1px solid #fecaca', borderRadius: '8px', background: '#fef2f2', color: '#ef4444', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <Trash2 size={14} />
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: '10.5px', fontWeight: 700, color: '#475569', marginBottom: '3px', display: 'block' }}>
+                    Nama Varian
+                  </label>
+                  <input
+                    type="text"
+                    value={v.name}
+                    onChange={e => update(v.id, { name: e.target.value })}
+                    placeholder="Contoh: Hitam M, Pouch 2L, Pedas"
+                    style={{ ...cellInput, fontWeight: 700, background: '#ffffff' }}
+                  />
+                </div>
+                <div style={{ width: '85px' }}>
+                  <label style={{ fontSize: '10.5px', fontWeight: 700, color: '#047857', marginBottom: '3px', display: 'block', textAlign: 'center' }}>
+                    {qtyLabel}
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    inputMode="decimal"
+                    value={v.qty}
+                    onChange={e => update(v.id, { qty: e.target.value === '' ? '' : Number(e.target.value) })}
+                    placeholder="0"
+                    aria-label={`${qtyLabel} varian ${v.name}`}
+                    style={{ ...cellInput, textAlign: 'center', fontWeight: 800, background: '#ffffff', color: '#047857' }}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onChange(variants.filter(x => x.id !== v.id))}
+                  title="Hapus varian"
+                  style={{ width: '34px', height: '34px', border: '1px solid #fecaca', borderRadius: '8px', background: '#fef2f2', color: '#ef4444', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                >
+                  <Trash2 size={15} />
                 </button>
               </div>
 
               {/* Row 2: Barcode Khusus Varian */}
-              <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                <div style={{ position: 'relative', flex: 1, display: 'flex', alignItems: 'center' }}>
-                  <span style={{ position: 'absolute', left: '8px', fontSize: '11px', fontWeight: 800, color: '#7c3aed', letterSpacing: '0.5px' }}>
-                    ||||
-                  </span>
-                  <input
-                    type="text"
-                    value={v.barcode || ''}
-                    onChange={e => update(v.id, { barcode: e.target.value })}
-                    placeholder="Scan / ketik Barcode varian ini..."
-                    style={{
-                      ...cellInput,
-                      paddingLeft: '32px',
-                      fontSize: '12px',
-                      fontFamily: 'monospace',
-                      fontWeight: 600,
-                      color: '#0f172a',
-                      background: v.barcode ? '#ffffff' : '#f5f3ff',
-                      border: v.barcode ? '1px solid #cbd5e1' : '1px dashed #c4b5fd'
-                    }}
-                  />
-                  {v.barcode && (
+              <div>
+                <label style={{ fontSize: '10.5px', fontWeight: 700, color: '#6d28d9', marginBottom: '3px', display: 'block' }}>
+                  Barcode Varian (Opsional)
+                </label>
+                <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                  <div style={{ position: 'relative', flex: 1, display: 'flex', alignItems: 'center' }}>
+                    <span style={{ position: 'absolute', left: '8px', fontSize: '11px', fontWeight: 800, color: '#7c3aed', letterSpacing: '0.5px' }}>
+                      ||||
+                    </span>
+                    <input
+                      type="text"
+                      value={v.barcode || ''}
+                      onChange={e => update(v.id, { barcode: e.target.value })}
+                      placeholder="Scan / ketik Barcode khusus varian ini..."
+                      style={{
+                        ...cellInput,
+                        paddingLeft: '32px',
+                        fontSize: '12px',
+                        fontFamily: 'monospace',
+                        fontWeight: 600,
+                        color: '#0f172a',
+                        background: v.barcode ? '#ffffff' : '#f5f3ff',
+                        border: v.barcode ? '1px solid #cbd5e1' : '1px dashed #c4b5fd'
+                      }}
+                    />
+                    {v.barcode && (
+                      <button
+                        type="button"
+                        onClick={() => update(v.id, { barcode: '' })}
+                        title="Hapus barcode"
+                        style={{ position: 'absolute', right: '8px', background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: 0, fontSize: '11px' }}
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+
+                  {!v.barcode && (
                     <button
                       type="button"
-                      onClick={() => update(v.id, { barcode: '' })}
-                      title="Hapus barcode"
-                      style={{ position: 'absolute', right: '8px', background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: 0, fontSize: '11px' }}
+                      onClick={() => update(v.id, { barcode: generateVariantBarcode(parentBarcode, index + 1) })}
+                      title="Buat barcode otomatis untuk varian ini"
+                      style={{
+                        height: '34px',
+                        padding: '0 10px',
+                        border: '1px solid #ddd6fe',
+                        borderRadius: '8px',
+                        background: '#ede9fe',
+                        color: '#6d28d9',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}
                     >
-                      ✕
+                      ⚡ Auto Barcode
                     </button>
                   )}
                 </div>
-
-                {!v.barcode && (
-                  <button
-                    type="button"
-                    onClick={() => update(v.id, { barcode: generateVariantBarcode(parentBarcode, index + 1) })}
-                    title="Buat barcode otomatis untuk varian ini"
-                    style={{
-                      height: '34px',
-                      padding: '0 8px',
-                      border: '1px solid #ddd6fe',
-                      borderRadius: '8px',
-                      background: '#ede9fe',
-                      color: '#6d28d9',
-                      fontSize: '11px',
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      whiteSpace: 'nowrap',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '4px'
-                    }}
-                  >
-                    ⚡ Auto Barcode
-                  </button>
-                )}
               </div>
 
               {/* Row 3: Harga Jual & Harga Grosir Khusus Varian */}
               {showPrices && (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    value={v.sellingPrice ?? ''}
-                    onChange={e => update(v.id, { sellingPrice: e.target.value === '' ? '' : Number(e.target.value) })}
-                    placeholder="Harga jual (ikut induk)"
-                    style={{ ...cellInput, fontSize: '12px', background: '#ffffff' }}
-                  />
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    value={v.wholesalePrice ?? ''}
-                    onChange={e => update(v.id, { wholesalePrice: e.target.value === '' ? '' : Number(e.target.value) })}
-                    placeholder="Harga grosir (ikut induk)"
-                    style={{ ...cellInput, fontSize: '12px', background: '#ffffff' }}
-                  />
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  <div>
+                    <label style={{ fontSize: '10.5px', fontWeight: 700, color: '#dc2626', marginBottom: '3px', display: 'block' }}>
+                      Harga Jual Varian (Ecer)
+                    </label>
+                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                      <span style={{ position: 'absolute', left: '8px', fontSize: '11px', fontWeight: 700, color: '#94a3b8' }}>Rp</span>
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        value={v.sellingPrice ?? ''}
+                        onChange={e => update(v.id, { sellingPrice: e.target.value === '' ? '' : Number(e.target.value) })}
+                        placeholder="Ikut harga induk"
+                        style={{ ...cellInput, paddingLeft: '28px', fontSize: '12px', background: '#ffffff', fontWeight: 700, color: '#b91c1c' }}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '10.5px', fontWeight: 700, color: '#0369a1', marginBottom: '3px', display: 'block' }}>
+                      Harga Grosir Varian
+                    </label>
+                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                      <span style={{ position: 'absolute', left: '8px', fontSize: '11px', fontWeight: 700, color: '#94a3b8' }}>Rp</span>
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        value={v.wholesalePrice ?? ''}
+                        onChange={e => update(v.id, { wholesalePrice: e.target.value === '' ? '' : Number(e.target.value) })}
+                        placeholder="Ikut harga grosir"
+                        style={{ ...cellInput, paddingLeft: '28px', fontSize: '12px', background: '#ffffff', fontWeight: 700, color: '#0369a1' }}
+                      />
+                    </div>
+                  </div>
                 </div>
               )}
 

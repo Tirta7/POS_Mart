@@ -6,7 +6,7 @@ import { useDraftStore } from '../../store/useDraftStore';
 import { 
   Plus, Save, CheckCircle, PackageCheck, Edit2, Trash2, X, ArrowDownToLine, 
   Camera, Search, FileText, AlertTriangle, Printer, LayoutGrid, Package, 
-  Eye, EyeOff, RefreshCw, Download, DollarSign, TrendingUp, Copy, Check, Tag 
+  Eye, EyeOff, RefreshCw, Download, DollarSign, TrendingUp, Copy, Check, Tag, Layers 
 } from 'lucide-react';
 import BarcodeScannerCamera from '../../components/BarcodeScannerCamera';
 import BarcodeLabelModal from '../../components/BarcodeLabelModal';
@@ -93,6 +93,7 @@ const StockManagement: React.FC = () => {
   const [minStock, setMinStock] = useState<number | string>('');
   const [image, setImage] = useState('');
   const [variants, setVariants] = useState<VariantDraft[]>([]);
+  const [isVariantEnabled, setIsVariantEnabled] = useState(false);
   const [newCategory, setNewCategory] = useState('');
 
   // Multi-tier Packaging & Pricing (Dus / Renceng / Eceran)
@@ -213,6 +214,7 @@ const StockManagement: React.FC = () => {
     setMinStock('');
     setImage('');
     setVariants([]);
+    setIsVariantEnabled(false);
     setBoxBarcode('');
     setBoxCapacity(40);
     setBoxPrice('');
@@ -732,6 +734,7 @@ const StockManagement: React.FC = () => {
     setMinStock(p.minStock || 0);
     setImage(p.image || '');
     if (p.variants && Array.isArray(p.variants) && p.variants.length > 0) {
+      setIsVariantEnabled(true);
       setVariants(p.variants.map((v: any) => ({
         id: v.id || makeVariantId(),
         name: v.name || '',
@@ -742,6 +745,7 @@ const StockManagement: React.FC = () => {
         image: v.image || v.image_url || ''
       })));
     } else {
+      setIsVariantEnabled(false);
       setVariants([]);
     }
     setIsFormOpen(true); // Buka popup
@@ -1396,24 +1400,25 @@ const StockManagement: React.FC = () => {
                 style={{
                   width: '100%',
                   minWidth: '1240px',
-                  borderCollapse: 'collapse',
+                  borderCollapse: 'separate',
+                  borderSpacing: 0,
                   textAlign: 'left',
                   display: 'table',
                   tableLayout: 'auto'
                 }}
               >
                 <thead>
-                  <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', position: 'sticky', top: 0, zIndex: 10 }}>
-                    <th style={{ padding: '10px 14px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', verticalAlign: 'middle', minWidth: '240px' }}>NAMA PRODUK & SPESIFIKASI</th>
-                    <th style={{ padding: '10px 12px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', width: '105px', verticalAlign: 'middle' }}>KATEGORI</th>
-                    <th style={{ padding: '10px 12px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', width: '135px', verticalAlign: 'middle' }}>STOK FISIK & DUS</th>
-                    <th style={{ padding: '10px 12px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right', width: '130px', verticalAlign: 'middle' }}>HARGA BELI</th>
-                    <th style={{ padding: '10px 12px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right', width: '115px', verticalAlign: 'middle' }}>HARGA ECER</th>
-                    <th style={{ padding: '10px 12px', color: '#0369a1', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right', width: '125px', verticalAlign: 'middle' }}>HARGA GROSIR</th>
-                    <th style={{ padding: '10px 12px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right', width: '125px', verticalAlign: 'middle' }}>HARGA DUS</th>
-                    <th style={{ padding: '10px 12px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right', width: '125px', verticalAlign: 'middle' }}>HARGA MENENGAH</th>
-                    <th style={{ padding: '10px 12px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', width: '120px', verticalAlign: 'middle' }}>PROFIT MARGIN</th>
-                    <th style={{ padding: '10px 12px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', width: '140px', verticalAlign: 'middle' }}>AKSI</th>
+                  <tr style={{ background: '#f8fafc' }}>
+                    <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f8fafc', borderBottom: '2px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.04)', padding: '11px 14px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', verticalAlign: 'middle', minWidth: '240px' }}>NAMA PRODUK & SPESIFIKASI</th>
+                    <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f8fafc', borderBottom: '2px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.04)', padding: '11px 12px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', width: '105px', verticalAlign: 'middle' }}>KATEGORI</th>
+                    <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f8fafc', borderBottom: '2px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.04)', padding: '11px 12px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', width: '135px', verticalAlign: 'middle' }}>STOK FISIK & DUS</th>
+                    <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f8fafc', borderBottom: '2px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.04)', padding: '11px 12px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right', width: '130px', verticalAlign: 'middle' }}>HARGA BELI</th>
+                    <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f8fafc', borderBottom: '2px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.04)', padding: '11px 12px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right', width: '115px', verticalAlign: 'middle' }}>HARGA ECER</th>
+                    <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f8fafc', borderBottom: '2px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.04)', padding: '11px 12px', color: '#0369a1', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right', width: '125px', verticalAlign: 'middle' }}>HARGA GROSIR</th>
+                    <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f8fafc', borderBottom: '2px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.04)', padding: '11px 12px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right', width: '125px', verticalAlign: 'middle' }}>HARGA DUS</th>
+                    <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f8fafc', borderBottom: '2px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.04)', padding: '11px 12px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right', width: '125px', verticalAlign: 'middle' }}>HARGA MENENGAH</th>
+                    <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f8fafc', borderBottom: '2px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.04)', padding: '11px 12px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', width: '120px', verticalAlign: 'middle' }}>PROFIT MARGIN</th>
+                    <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f8fafc', borderBottom: '2px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.04)', padding: '11px 12px', color: '#64748b', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', width: '140px', verticalAlign: 'middle' }}>AKSI</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1493,6 +1498,26 @@ const StockManagement: React.FC = () => {
                                 <span style={{ fontSize: '13.5px', fontWeight: 700, color: '#0f172a', letterSpacing: '-0.2px' }}>
                                   {p.name}
                                 </span>
+                                {p.variants && p.variants.length > 0 && (
+                                  <span
+                                    style={{
+                                      fontSize: '9.5px',
+                                      fontWeight: 800,
+                                      backgroundColor: '#ede9fe',
+                                      color: '#6d28d9',
+                                      border: '1px solid #ddd6fe',
+                                      padding: '1px 6px',
+                                      borderRadius: '999px',
+                                      letterSpacing: '0.3px',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '3px'
+                                    }}
+                                    title={`${p.variants.length} varian produk aktif`}
+                                  >
+                                    <Layers size={10} /> {p.variants.length} Varian
+                                  </span>
+                                )}
                                 {p.isPending && (
                                   <span
                                     style={{
@@ -1658,7 +1683,7 @@ const StockManagement: React.FC = () => {
                                 )}
                               </div>
 
-                              {/* Packaging Specification Badges */}
+                              {/* Packaging Specification Badges & Variant Chips */}
                               <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap', marginTop: '1px' }}>
                                 {boxCap > 1 && (
                                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '9.5px', fontWeight: 700, color: '#92400e', background: '#fef3c7', border: '1px solid #fde68a', padding: '1px 5px', borderRadius: '4px' }}>
@@ -1669,6 +1694,31 @@ const StockManagement: React.FC = () => {
                                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '9.5px', fontWeight: 700, color: '#0369a1', background: '#e0f2fe', border: '1px solid #bae6fd', padding: '1px 5px', borderRadius: '4px' }}>
                                     🗂️ 1 {midUnit} = {midCap} {unit}
                                   </span>
+                                )}
+                                {p.variants && p.variants.length > 0 && (
+                                  <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '2px' }}>
+                                    {p.variants.map((v: any) => (
+                                      <span
+                                        key={v.id}
+                                        style={{
+                                          fontSize: '9px',
+                                          fontWeight: 600,
+                                          background: '#f5f3ff',
+                                          color: '#6d28d9',
+                                          border: '1px solid #ddd6fe',
+                                          padding: '1px 5px',
+                                          borderRadius: '4px',
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          gap: '2px'
+                                        }}
+                                        title={`Barcode: ${v.barcode || '-'}, Stok: ${v.stock} ${unit}${v.sellingPrice ? `, Harga: Rp ${Number(v.sellingPrice).toLocaleString('id-ID')}` : ''}`}
+                                      >
+                                        <span>{v.name}</span>
+                                        <strong style={{ color: '#047857' }}>({v.stock})</strong>
+                                      </span>
+                                    ))}
+                                  </div>
                                 )}
                               </div>
                             </div>
@@ -1712,7 +1762,11 @@ const StockManagement: React.FC = () => {
                                 <span>{stockVal.toLocaleString('id-ID')}</span>
                                 <span style={{ fontSize: '10px', fontWeight: 600, opacity: 0.85 }}>{unit}</span>
                               </div>
-                              {boxCap > 1 && (
+                              {p.variants && p.variants.length > 0 ? (
+                                <span style={{ fontSize: '9.5px', fontWeight: 700, color: '#6d28d9', background: '#f5f3ff', border: '1px solid #ddd6fe', padding: '1px 5px', borderRadius: '4px', marginTop: '2px' }}>
+                                  {p.variants.length} Varian
+                                </span>
+                              ) : boxCap > 1 && (
                                 <span style={{ fontSize: '10px', fontWeight: 700, color: stockVal <= 0 ? '#dc2626' : '#64748b' }}>
                                   {fullBoxes > 0 ? (
                                     <>📦 {fullBoxes} Dus {remainderPcs > 0 ? `+ ${remainderPcs} ${unit}` : '(Pas)'}</>
@@ -2939,30 +2993,92 @@ const StockManagement: React.FC = () => {
               {/* SECTION: VARIAN PRODUK (OPSIONAL) */}
               <div className="ios-section-header" style={{ marginTop: '22px' }}>
                 <span>VARIAN PRODUK (OPSIONAL)</span>
-                <span className="ios-hint-gray">Warna / Ukuran / Rasa</span>
-              </div>
-              <div style={{ padding: '0 4px', marginBottom: '8px' }}>
-                <VariantEditor
-                  variants={variants}
-                  onChange={(next) => {
-                    setVariants(next);
-                    const named = next.filter(v => v.name.trim());
-                    if (named.length > 0) {
-                      const totalVQty = sumVariantQty(named);
-                      setQty(totalVQty);
-                      const bCap = Math.max(1, Number(boxCapacity) || 40);
-                      if (bCap > 1) {
-                        setBoxQty(Math.floor(totalVQty / bCap));
+                <label style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  fontSize: '11.5px',
+                  fontWeight: 700,
+                  color: isVariantEnabled ? '#6d28d9' : '#64748b',
+                  background: isVariantEnabled ? '#ede9fe' : '#f1f5f9',
+                  border: `1px solid ${isVariantEnabled ? '#ddd6fe' : '#cbd5e1'}`,
+                  padding: '3px 10px',
+                  borderRadius: '999px',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s'
+                }}>
+                  <input 
+                    type="checkbox" 
+                    checked={isVariantEnabled} 
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setIsVariantEnabled(checked);
+                      if (!checked) {
+                        setVariants([]);
                       }
-                    }
-                  }}
-                  parentBarcode={retailBarcode || boxBarcode || productId}
-                  title="Varian Produk"
-                  qtyLabel={editingId ? 'Stok Fisik' : 'Qty Masuk'}
-                  showPrices={true}
-                  hint="Tambahkan varian jika produk memiliki pilihan warna, ukuran, atau rasa berbeda (cth: Hitam M, Hitam L, Putih L). Barcode & harga varian akan otomatis mengikuti harga induk jika dikosongkan."
-                />
+                    }} 
+                    style={{ accentColor: '#7c3aed', cursor: 'pointer' }}
+                  />
+                  <span>{isVariantEnabled ? 'Varian Aktif' : 'Aktifkan Varian'}</span>
+                </label>
               </div>
+
+              {isVariantEnabled ? (
+                <div style={{ padding: '0 4px', marginBottom: '8px' }}>
+                  <VariantEditor
+                    variants={variants}
+                    onChange={(next) => {
+                      setVariants(next);
+                      const named = next.filter(v => v.name.trim());
+                      if (named.length > 0) {
+                        const totalVQty = sumVariantQty(named);
+                        setQty(totalVQty);
+                        const bCap = Math.max(1, Number(boxCapacity) || 40);
+                        if (bCap > 1) {
+                          setBoxQty(Math.floor(totalVQty / bCap));
+                        }
+                      }
+                    }}
+                    parentBarcode={retailBarcode || boxBarcode || productId}
+                    title="Varian Produk"
+                    qtyLabel={editingId ? 'Stok Fisik' : 'Qty Masuk'}
+                    showPrices={true}
+                    hint="Tambahkan varian jika produk memiliki pilihan warna, ukuran, atau rasa berbeda (cth: Hitam M, Hitam L, Putih L). Barcode & harga varian akan otomatis mengikuti harga induk jika dikosongkan."
+                  />
+                </div>
+              ) : (
+                <div style={{
+                  padding: '10px 14px',
+                  background: '#f8fafc',
+                  border: '1px dashed #cbd5e1',
+                  borderRadius: '10px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  marginBottom: '10px'
+                }}>
+                  <div style={{ fontSize: '12px', color: '#64748b' }}>
+                    Produk ini adalah produk standar tanpa varian rasa / ukuran.
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsVariantEnabled(true)}
+                    style={{
+                      border: '1px solid #ddd6fe',
+                      background: '#ede9fe',
+                      color: '#6d28d9',
+                      padding: '4px 10px',
+                      borderRadius: '7px',
+                      fontSize: '11.5px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap'
+                    }}
+                  >
+                    + Buat Varian
+                  </button>
+                </div>
+              )}
 
               {/* SECTION: PENGATURAN ISI DUS & STOK FISIK */}
               <div className="ios-section-header" style={{ marginTop: '20px' }}>
