@@ -543,7 +543,13 @@ const StockManagement: React.FC = () => {
       // Item draf lama (sebelum fitur ini) sudah pernah masuk stok -> jangan ditambah dua kali
       if (!item.pending) continue;
       const live = useInventoryStore.getState().products;
-      const existing = live.find(p => p.id === item.id || p.barcode === item.id);
+      const existing = live.find(p => 
+        p.id === item.id || 
+        p.barcode === item.id || 
+        (item.barcode && (p.barcode === item.barcode || p.boxBarcode === item.barcode)) ||
+        (item.boxBarcode && (p.boxBarcode === item.boxBarcode || p.barcode === item.boxBarcode)) ||
+        (item.sku && p.sku && p.sku.toLowerCase() === item.sku.toLowerCase())
+      );
       const qtyIn = Number(item.qty);
       const buyPrice = Number(item.purchasePrice);
       // Varian pada draf (pastikan setiap varian punya ID agar bisa dipakai mutasi)
@@ -563,8 +569,9 @@ const StockManagement: React.FC = () => {
         // Produk sudah ada -> tambah stok, HPP Moving Average
         const newTotal = stockBefore + qtyIn;
         const avg = newTotal > 0
-          ? Math.round(((stockBefore * existing.purchasePrice) + (qtyIn * buyPrice)) / newTotal)
+          ? Math.round(((stockBefore * (existing.purchasePrice || 0)) + (qtyIn * buyPrice)) / newTotal)
           : buyPrice;
+        const newPurchasePrice = buyPrice > 0 ? avg : (existing.purchasePrice || 0);
 
         // Cocokkan varian draf dengan varian yang sudah ada (berdasarkan nama); sisanya dibuat baru
         const variantsPayload: any[] = exVariants.map(v => ({
@@ -600,7 +607,7 @@ const StockManagement: React.FC = () => {
 
         // Mencegah Race Condition: Jangan update stok di sini! Biarkan Mutasi (recordStockMutation) 
         // yang melakukan INCREMENT secara atomic di sisi database.
-        const { stock, variants: _v, ...payload } = { ...existing, purchasePrice: avg };
+        const { stock, variants: _v, ...payload } = { ...existing, purchasePrice: newPurchasePrice };
         await updateProduct(existing.id, { ...payload, variants: variantsPayload } as any);
 
         if (resolved.length > 0) {
@@ -667,9 +674,9 @@ const StockManagement: React.FC = () => {
   };
 
   // Posting dari drawer (item terpilih saja, bisa dari beberapa draf)
-  const handlePostFromDrawer = (items: any[]): string => {
+  const handlePostFromDrawer = async (items: any[]): Promise<string> => {
     const ref = makeGrNumber();
-    applyItemsToStock(items, ref);
+    await applyItemsToStock(items, ref);
     writePostedLog(ref, items);
 
     const ids = new Set(items.map(i => i.id));
@@ -694,7 +701,10 @@ const StockManagement: React.FC = () => {
       // Kosongkan draft global
       const emptyDraft: any[] = [];
       saveDrafts(emptyDraft);
-          } finally {
+    } catch (err: any) {
+      console.error('Error posting draf:', err);
+      alert(err?.message || 'Gagal memposting draf ke stok. Silakan coba lagi.');
+    } finally {
       setIsSubmitting(false);
     }
   };

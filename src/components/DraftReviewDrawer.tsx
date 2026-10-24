@@ -56,8 +56,8 @@ interface Props {
   onRemoveItem: (id: string) => void;
   /** Simpan perubahan satu item draf (ID/barcode tidak bisa diubah) */
   onSaveItem: (item: ReviewItem) => void;
-  /** Mengembalikan nomor referensi GR hasil posting */
-  onPost: (items: ReviewItem[]) => string;
+  /** Mengembalikan nomor referensi GR hasil posting (bisa async) */
+  onPost: (items: ReviewItem[]) => Promise<string> | string;
 }
 
 const idr = (n: number) => 'Rp ' + Number(n || 0).toLocaleString('id-ID');
@@ -77,6 +77,8 @@ const DraftReviewDrawer: React.FC<Props> = ({
 }) => {
   const [closing, setClosing] = useState(false);
   const [posted, setPosted] = useState<{ ref: string; count: number; value: number } | null>(null);
+  const [isPosting, setIsPosting] = useState(false);
+  const [postError, setPostError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<Record<string, any>>({});
 
@@ -202,10 +204,20 @@ const DraftReviewDrawer: React.FC<Props> = ({
   const totalQty = items.reduce((s, i) => s + Number(i.qty), 0);
   const totalValue = items.reduce((s, i) => s + Number(i.purchasePrice) * Number(i.qty), 0);
 
-  const handlePost = () => {
-    const value = postable.reduce((s, i) => s + Number(i.purchasePrice) * Number(i.qty), 0);
-    const ref = onPost(postable);
-    setPosted({ ref, count: postable.length, value });
+  const handlePost = async () => {
+    if (isPosting || postable.length === 0 || editingId) return;
+    setIsPosting(true);
+    setPostError(null);
+    try {
+      const value = postable.reduce((s, i) => s + Number(i.purchasePrice) * Number(i.qty), 0);
+      const ref = await onPost(postable);
+      setPosted({ ref, count: postable.length, value });
+    } catch (err: any) {
+      console.error('Error posting draft items:', err);
+      setPostError(err?.message || 'Gagal memposting item draf ke stok. Silakan periksa data produk atau coba lagi.');
+    } finally {
+      setIsPosting(false);
+    }
   };
 
   return (
@@ -906,6 +918,12 @@ const DraftReviewDrawer: React.FC<Props> = ({
                 );
               })}
 
+              {postError && (
+                <div style={{ display: 'flex', gap: '8px', padding: '10px 14px', backgroundColor: '#fef2f2', borderRadius: '10px', border: '1px solid #fecaca', color: '#b91c1c', fontSize: '12px', fontWeight: 600 }}>
+                  <span>⚠️ {postError}</span>
+                </div>
+              )}
+
               {postable.length > 0 && (
                 <div style={{ display: 'flex', gap: '10px', padding: '10px 14px', backgroundColor: '#ecfdf5', borderRadius: '10px', border: '1px solid #a7f3d0' }}>
                   <CheckCircle size={16} color="#059669" style={{ flexShrink: 0, marginTop: '2px' }} />
@@ -927,6 +945,7 @@ const DraftReviewDrawer: React.FC<Props> = ({
                 type="button" 
                 className="bo-btn bo-btn-secondary" 
                 onClick={close}
+                disabled={isPosting}
                 style={{ padding: '8px 18px', fontSize: '13px', borderRadius: '8px' }}
               >
                 Tutup
@@ -935,16 +954,16 @@ const DraftReviewDrawer: React.FC<Props> = ({
                 type="button" 
                 className="bo-btn bo-btn-primary"
                 onClick={handlePost}
-                disabled={postable.length === 0 || !!editingId}
+                disabled={isPosting || postable.length === 0 || !!editingId}
                 style={{ 
                   minWidth: '220px', 
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', 
-                  opacity: postable.length === 0 || editingId ? 0.5 : 1,
+                  opacity: isPosting || postable.length === 0 || editingId ? 0.5 : 1,
                   padding: '8px 20px', fontSize: '13px', borderRadius: '8px',
                   boxShadow: '0 4px 12px rgba(218,41,28,0.25)'
                 }}
               >
-                <CheckCircle size={16} /> Konfirmasi &amp; Posting{postable.length > 1 ? ` (${postable.length})` : ''}
+                <CheckCircle size={16} /> {isPosting ? 'Memproses Posting...' : `Konfirmasi & Posting${postable.length > 1 ? ` (${postable.length})` : ''}`}
               </button>
             </div>
           </>

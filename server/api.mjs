@@ -1559,7 +1559,7 @@ app.post('/api/saas/stock-transactions', async (req, res) => {
 
         const price = Number(item.purchasePrice || 0);
         if (!Number.isFinite(price) || price < 0) throw new ValidationError(`${label} (${product.name}): harga beli tidak valid.`);
-        if (type === 'IN' && price <= 0) throw new ValidationError(`${label} (${product.name}): harga beli wajib lebih dari 0.`);
+        if (type === 'IN' && supplierId && price <= 0) throw new ValidationError(`${label} (${product.name}): harga beli wajib lebih dari 0 untuk faktur pembelian supplier.`);
 
         // --- Varian ---
         const hasVariants = product.variants.length > 0;
