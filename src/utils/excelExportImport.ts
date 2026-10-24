@@ -135,7 +135,7 @@ export const exportMasterExcel = (data: ExportDataPayload, customName?: string) 
     const minWholesaleQty = parseNumber(p.minWholesaleQty ?? p.min_wholesale_qty, 1);
     const boxPriceVal = parseNumber(p.boxPrice ?? p.box_price, 0);
     const boxPrice = boxPriceVal > 0 ? boxPriceVal : (boxCapacity > 1 ? sellPrice * boxCapacity : '');
-    const boxCost = boxCapacity > 1 ? (buyPrice * boxCapacity) : '';
+    const boxCost = boxCapacity > 1 ? (parseNumber(p.boxPurchasePrice ?? p.box_purchase_price, 0) || (buyPrice * boxCapacity)) : '';
     const estBoxStock = boxCapacity > 1 ? Math.floor(stock / boxCapacity) : '-';
     const remRetailStock = boxCapacity > 1 ? (stock % boxCapacity) : stock;
 
@@ -534,7 +534,7 @@ export const parseExcelFile = async (file: File): Promise<ParsedImportData> => {
                 0
               );
               if (buyPrice === 0 && boxCost > 0 && boxCapacity > 0) {
-                buyPrice = Math.round(boxCost / boxCapacity);
+                buyPrice = Number((boxCost / boxCapacity).toFixed(4));
               }
 
               // Harga Jual Eceran Satuan
@@ -647,6 +647,8 @@ export const parseExcelFile = async (file: File): Promise<ParsedImportData> => {
                 boxCapacity: boxCapacity > 0 ? boxCapacity : 1,
                 box_price: boxPrice > 0 ? boxPrice : undefined,
                 boxPrice: boxPrice > 0 ? boxPrice : undefined,
+                box_purchase_price: boxCost > 0 ? boxCost : undefined,
+                boxPurchasePrice: boxCost > 0 ? boxCost : undefined,
                 min_wholesale_qty: minWholesaleQty > 0 ? minWholesaleQty : 1,
                 minWholesaleQty: minWholesaleQty > 0 ? minWholesaleQty : 1,
                 mid_unit_name: midUnitName || undefined,
@@ -687,6 +689,8 @@ export const parseExcelFile = async (file: File): Promise<ParsedImportData> => {
                   boxCapacity: boxCapacity > 1 ? boxCapacity : (cur.box_capacity || cur.boxCapacity || 1),
                   box_price: boxPrice > 0 ? boxPrice : (cur.box_price || cur.boxPrice),
                   boxPrice: boxPrice > 0 ? boxPrice : (cur.box_price || cur.boxPrice),
+                  box_purchase_price: boxCost > 0 ? boxCost : (cur.box_purchase_price || cur.boxPurchasePrice),
+                  boxPurchasePrice: boxCost > 0 ? boxCost : (cur.box_purchase_price || cur.boxPurchasePrice),
                   min_wholesale_qty: minWholesaleQty > 1 ? minWholesaleQty : (cur.min_wholesale_qty || cur.minWholesaleQty || 1),
                   minWholesaleQty: minWholesaleQty > 1 ? minWholesaleQty : (cur.min_wholesale_qty || cur.minWholesaleQty || 1),
                   mid_unit_name: midUnitName || cur.mid_unit_name || cur.midUnitName,

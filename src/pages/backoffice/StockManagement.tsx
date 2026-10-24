@@ -87,6 +87,7 @@ const StockManagement: React.FC = () => {
   const [unit, setUnit] = useState('Pcs');
   const [purchasePrice, setPurchasePrice] = useState<number | string>('');
   const [boxPurchasePrice, setBoxPurchasePrice] = useState<number | string>('');
+  const [isEditingHpp, setIsEditingHpp] = useState(false);
   const [sellingPrice, setSellingPrice] = useState<number | string>('');
   const [wholesalePrice, setWholesalePrice] = useState<number | string>('');
   const [minWholesaleQty, setMinWholesaleQty] = useState<number | string>('');
@@ -368,6 +369,7 @@ const StockManagement: React.FC = () => {
           category,
           unit,
           purchasePrice: baseCost,
+          boxPurchasePrice: cleanNum(boxPurchasePrice) > 0 ? cleanNum(boxPurchasePrice) : null,
           sellingPrice: numSellingPrice,
           wholesalePrice: finalWholesalePrice,
           minWholesaleQty: finalMinWholesaleQty,
@@ -467,6 +469,7 @@ const StockManagement: React.FC = () => {
         location: 'Gudang Utama',
         qty: totalQty,
         purchasePrice: cleanNum(purchasePrice),
+        boxPurchasePrice: cleanNum(boxPurchasePrice) > 0 ? cleanNum(boxPurchasePrice) : undefined,
         sellingPrice: numSellingPrice,
         wholesalePrice: finalWholesalePrice,
         minWholesaleQty: finalMinWholesaleQty,
@@ -672,6 +675,7 @@ const StockManagement: React.FC = () => {
           stock: 0, // Dikosongkan agar penambahan qty di mutasi tidak berlipat (doubled)
           baseUnitMultiplier: 1,
           purchasePrice: buyPrice,
+          boxPurchasePrice: item.boxPurchasePrice || undefined,
           sellingPrice: Number(item.sellingPrice),
           wholesalePrice: Number(item.wholesalePrice || 0),
           minWholesaleQty: Number(item.minWholesaleQty || 0),
@@ -780,9 +784,15 @@ const StockManagement: React.FC = () => {
     const editBoxCap = Number(p.boxCapacity) || 1;
     setBoxQty(editBoxCap > 1 ? Math.floor((Number(p.stock) || 0) / editBoxCap) : '');
     setUnit(p.unit || 'Pcs');
-    setPurchasePrice(p.purchasePrice);
+    setPurchasePrice(p.purchasePrice !== undefined && p.purchasePrice !== null ? p.purchasePrice : '');
     const bCap = Number(p.boxCapacity) || 1;
-    setBoxPurchasePrice(bCap > 1 && p.purchasePrice ? Math.round(Number(p.purchasePrice) * bCap) : '');
+    if (p.boxPurchasePrice !== undefined && p.boxPurchasePrice !== null && Number(p.boxPurchasePrice) > 0) {
+      setBoxPurchasePrice(p.boxPurchasePrice);
+    } else if (bCap > 1 && p.purchasePrice) {
+      setBoxPurchasePrice(Number((Number(p.purchasePrice) * bCap).toFixed(2)));
+    } else {
+      setBoxPurchasePrice('');
+    }
     setSellingPrice(p.sellingPrice);
     setWholesalePrice(p.wholesalePrice !== undefined && p.wholesalePrice !== null && Number(p.wholesalePrice) > 0 ? p.wholesalePrice : '');
     setMinWholesaleQty(p.minWholesaleQty ? p.minWholesaleQty : '');
@@ -817,7 +827,7 @@ const StockManagement: React.FC = () => {
     setRestockBoxQty('');
     setRestockQty('');
     setRestockPrice(unitPrice);
-    setRestockBoxPrice(unitPrice * boxCap);
+    setRestockBoxPrice(p.boxPurchasePrice ? Number(p.boxPurchasePrice) : Number((unitPrice * boxCap).toFixed(2)));
     setRestockVarQty({});
     setRestockNewVariants([]);
   };
@@ -852,8 +862,8 @@ const StockManagement: React.FC = () => {
     const newPrice = Number(restockPrice);
 
     const newTotalQty = oldQty + addedQty;
-    // Hitung Harga Pokok Pembelian (HPP) baru dengan Moving Average
-    const newAveragePrice = Math.round(((oldQty * oldPrice) + (addedQty * newPrice)) / newTotalQty);
+    // Hitung Harga Pokok Pembelian (HPP) baru dengan Moving Average (presisi desimal)
+    const newAveragePrice = Number((((oldQty * oldPrice) + (addedQty * newPrice)) / newTotalQty).toFixed(4));
 
     // Mencegah Race Condition: Jangan update stok di sini! Mutasi IN yang akan
     // menambah stok (increment) di database.
@@ -914,6 +924,7 @@ const StockManagement: React.FC = () => {
     boxBarcode: si.boxBarcode || si.barcode,
     boxCapacity: si.boxCapacity || 40,
     boxPrice: si.boxPrice || 0,
+    boxPurchasePrice: si.boxPurchasePrice || undefined,
     midUnitName: si.midUnitName || '',
     midBarcode: si.midBarcode || '',
     midCapacity: Number(si.midCapacity || 0),
@@ -965,7 +976,16 @@ const StockManagement: React.FC = () => {
   }, [products]);
 
   const totalInventoryCost = useMemo(() => {
-    return products.reduce((acc, p) => acc + ((Number(p.stock) || 0) * (Number(p.purchasePrice) || 0)), 0);
+    return products.reduce((acc, p) => {
+      const bCap = Number(p.boxCapacity) || 1;
+      const bBuy = Number(p.boxPurchasePrice) || 0;
+      const uBuy = Number(p.purchasePrice) || 0;
+      const st = Number(p.stock) || 0;
+      if (bCap > 1 && bBuy > 0) {
+        return acc + ((st / bCap) * bBuy);
+      }
+      return acc + (st * uBuy);
+    }, 0);
   }, [products]);
 
   const totalInventoryRetail = useMemo(() => {
@@ -1026,7 +1046,16 @@ const StockManagement: React.FC = () => {
 
   const filteredStats = useMemo(() => {
     const totalUnits = filteredProducts.reduce((sum, p) => sum + (Number(p.stock) || 0), 0);
-    const totalCost = filteredProducts.reduce((sum, p) => sum + ((Number(p.stock) || 0) * (Number(p.purchasePrice) || 0)), 0);
+    const totalCost = filteredProducts.reduce((sum, p) => {
+      const bCap = Number(p.boxCapacity) || 1;
+      const bBuy = Number(p.boxPurchasePrice) || 0;
+      const uBuy = Number(p.purchasePrice) || 0;
+      const st = Number(p.stock) || 0;
+      if (bCap > 1 && bBuy > 0) {
+        return sum + ((st / bCap) * bBuy);
+      }
+      return sum + (st * uBuy);
+    }, 0);
     const totalRetail = filteredProducts.reduce((sum, p) => sum + ((Number(p.stock) || 0) * (Number(p.sellingPrice) || 0)), 0);
     return { totalUnits, totalCost, totalRetail };
   }, [filteredProducts]);
@@ -2423,7 +2452,7 @@ const StockManagement: React.FC = () => {
                         setRestockBoxPrice(val);
                         const num = Number(val);
                         if (!isNaN(num) && restockBoxCap > 0) {
-                          setRestockPrice(Math.round(num / restockBoxCap));
+                          setRestockPrice(Number((num / restockBoxCap).toFixed(4)));
                         }
                       }}
                       placeholder="Rp /Dus"
@@ -2433,15 +2462,11 @@ const StockManagement: React.FC = () => {
                     <label className="bo-label" style={{ fontSize: '11px' }}>MODAL / {restockProduct.unit.toUpperCase()} (RP)</label>
                     <input
                       type="number"
+                      step="any"
                       className="bo-input"
                       value={restockPrice}
                       onChange={(e) => {
-                        const val = e.target.value;
-                        setRestockPrice(val);
-                        const num = Number(val);
-                        if (!isNaN(num)) {
-                          setRestockBoxPrice(Math.round(num * restockBoxCap));
-                        }
+                        setRestockPrice(e.target.value);
                       }}
                       required
                     />
@@ -3159,9 +3184,7 @@ const StockManagement: React.FC = () => {
                           setQty(Number(boxQty) * cap);
                         }
                         if (boxPurchasePrice !== '') {
-                          setPurchasePrice(Math.round(Number(boxPurchasePrice) / cap));
-                        } else if (purchasePrice !== '' && cap > 1) {
-                          setBoxPurchasePrice(Math.round(Number(purchasePrice) * cap));
+                          setPurchasePrice(Number((Number(boxPurchasePrice) / cap).toFixed(4)));
                         }
                       }}
                       className="ios-input-gray ios-input-small"
@@ -3515,10 +3538,10 @@ const StockManagement: React.FC = () => {
                           setBoxPurchasePrice(val === '' ? '' : Number(val));
                           const bCap = Number(boxCapacity) || 1;
                           if (val !== '' && bCap > 0) {
-                            setPurchasePrice(Math.round(Number(val) / bCap));
+                            setPurchasePrice(Number((Number(val) / bCap).toFixed(4)));
                           }
                         }} 
-                        placeholder={purchasePrice && Number(boxCapacity) > 1 ? String(Math.round(Number(purchasePrice) * Number(boxCapacity))) : ''}
+                        placeholder={boxPurchasePrice !== '' ? String(boxPurchasePrice) : ''}
                         className="ios-input-gray" 
                         style={{ textAlign: 'right', width: '130px', fontWeight: 800, color: '#0f172a' }} 
                       />
@@ -3534,21 +3557,30 @@ const StockManagement: React.FC = () => {
                       {Number(boxCapacity) > 1 
                         ? `Biaya pokok satuan eceran (otomatis: Rp {harga Dus} ÷ ${boxCapacity})`
                         : `Biaya pokok dasar eceran per ${unit}`}
+                      {purchasePrice !== '' && Number(purchasePrice) % 1 !== 0 && (
+                        <div style={{ color: '#0284c7', fontSize: '11px', marginTop: '2px', fontWeight: 600 }}>
+                          ℹ️ Presisi faktur: Rp {Number(purchasePrice).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 4 })} (ditampilkan dibulatkan)
+                        </div>
+                      )}
+                      {Number(boxCapacity) > 1 && boxPurchasePrice !== '' && purchasePrice !== '' && Math.abs(Number(purchasePrice) * Number(boxCapacity) - Number(boxPurchasePrice)) > 1 && (
+                        <div style={{ color: '#b45309', fontSize: '11px', marginTop: '2px', fontWeight: 600 }}>
+                          ⚠️ HPP manual tidak sama dengan harga Dus ÷ {boxCapacity}. Harga Dus faktur tetap Rp {Number(boxPurchasePrice).toLocaleString('id-ID')}.
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div className="ios-input-prefix">
                     <span>Rp</span>
                     <input 
                       type="number" 
-                      inputMode="numeric" 
-                      value={purchasePrice} 
+                      inputMode="decimal" 
+                      step="any"
+                      value={isEditingHpp ? purchasePrice : (purchasePrice !== '' ? Math.round(Number(purchasePrice)) : '')}
+                      onFocus={() => setIsEditingHpp(true)}
+                      onBlur={() => setIsEditingHpp(false)}
                       onChange={(e) => {
                         const val = e.target.value;
                         setPurchasePrice(val === '' ? '' : Number(val));
-                        const bCap = Number(boxCapacity) || 1;
-                        if (val !== '' && bCap > 1) {
-                          setBoxPurchasePrice(Math.round(Number(val) * bCap));
-                        }
                       }} 
                       className="ios-input-gray" 
                       style={{ textAlign: 'right', width: '130px', fontWeight: 700 }} 

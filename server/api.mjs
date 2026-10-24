@@ -298,6 +298,7 @@ app.post('/api/saas/products', async (req, res) => {
           box_barcode: data.boxBarcode || data.barcode || null,
           box_capacity: optNum(data.boxCapacity) || 1,
           box_price: optNum(data.boxPrice) || Number(data.wholesalePrice || 0),
+          box_purchase_price: data.boxPurchasePrice !== undefined && data.boxPurchasePrice !== null && data.boxPurchasePrice !== '' ? Math.max(0, Number(data.boxPurchasePrice)) : null,
           mid_unit_name: data.midUnitName || null,
           mid_barcode: data.midBarcode || null,
           mid_capacity: optNum(data.midCapacity) || 0,
@@ -370,6 +371,7 @@ app.put('/api/saas/products/:id', async (req, res) => {
     if (data.boxBarcode !== undefined) updateData.box_barcode = data.boxBarcode ? String(data.boxBarcode).trim() : null;
     if (data.boxCapacity !== undefined) updateData.box_capacity = Math.max(1, Number(data.boxCapacity) || 1);
     if (data.boxPrice !== undefined) updateData.box_price = Math.max(0, Number(data.boxPrice) || 0);
+    if (data.boxPurchasePrice !== undefined) updateData.box_purchase_price = (data.boxPurchasePrice === null || data.boxPurchasePrice === '') ? null : Math.max(0, Number(data.boxPurchasePrice) || 0);
     if (data.midUnitName !== undefined) updateData.mid_unit_name = data.midUnitName ? String(data.midUnitName).trim() : null;
     if (data.midBarcode !== undefined) updateData.mid_barcode = data.midBarcode ? String(data.midBarcode).trim() : null;
     if (data.midCapacity !== undefined) updateData.mid_capacity = Math.max(0, Number(data.midCapacity) || 0);
@@ -1674,9 +1676,8 @@ app.post('/api/saas/stock-transactions', async (req, res) => {
         if (type === 'IN' && l.price > 0) {
           const oldQty = Math.max(0, l.product.stock);
           const newQty = oldQty + Math.abs(l.qty);
-          productUpdate.purchase_price = newQty > 0
-            ? Math.round(((oldQty * (l.product.purchase_price || 0)) + (Math.abs(l.qty) * l.price)) / newQty)
-            : l.price;
+          const rawAvg = ((oldQty * (l.product.purchase_price || 0)) + (Math.abs(l.qty) * l.price)) / newQty;
+          productUpdate.purchase_price = newQty > 0 ? Number(rawAvg.toFixed(4)) : l.price;
           // Produk dengan beberapa baris varian: stok awal baris berikutnya harus ikut yang terbaru
           l.product.stock = newQty;
           l.product.purchase_price = productUpdate.purchase_price;
@@ -2239,7 +2240,16 @@ app.get('/api/saas/export/all', async (req, res) => {
 
     // Calculate Financial & Sales Analytics
     const totalSalesAmount = transactions.reduce((acc, t) => acc + (t.total_amount || 0), 0);
-    const totalStockCost = products.reduce((acc, p) => acc + ((p.stock || 0) * (p.purchase_price || 0)), 0);
+    const totalStockCost = products.reduce((acc, p) => {
+      const bCap = Number(p.box_capacity) || 1;
+      const bBuy = Number(p.box_purchase_price) || 0;
+      const uBuy = Number(p.purchase_price) || 0;
+      const st = Number(p.stock) || 0;
+      if (bCap > 1 && bBuy > 0) {
+        return acc + ((st / bCap) * bBuy);
+      }
+      return acc + (st * uBuy);
+    }, 0);
     const totalStockRetailValue = products.reduce((acc, p) => acc + ((p.stock || 0) * (p.selling_price || 0)), 0);
     const totalSupplierDebt = suppliers.reduce((acc, s) => acc + (s.payable || 0), 0);
 
@@ -2320,6 +2330,7 @@ app.post('/api/saas/import/master', async (req, res) => {
         const pRetailBarcode = (p.retail_barcode ?? p.retailBarcode) ? String(p.retail_barcode ?? p.retailBarcode).trim() : null;
         const pBoxCapacity = Number(p.box_capacity ?? p.boxCapacity ?? 1) || 1;
         const pBoxPrice = Number(p.box_price ?? p.boxPrice ?? 0) || 0;
+        const pBoxPurchasePrice = Number(p.box_purchase_price ?? p.boxPurchasePrice ?? p.modal_dus ?? p.harga_beli_dus ?? 0) || 0;
 
         const pMidUnitName = (p.mid_unit_name ?? p.midUnitName) ? String(p.mid_unit_name ?? p.midUnitName).trim() : null;
         const pMidBarcode = (p.mid_barcode ?? p.midBarcode) ? String(p.mid_barcode ?? p.midBarcode).trim() : null;
@@ -2411,6 +2422,7 @@ app.post('/api/saas/import/master', async (req, res) => {
               box_barcode: pBoxBarcode || existing.box_barcode,
               box_capacity: pBoxCapacity > 0 ? pBoxCapacity : existing.box_capacity,
               box_price: pBoxPrice > 0 ? pBoxPrice : existing.box_price,
+              box_purchase_price: pBoxPurchasePrice > 0 ? pBoxPurchasePrice : existing.box_purchase_price,
               retail_barcode: pRetailBarcode || existing.retail_barcode,
               mid_unit_name: pMidUnitName || existing.mid_unit_name,
               mid_barcode: pMidBarcode || existing.mid_barcode,
@@ -2448,6 +2460,7 @@ app.post('/api/saas/import/master', async (req, res) => {
               box_barcode: pBoxBarcode,
               box_capacity: pBoxCapacity,
               box_price: pBoxPrice,
+              box_purchase_price: pBoxPurchasePrice > 0 ? pBoxPurchasePrice : null,
               retail_barcode: pRetailBarcode,
               mid_unit_name: pMidUnitName,
               mid_barcode: pMidBarcode,

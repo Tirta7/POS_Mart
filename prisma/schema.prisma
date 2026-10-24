@@ -129,6 +129,7 @@ model Product {
   box_barcode    String?
   box_capacity   Float?  @default(1)
   box_price      Float?  @default(0)
+  box_purchase_price Float? @default(0) // Harga Beli Distributor per Dus (Source of Truth)
   mid_unit_name  String?
   mid_barcode    String?
   mid_capacity   Float?  @default(0)

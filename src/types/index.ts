@@ -23,6 +23,7 @@ export interface Product {
   boxBarcode?: string;       // Barcode kemasan Dus / Karton luar
   boxCapacity?: number;      // Isi per 1 Dus dalam satuan eceran (misal 40 pcs)
   boxPrice?: number;         // Harga jual per 1 Dus
+  boxPurchasePrice?: number; // Harga beli distributor per 1 Dus (Source of Truth)
   midUnitName?: string;      // Nama kemasan menengah (Renceng, Lusin, Slop, Pack)
   midBarcode?: string;       // Barcode kemasan menengah
   midCapacity?: number;      // Isi per 1 Renceng/Lusin dalam satuan eceran (misal 10 pcs)
