@@ -14,7 +14,7 @@ interface InventoryState {
   addProduct: (product: Product) => Promise<Product>;
   deleteProduct: (id: string) => Promise<DeleteProductResult>;
   setProductActive: (id: string, active: boolean) => Promise<boolean>;
-  updateProduct: (oldId: string, product: Product) => Promise<void>;
+  updateProduct: (oldId: string, product: Product) => Promise<Product | void>;
   updateProductStock: (productId: string, qty: number) => void;
   reserveStock: (productId: string, qty: number, variantId?: string) => void;
   releaseReservedStock: (productId: string, qty: number, variantId?: string) => void;
@@ -42,7 +42,7 @@ const mapProduct = (p: any): Product => ({
   sku: p.sku || '',
   barcode: p.barcode || '',
   name: p.name,
-  category: p.category?.name || 'Uncategorized',
+  category: p.category?.name || (typeof p.category === 'string' ? p.category : (p.category_name || 'Uncategorized')),
   location: '',
   unit: p.unit || 'Pcs',
   isActive: p.is_active !== false,
@@ -213,7 +213,7 @@ export const useInventoryStore = create<InventoryState>()(
             const data = await res.json();
             const updated = mapProduct(data);
             set((state) => ({ products: state.products.map(p => p.id === oldId ? updated : p) }));
-            get().fetchProducts().catch(() => {});
+            return updated;
           } else {
             const err = await res.json().catch(() => ({ error: 'Gagal memperbarui produk di server' }));
             console.error('Update product error:', err);

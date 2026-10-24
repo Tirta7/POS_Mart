@@ -114,7 +114,7 @@ const syncProductVariants = async (tx, tenantId, productId, variants) => {
 // Middleware CORS dan Auth
 app.use('/api/saas', async (req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, PATCH, DELETE');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-tenant-id');
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
   res.setHeader('Pragma', 'no-cache');
@@ -318,7 +318,7 @@ app.post('/api/saas/products', async (req, res) => {
   }
 });
 
-app.put('/api/saas/products/:id', async (req, res) => {
+const handleUpdateProduct = async (req, res) => {
   try {
     const data = req.body || {};
     let existing = await prisma.product.findFirst({
@@ -335,48 +335,118 @@ app.put('/api/saas/products/:id', async (req, res) => {
 
     const effectiveTenantId = existing.tenant_id || req.tenantId;
 
+    // Helper untuk membaca nilai baik dalam camelCase, snake_case, maupun istilah bahasa Indonesia
+    const getField = (...keys) => {
+      for (const k of keys) {
+        if (data[k] !== undefined) return data[k];
+      }
+      return undefined;
+    };
+
     let categoryId = undefined;
-    if (data.category) {
-      const cat = await prisma.category.findFirst({
-        where: { name: String(data.category).trim(), tenant_id: effectiveTenantId }
-      });
-      if (cat) {
-        categoryId = cat.id;
-      } else {
-        const newCat = await prisma.category.create({
-          data: { name: String(data.category).trim(), tenant_id: effectiveTenantId }
+    const catInput = getField('category', 'categoryId', 'category_id', 'kategori');
+    if (catInput !== undefined && catInput !== null && catInput !== '') {
+      let catName = '';
+      if (typeof catInput === 'object') {
+        catName = String(catInput.name || catInput.nama || '').trim();
+        if (catInput.id) categoryId = catInput.id;
+      } else if (typeof catInput === 'string') {
+        const trimmed = catInput.trim();
+        if (trimmed.length > 20 && !trimmed.includes(' ')) {
+          const catById = await prisma.category.findUnique({ where: { id: trimmed } }).catch(() => null);
+          if (catById) categoryId = catById.id;
+          else catName = trimmed;
+        } else {
+          catName = trimmed;
+        }
+      }
+      if (!categoryId && catName) {
+        const cat = await prisma.category.findFirst({
+          where: {
+            tenant_id: effectiveTenantId,
+            name: { equals: catName, mode: 'insensitive' }
+          }
         });
-        categoryId = newCat.id;
+        if (cat) {
+          categoryId = cat.id;
+        } else {
+          const newCat = await prisma.category.create({
+            data: { name: catName, tenant_id: effectiveTenantId }
+          });
+          categoryId = newCat.id;
+        }
       }
     }
 
-    // Jika daftar varian dikirim -> sinkronkan; stok produk = total stok varian (data.stock diabaikan)
+    // Jika daftar varian dikirim -> sinkronkan
     const variantsProvided = Array.isArray(data.variants);
     const incomingVariants = variantsProvided ? data.variants.filter(v => v && String(v.name || '').trim()) : [];
     const hasVariants = incomingVariants.length > 0;
 
     const updateData = {};
-    if (data.sku !== undefined) updateData.sku = data.sku ? String(data.sku).trim() : null;
-    if (data.barcode !== undefined) updateData.barcode = data.barcode ? String(data.barcode).trim() : null;
-    if (data.name !== undefined && String(data.name).trim()) updateData.name = String(data.name).trim();
+    const nameVal = getField('name', 'nama', 'product_name');
+    if (nameVal !== undefined && String(nameVal).trim()) updateData.name = String(nameVal).trim();
+
+    const skuVal = getField('sku', 'kode_sku');
+    if (skuVal !== undefined) updateData.sku = skuVal ? String(skuVal).trim() : null;
+
+    const barcodeVal = getField('barcode', 'kode_barcode');
+    if (barcodeVal !== undefined) updateData.barcode = barcodeVal ? String(barcodeVal).trim() : null;
+
     if (categoryId !== undefined) updateData.category_id = categoryId;
-    if (data.purchasePrice !== undefined) updateData.purchase_price = Math.max(0, Number(data.purchasePrice) || 0);
-    if (data.sellingPrice !== undefined) updateData.selling_price = Math.max(0, Number(data.sellingPrice) || 0);
-    if (data.wholesalePrice !== undefined) updateData.wholesale_price = Math.max(0, Number(data.wholesalePrice) || 0);
-    if (data.minWholesaleQty !== undefined) updateData.min_wholesale_qty = optNum(data.minWholesaleQty);
-    if (data.stock !== undefined && !hasVariants) updateData.stock = Number(data.stock) || 0;
-    if (data.minStock !== undefined) updateData.min_stock = Math.max(0, Number(data.minStock) || 0);
-    if (data.unit !== undefined && data.unit) updateData.unit = String(data.unit).trim();
-    if (data.image !== undefined) updateData.image_url = data.image;
-    if (data.boxBarcode !== undefined) updateData.box_barcode = data.boxBarcode ? String(data.boxBarcode).trim() : null;
-    if (data.boxCapacity !== undefined) updateData.box_capacity = Math.max(1, Number(data.boxCapacity) || 1);
-    if (data.boxPrice !== undefined) updateData.box_price = Math.max(0, Number(data.boxPrice) || 0);
-    if (data.boxPurchasePrice !== undefined) updateData.box_purchase_price = (data.boxPurchasePrice === null || data.boxPurchasePrice === '') ? null : Math.max(0, Number(data.boxPurchasePrice) || 0);
-    if (data.midUnitName !== undefined) updateData.mid_unit_name = data.midUnitName ? String(data.midUnitName).trim() : null;
-    if (data.midBarcode !== undefined) updateData.mid_barcode = data.midBarcode ? String(data.midBarcode).trim() : null;
-    if (data.midCapacity !== undefined) updateData.mid_capacity = Math.max(0, Number(data.midCapacity) || 0);
-    if (data.midPrice !== undefined) updateData.mid_price = Math.max(0, Number(data.midPrice) || 0);
-    if (data.retailBarcode !== undefined) updateData.retail_barcode = data.retailBarcode ? String(data.retailBarcode).trim() : null;
+
+    const purchasePriceVal = getField('purchasePrice', 'purchase_price', 'harga_beli', 'modal', 'hpp');
+    if (purchasePriceVal !== undefined) updateData.purchase_price = Math.max(0, Number(purchasePriceVal) || 0);
+
+    const sellingPriceVal = getField('sellingPrice', 'selling_price', 'harga_jual');
+    if (sellingPriceVal !== undefined) updateData.selling_price = Math.max(0, Number(sellingPriceVal) || 0);
+
+    const wholesalePriceVal = getField('wholesalePrice', 'wholesale_price', 'harga_grosir');
+    if (wholesalePriceVal !== undefined) updateData.wholesale_price = Math.max(0, Number(wholesalePriceVal) || 0);
+
+    const minWholesaleQtyVal = getField('minWholesaleQty', 'min_wholesale_qty', 'min_grosir');
+    if (minWholesaleQtyVal !== undefined) updateData.min_wholesale_qty = optNum(minWholesaleQtyVal);
+
+    const stockVal = getField('stock', 'stok', 'qty');
+    if (stockVal !== undefined && !hasVariants) updateData.stock = Number(stockVal) || 0;
+
+    const minStockVal = getField('minStock', 'min_stock', 'min_stok');
+    if (minStockVal !== undefined) updateData.min_stock = Math.max(0, Number(minStockVal) || 0);
+
+    const unitVal = getField('unit', 'satuan');
+    if (unitVal !== undefined && unitVal) updateData.unit = String(unitVal).trim();
+
+    const imageVal = getField('image', 'image_url', 'imageUrl', 'foto');
+    if (imageVal !== undefined) updateData.image_url = imageVal ? String(imageVal) : null;
+
+    const boxBarcodeVal = getField('boxBarcode', 'box_barcode', 'barcode_dus');
+    if (boxBarcodeVal !== undefined) updateData.box_barcode = boxBarcodeVal ? String(boxBarcodeVal).trim() : null;
+
+    const boxCapacityVal = getField('boxCapacity', 'box_capacity', 'isi_dus');
+    if (boxCapacityVal !== undefined) updateData.box_capacity = Math.max(1, Number(boxCapacityVal) || 1);
+
+    const boxPriceVal = getField('boxPrice', 'box_price', 'harga_dus');
+    if (boxPriceVal !== undefined) updateData.box_price = Math.max(0, Number(boxPriceVal) || 0);
+
+    const boxPurchasePriceVal = getField('boxPurchasePrice', 'box_purchase_price', 'harga_beli_dus');
+    if (boxPurchasePriceVal !== undefined) {
+      updateData.box_purchase_price = (boxPurchasePriceVal === null || boxPurchasePriceVal === '') ? null : Math.max(0, Number(boxPurchasePriceVal) || 0);
+    }
+
+    const midUnitNameVal = getField('midUnitName', 'mid_unit_name', 'satuan_sedang');
+    if (midUnitNameVal !== undefined) updateData.mid_unit_name = midUnitNameVal ? String(midUnitNameVal).trim() : null;
+
+    const midBarcodeVal = getField('midBarcode', 'mid_barcode');
+    if (midBarcodeVal !== undefined) updateData.mid_barcode = midBarcodeVal ? String(midBarcodeVal).trim() : null;
+
+    const midCapacityVal = getField('midCapacity', 'mid_capacity', 'isi_sedang');
+    if (midCapacityVal !== undefined) updateData.mid_capacity = Math.max(0, Number(midCapacityVal) || 0);
+
+    const midPriceVal = getField('midPrice', 'mid_price', 'harga_sedang');
+    if (midPriceVal !== undefined) updateData.mid_price = Math.max(0, Number(midPriceVal) || 0);
+
+    const retailBarcodeVal = getField('retailBarcode', 'retail_barcode', 'barcode_eceran');
+    if (retailBarcodeVal !== undefined) updateData.retail_barcode = retailBarcodeVal ? String(retailBarcodeVal).trim() : null;
 
     const product = await prisma.$transaction(async (tx) => {
       await tx.product.update({
@@ -388,13 +458,20 @@ app.put('/api/saas/products/:id', async (req, res) => {
       }
       return tx.product.findUnique({ where: { id: existing.id }, include: PRODUCT_INCLUDE });
     });
+
     notifyTenant(effectiveTenantId, 'products');
+    if (effectiveTenantId !== req.tenantId) {
+      notifyTenant(req.tenantId, 'products');
+    }
     res.json(product);
   } catch (err) {
     console.error('Error updating product:', err);
     res.status(500).json({ error: err.message });
   }
-});
+};
+
+app.put('/api/saas/products/:id', handleUpdateProduct);
+app.patch('/api/saas/products/:id', handleUpdateProduct);
 
 app.delete('/api/saas/products/:id', async (req, res) => {
   try {
@@ -1558,6 +1635,12 @@ app.post('/api/saas/stock-transactions', async (req, res) => {
             where: { id: item.productId, tenant_id: req.tenantId, deleted_at: null },
             include: { variants: true }
           });
+          if (!product) {
+            product = await tx.product.findFirst({
+              where: { id: item.productId, deleted_at: null },
+              include: { variants: true }
+            });
+          }
           if (product) productCache.set(item.productId, product);
         }
         if (!product) throw new ValidationError(`${label}: produk tidak ditemukan / sudah dihapus.`);

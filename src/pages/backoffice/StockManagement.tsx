@@ -307,7 +307,66 @@ const StockManagement: React.FC = () => {
     const finalSku = (sku || '').trim() || generateAutoSKU(cleanName, finalBarcode);
 
     if (editingId) {
-      // Find original to keep unmodified fields (like id, barcode, etc)
+      // 1. Cek apakah yang diedit adalah item draft
+      const draftIdx = draftItems.findIndex(d => d.id === editingId);
+      if (draftIdx !== -1) {
+        const finalBoxCap = Math.max(1, cleanNum(boxCapacity) || 1);
+        const finalBoxPrice = cleanNum(boxPrice);
+        const finalWholesalePrice = cleanNum(wholesalePrice);
+        const finalMinWholesaleQty = cleanNum(minWholesaleQty);
+        const finalMidCap = hasMidTier ? Math.max(1, cleanNum(midCapacity) || 1) : 0;
+        const finalMidPrice = hasMidTier ? cleanNum(midPrice) : 0;
+        const finalMidUnitName = hasMidTier && midUnitName.trim() ? midUnitName.trim() : undefined;
+        const finalMidBarcode = hasMidTier && midBarcode.trim() ? midBarcode.trim() : undefined;
+        const finalBoxBarcode = boxBarcode.trim() || finalBarcode;
+        const finalRetailBarcode = retailBarcode.trim();
+
+        const updatedItem = {
+          ...draftItems[draftIdx],
+          barcode: finalBoxBarcode,
+          sku: finalSku,
+          name: cleanName,
+          category,
+          unit,
+          qty: totalQty,
+          purchasePrice: cleanNum(purchasePrice),
+          boxPurchasePrice: cleanNum(boxPurchasePrice) > 0 ? cleanNum(boxPurchasePrice) : undefined,
+          sellingPrice: numSellingPrice,
+          wholesalePrice: finalWholesalePrice,
+          minWholesaleQty: finalMinWholesaleQty,
+          minStock: cleanNum(minStock),
+          image: image ? getProductImage(image) : '',
+          boxBarcode: finalBoxBarcode,
+          boxCapacity: finalBoxCap,
+          boxPrice: finalBoxPrice,
+          midUnitName: finalMidUnitName,
+          midBarcode: finalMidBarcode,
+          midCapacity: finalMidCap,
+          midPrice: finalMidPrice,
+          retailBarcode: finalRetailBarcode || undefined,
+          variants: namedVariants.map(v => ({
+            id: v.id || makeVariantId(),
+            name: v.name.trim(),
+            barcode: v.barcode ? v.barcode.trim() : undefined,
+            sku: v.sku ? v.sku.trim() : undefined,
+            stock: v.qty !== '' ? cleanNum(v.qty) : 0,
+            qty: v.qty !== '' ? cleanNum(v.qty) : 0,
+            purchasePrice: (v as any).purchasePrice ? cleanNum((v as any).purchasePrice) : cleanNum(purchasePrice),
+            sellingPrice: v.sellingPrice !== '' && cleanNum(v.sellingPrice) > 0 ? cleanNum(v.sellingPrice) : undefined,
+            wholesalePrice: v.wholesalePrice !== '' && cleanNum(v.wholesalePrice) > 0 ? cleanNum(v.wholesalePrice) : undefined,
+            image: v.image ? v.image.trim() : undefined,
+          }))
+        };
+        const nextItems = [...draftItems];
+        nextItems[draftIdx] = updatedItem;
+        saveDrafts([{ grNumber: 'GLOBAL-DRAFT', savedAt: new Date().toISOString(), draftId: 'DRAFT-GLOBAL', items: nextItems }]);
+        setDraftToast(`Perubahan draf "${cleanName}" berhasil disimpan!`);
+        setTimeout(() => setDraftToast(null), 3500);
+        resetForm();
+        return;
+      }
+
+      // 2. Find original to keep unmodified fields (like id, barcode, etc)
       const original = products.find(p => p.id === editingId);
       if (!original) {
         alert('Produk yang sedang diedit tidak ditemukan di daftar.');
@@ -360,8 +419,11 @@ const StockManagement: React.FC = () => {
         }
 
         // c. Simpan master data multi-tier (PENTING: gunakan original.id, jangan ubah id primary key!)
+        // Pisahkan stock lama agar updateProduct tidak menimpa mutasi stok
+        const { stock: _oldStock, variants: _oldVars, ...cleanOriginal } = original as any;
+
         await updateProduct(original.id, {
-          ...original,
+          ...cleanOriginal,
           id: original.id,
           barcode: finalBoxBarcode,
           sku: finalSku,
@@ -383,18 +445,22 @@ const StockManagement: React.FC = () => {
           midCapacity: finalMidCap,
           midPrice: finalMidPrice,
           retailBarcode: finalRetailBarcode,
-          variants: namedVariants.map(v => ({
-            id: v.id || makeVariantId(),
-            name: v.name.trim(),
-            barcode: v.barcode ? v.barcode.trim() : null,
-            stock: v.qty !== '' ? cleanNum(v.qty) : 0,
-            sellingPrice: v.sellingPrice !== '' && cleanNum(v.sellingPrice) > 0 ? cleanNum(v.sellingPrice) : null,
-            wholesalePrice: v.wholesalePrice !== '' && cleanNum(v.wholesalePrice) > 0 ? cleanNum(v.wholesalePrice) : null,
-            image: v.image ? v.image.trim() : null,
-          }))
+          variants: namedVariants.map(v => {
+            const origV = origVariants.find((ov: any) => ov.id === v.id || ov.name.trim().toLowerCase() === v.name.trim().toLowerCase());
+            return {
+              id: v.id || makeVariantId(),
+              name: v.name.trim(),
+              barcode: v.barcode ? v.barcode.trim() : null,
+              // Kirim stok lama ke master data agar tidak double increment sebelum mutasi dicatat
+              stock: origV ? (Number(origV.stock) || 0) : 0,
+              sellingPrice: v.sellingPrice !== '' && cleanNum(v.sellingPrice) > 0 ? cleanNum(v.sellingPrice) : null,
+              wholesalePrice: v.wholesalePrice !== '' && cleanNum(v.wholesalePrice) > 0 ? cleanNum(v.wholesalePrice) : null,
+              image: v.image ? v.image.trim() : null,
+            };
+          })
         } as any);
 
-        // Mutasi stok jika ada selisih
+        // d. Mutasi stok jika ada selisih
         if (hasVariants) {
           const varLines: MutationLine[] = [];
           for (const nv of namedVariants) {
@@ -424,6 +490,12 @@ const StockManagement: React.FC = () => {
             await recordStockMutation('ADJUSTMENT', docNo, lines, `Koreksi stok via Edit Master Data (${original.stock} → ${totalQty} ${unit})`);
           }
         }
+
+        // e. Pastikan state lokal dan server 100% tersinkronisasi
+        await Promise.all([
+          useInventoryStore.getState().fetchProducts(),
+          useInventoryStore.getState().fetchTransactions?.() || Promise.resolve()
+        ]);
 
         setDraftToast(`Perubahan data & harga "${cleanName}" berhasil disimpan!`);
         setTimeout(() => setDraftToast(null), 3500);
