@@ -113,8 +113,20 @@ const StockManagement: React.FC = () => {
   
   const [cameraScannerOpen, setCameraScannerOpen] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [drawerClosing, setDrawerClosing] = useState(false);
   const [isMobileScreen, setIsMobileScreen] = useState(() => (typeof window !== 'undefined' ? window.innerWidth <= 768 : false));
+
+  // Helper sanitasi angka (menangani format ribuan bertitik cth 2.500 atau string kosong)
+  const cleanNum = (val: any): number => {
+    if (val === undefined || val === null || val === '') return 0;
+    if (typeof val === 'number') return isNaN(val) ? 0 : val;
+    const s = String(val).trim().replace(/[^0-9.,-]/g, '');
+    if (!s) return 0;
+    if (/^\d{1,3}(\.\d{3})+$/.test(s)) return Number(s.replace(/\./g, '')) || 0;
+    const n = parseFloat(s.replace(',', '.'));
+    return isNaN(n) ? 0 : n;
+  };
 
   React.useEffect(() => {
     const checkScreen = () => setIsMobileScreen(window.innerWidth <= 768);
@@ -259,13 +271,25 @@ const StockManagement: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSaving) return;
+
+    const cleanName = (name || '').trim();
+    if (!cleanName) {
+      alert('Nama produk tidak boleh kosong. Silakan isi nama produk.');
+      return;
+    }
+
+    const numSellingPrice = cleanNum(sellingPrice);
+    if (numSellingPrice <= 0) {
+      alert('Harga jual eceran (per satuan) harus diisi angka lebih besar dari 0.');
+      return;
+    }
 
     // Varian: baris tanpa nama diabaikan. Jika ada varian, stok produk = total qty semua varian.
     const namedVariants = variants.filter(v => v.name.trim());
     const hasVariants = namedVariants.length > 0;
-    const totalQty = hasVariants ? sumVariantQty(namedVariants) : Number(qty);
+    const totalQty = hasVariants ? sumVariantQty(namedVariants) : cleanNum(qty);
 
-    if (!name || Number(sellingPrice) <= 0) return;
     if (!editingId && totalQty <= 0) {
       if (hasVariants) alert('Isi jumlah (qty) minimal pada satu varian.');
       return;
@@ -277,65 +301,77 @@ const StockManagement: React.FC = () => {
     }
     
     // Tanpa barcode -> buat barcode internal unik (SKxxxxxx), sama untuk ID & barcode
-    const finalId = productId || generateInternalBarcode(products);
+    const finalId = productId.trim() || generateInternalBarcode(products);
     const finalBarcode = finalId;
-    const finalSku = (sku || '').trim() || generateAutoSKU(name, finalBarcode);
+    const finalSku = (sku || '').trim() || generateAutoSKU(cleanName, finalBarcode);
 
     if (editingId) {
       // Find original to keep unmodified fields (like id, barcode, etc)
       const original = products.find(p => p.id === editingId);
-      if (original) {
-        // Cek duplikat: pastikan ID baru tidak bertabrakan dengan produk LAIN (kecuali diri sendiri)
-        const isDuplicate = products.some(p => p.id !== editingId && (p.id === finalId || p.barcode === finalBarcode));
-        if (isDuplicate) {
-          alert(`Peringatan: Barcode/ID ${finalId} sudah digunakan oleh produk lain!`);
-          return;
-        }
+      if (!original) {
+        alert('Produk yang sedang diedit tidak ditemukan di daftar.');
+        return;
+      }
 
+      const finalBoxCap = Math.max(1, cleanNum(boxCapacity) || 1);
+      const finalBoxPrice = cleanNum(boxPrice);
+      const finalWholesalePrice = cleanNum(wholesalePrice);
+      const finalMinWholesaleQty = cleanNum(minWholesaleQty);
+      const finalMidCap = hasMidTier ? Math.max(1, cleanNum(midCapacity) || 1) : 0;
+      const finalMidPrice = hasMidTier ? cleanNum(midPrice) : 0;
+      const finalMidUnitName = hasMidTier && midUnitName.trim() ? midUnitName.trim() : null;
+      const finalMidBarcode = hasMidTier && midBarcode.trim() ? midBarcode.trim() : null;
+      const finalBoxBarcode = boxBarcode.trim() || finalBarcode;
+      const finalRetailBarcode = retailBarcode.trim();
+
+      // Cek duplikat barcode terhadap produk lain (bukan diri sendiri)
+      const isDuplicate = products.some(p => {
+        if (p.id === editingId) return false;
+        const otherCodes = [p.barcode, p.boxBarcode, p.retailBarcode, p.midBarcode].filter(Boolean);
+        if (finalBoxBarcode && otherCodes.includes(finalBoxBarcode)) return true;
+        if (finalRetailBarcode && otherCodes.includes(finalRetailBarcode)) return true;
+        return false;
+      });
+      if (isDuplicate) {
+        alert(`Peringatan: Barcode "${finalBoxBarcode || finalRetailBarcode}" sudah digunakan oleh produk lain!`);
+        return;
+      }
+
+      setIsSaving(true);
+      try {
         const origVariants = original.variants || [];
-        const baseCost = Number(purchasePrice);
+        const baseCost = cleanNum(purchasePrice);
         const docNo = makeDocNo('ADJ');
         const keptIds = new Set(namedVariants.map(v => v.id));
 
         // a. Produk polos -> bervarian: kosongkan stok induk dulu, lalu isi lewat qty tiap varian
         if (hasVariants && origVariants.length === 0 && original.stock !== 0) {
           await recordStockMutation('ADJUSTMENT', docNo,
-            [{ productId: original.id, qty: -original.stock, purchasePrice: baseCost, name, unit }],
+            [{ productId: original.id, qty: -original.stock, purchasePrice: baseCost, name: cleanName, unit }],
             'Konversi stok produk ke varian');
         }
         // b. Varian yang dihapus: nol-kan stoknya lebih dulu agar tercatat di Mutasi Stok
         const removed = origVariants.filter(v => !keptIds.has(v.id) && v.stock !== 0);
         if (removed.length > 0) {
           await recordStockMutation('ADJUSTMENT', docNo,
-            removed.map(v => ({ productId: original.id, variantId: v.id, variantName: v.name, qty: -v.stock, purchasePrice: baseCost, name, unit })),
+            removed.map(v => ({ productId: original.id, variantId: v.id, variantName: v.name, qty: -v.stock, purchasePrice: baseCost, name: cleanName, unit })),
             'Varian dihapus via Edit Master Data');
         }
 
-        // c. Simpan master data multi-tier
-        const finalBoxCap = Math.max(1, Number(boxCapacity) || 40);
-        const finalBoxPrice = Number(boxPrice) > 0 ? Number(boxPrice) : 0;
-        const finalWholesalePrice = Number(wholesalePrice) > 0 ? Number(wholesalePrice) : 0;
-        const finalMinWholesaleQty = Number(minWholesaleQty) > 0 ? Number(minWholesaleQty) : 0;
-        const finalMidCap = hasMidTier ? Math.max(1, Number(midCapacity) || 1) : 0;
-        const finalMidPrice = hasMidTier ? (Number(midPrice) || 0) : 0;
-        const finalMidUnitName = hasMidTier && midUnitName.trim() ? midUnitName.trim() : null;
-        const finalMidBarcode = hasMidTier && midBarcode.trim() ? midBarcode.trim() : null;
-        const finalBoxBarcode = boxBarcode.trim() || finalBarcode;
-        const finalRetailBarcode = retailBarcode.trim();
-
+        // c. Simpan master data multi-tier (PENTING: gunakan original.id, jangan ubah id primary key!)
         await updateProduct(original.id, {
           ...original,
-          id: finalId,
+          id: original.id,
           barcode: finalBoxBarcode,
           sku: finalSku,
-          name,
+          name: cleanName,
           category,
           unit,
           purchasePrice: baseCost,
-          sellingPrice: Number(sellingPrice),
+          sellingPrice: numSellingPrice,
           wholesalePrice: finalWholesalePrice,
           minWholesaleQty: finalMinWholesaleQty,
-          minStock: Number(minStock),
+          minStock: cleanNum(minStock),
           image: image || original.image,
           boxBarcode: finalBoxBarcode,
           boxCapacity: finalBoxCap,
@@ -349,9 +385,9 @@ const StockManagement: React.FC = () => {
             id: v.id || makeVariantId(),
             name: v.name.trim(),
             barcode: v.barcode ? v.barcode.trim() : null,
-            stock: v.qty !== '' ? Number(v.qty) : 0,
-            sellingPrice: v.sellingPrice !== '' && Number(v.sellingPrice) > 0 ? Number(v.sellingPrice) : null,
-            wholesalePrice: v.wholesalePrice !== '' && Number(v.wholesalePrice) > 0 ? Number(v.wholesalePrice) : null,
+            stock: v.qty !== '' ? cleanNum(v.qty) : 0,
+            sellingPrice: v.sellingPrice !== '' && cleanNum(v.sellingPrice) > 0 ? cleanNum(v.sellingPrice) : null,
+            wholesalePrice: v.wholesalePrice !== '' && cleanNum(v.wholesalePrice) > 0 ? cleanNum(v.wholesalePrice) : null,
             image: v.image ? v.image.trim() : null,
           }))
         } as any);
@@ -362,7 +398,7 @@ const StockManagement: React.FC = () => {
           for (const nv of namedVariants) {
             const origV = origVariants.find((ov: any) => ov.id === nv.id || ov.name.trim().toLowerCase() === nv.name.trim().toLowerCase());
             const origStock = origV ? (Number(origV.stock) || 0) : 0;
-            const newStock = Number(nv.qty) || 0;
+            const newStock = cleanNum(nv.qty);
             const vDiff = newStock - origStock;
             if (vDiff !== 0) {
               varLines.push({
@@ -371,7 +407,7 @@ const StockManagement: React.FC = () => {
                 variantName: nv.name,
                 qty: vDiff,
                 purchasePrice: baseCost,
-                name,
+                name: cleanName,
                 unit
               });
             }
@@ -382,12 +418,21 @@ const StockManagement: React.FC = () => {
         } else {
           const diffQty = totalQty - original.stock;
           if (diffQty !== 0) {
-            const lines: MutationLine[] = [{ productId: original.id, qty: diffQty, purchasePrice: baseCost, name, unit }];
+            const lines: MutationLine[] = [{ productId: original.id, qty: diffQty, purchasePrice: baseCost, name: cleanName, unit }];
             await recordStockMutation('ADJUSTMENT', docNo, lines, `Koreksi stok via Edit Master Data (${original.stock} → ${totalQty} ${unit})`);
           }
         }
-        setEditingId(null);
+
+        setDraftToast(`Perubahan data & harga "${cleanName}" berhasil disimpan!`);
+        setTimeout(() => setDraftToast(null), 3500);
+        resetForm();
+      } catch (err: any) {
+        console.error("Gagal simpan edit produk:", err);
+        alert(err.message || 'Gagal menyimpan perubahan produk.');
+      } finally {
+        setIsSaving(false);
       }
+      return;
     } else {
       // Cek duplikat: di stok, di sesi ini, dan di draf lain yang belum diposting
       const pendingItems = [...draftItems];
@@ -399,12 +444,12 @@ const StockManagement: React.FC = () => {
         return;
       }
 
-      const finalBoxCap = Math.max(1, Number(boxCapacity) || 40);
-      const finalBoxPrice = Number(boxPrice) > 0 ? Number(boxPrice) : 0;
-      const finalWholesalePrice = Number(wholesalePrice) > 0 ? Number(wholesalePrice) : 0;
-      const finalMinWholesaleQty = Number(minWholesaleQty) > 0 ? Number(minWholesaleQty) : 0;
-      const finalMidCap = hasMidTier ? Math.max(1, Number(midCapacity) || 1) : 0;
-      const finalMidPrice = hasMidTier ? (Number(midPrice) || 0) : 0;
+      const finalBoxCap = Math.max(1, cleanNum(boxCapacity) || 40);
+      const finalBoxPrice = cleanNum(boxPrice);
+      const finalWholesalePrice = cleanNum(wholesalePrice);
+      const finalMinWholesaleQty = cleanNum(minWholesaleQty);
+      const finalMidCap = hasMidTier ? Math.max(1, cleanNum(midCapacity) || 1) : 0;
+      const finalMidPrice = hasMidTier ? cleanNum(midPrice) : 0;
       const finalMidUnitName = hasMidTier && midUnitName.trim() ? midUnitName.trim() : undefined;
       const finalMidBarcode = hasMidTier && midBarcode.trim() ? midBarcode.trim() : undefined;
       const finalBoxBarcode = boxBarcode.trim() || finalBarcode;
@@ -416,16 +461,16 @@ const StockManagement: React.FC = () => {
         id: finalId,
         barcode: finalBoxBarcode,
         sku: finalSku, 
-        name, 
+        name: cleanName, 
         category, 
         unit,
         location: 'Gudang Utama',
         qty: totalQty,
-        purchasePrice: Number(purchasePrice),
-        sellingPrice: Number(sellingPrice),
+        purchasePrice: cleanNum(purchasePrice),
+        sellingPrice: numSellingPrice,
         wholesalePrice: finalWholesalePrice,
         minWholesaleQty: finalMinWholesaleQty,
-        minStock: Number(minStock),
+        minStock: cleanNum(minStock),
         image: image ? getProductImage(image) : '',
         boxBarcode: finalBoxBarcode,
         boxCapacity: finalBoxCap,
@@ -440,11 +485,11 @@ const StockManagement: React.FC = () => {
           name: v.name.trim(),
           barcode: v.barcode ? v.barcode.trim() : undefined,
           sku: v.sku ? v.sku.trim() : undefined,
-          stock: v.qty !== '' ? Number(v.qty) : 0,
-          qty: v.qty !== '' ? Number(v.qty) : 0,
-          purchasePrice: (v as any).purchasePrice ? Number((v as any).purchasePrice) : Number(purchasePrice),
-          sellingPrice: v.sellingPrice !== '' && Number(v.sellingPrice) > 0 ? Number(v.sellingPrice) : undefined,
-          wholesalePrice: v.wholesalePrice !== '' && Number(v.wholesalePrice) > 0 ? Number(v.wholesalePrice) : undefined,
+          stock: v.qty !== '' ? cleanNum(v.qty) : 0,
+          qty: v.qty !== '' ? cleanNum(v.qty) : 0,
+          purchasePrice: (v as any).purchasePrice ? cleanNum((v as any).purchasePrice) : cleanNum(purchasePrice),
+          sellingPrice: v.sellingPrice !== '' && cleanNum(v.sellingPrice) > 0 ? cleanNum(v.sellingPrice) : undefined,
+          wholesalePrice: v.wholesalePrice !== '' && cleanNum(v.wholesalePrice) > 0 ? cleanNum(v.wholesalePrice) : undefined,
           image: v.image ? v.image.trim() : undefined,
         }))
       };
@@ -453,7 +498,7 @@ const StockManagement: React.FC = () => {
       // Update global draft
       saveDrafts([{ grNumber: 'GLOBAL-DRAFT', savedAt: new Date().toISOString(), draftId: 'DRAFT-GLOBAL', items: nextItems }]);
       
-      setDraftToast(`"${name}" (${totalQty} ${unit}${boxQty ? ` / ${boxQty} Dus` : ''}) ditambahkan ke Draf. Belum tampil di Kasir POS sebelum diposting.`);
+      setDraftToast(`"${cleanName}" (${totalQty} ${unit}${boxQty ? ` / ${boxQty} Dus` : ''}) ditambahkan ke Draf. Belum tampil di Kasir POS sebelum diposting.`);
       setTimeout(() => setDraftToast(null), 4500);
 
       // Barang tanpa barcode pabrikan -> langsung tawarkan cetak label stiker
@@ -463,8 +508,8 @@ const StockManagement: React.FC = () => {
           id: finalId,
           barcode: finalBoxBarcode,
           sku: finalSku,
-          name,
-          sellingPrice: Number(sellingPrice),
+          name: cleanName,
+          sellingPrice: numSellingPrice,
           variants: namedVariants
         });
       }
@@ -3559,9 +3604,9 @@ const StockManagement: React.FC = () => {
                       <input 
                         type="number" 
                         inputMode="numeric" 
-                        min={1}
+                        min={0}
                         value={minWholesaleQty} 
-                        onChange={(e) => setMinWholesaleQty(e.target.value === '' ? '' : Number(e.target.value))} 
+                        onChange={(e) => setMinWholesaleQty(e.target.value === '' ? '' : Math.max(0, cleanNum(e.target.value)))} 
                         placeholder="1"
                         className="ios-input-gray ios-input-small" 
                         style={{ textAlign: 'center', width: '50px', fontWeight: 700 }} 
@@ -3690,10 +3735,16 @@ const StockManagement: React.FC = () => {
 
               {/* FOOTER ACTIONS */}
               <div className="ios-sheet-footer">
-                <button type="button" className="ios-btn-batal" onClick={closeDrawer}>Batal</button>
-                <button type="submit" className="ios-btn-simpan">
-                  {editingId ? <Save size={18} /> : <Plus size={18} />}
-                  {editingId ? 'Simpan Perubahan' : 'Tambahkan ke Daftar'}
+                <button type="button" className="ios-btn-batal" onClick={closeDrawer} disabled={isSaving}>Batal</button>
+                <button type="submit" className="ios-btn-simpan" disabled={isSaving} style={{ opacity: isSaving ? 0.7 : 1 }}>
+                  {isSaving ? (
+                    <span>⏳ Menyimpan...</span>
+                  ) : (
+                    <>
+                      {editingId ? <Save size={18} /> : <Plus size={18} />}
+                      {editingId ? 'Simpan Perubahan' : 'Tambahkan ke Daftar'}
+                    </>
+                  )}
                 </button>
               </div>
             </form>

@@ -319,18 +319,31 @@ app.post('/api/saas/products', async (req, res) => {
 
 app.put('/api/saas/products/:id', async (req, res) => {
   try {
-    const data = req.body;
+    const data = req.body || {};
+    let existing = await prisma.product.findFirst({
+      where: { id: req.params.id, tenant_id: req.tenantId }
+    });
+    if (!existing) {
+      existing = await prisma.product.findUnique({
+        where: { id: req.params.id }
+      });
+    }
+    if (!existing) {
+      return res.status(404).json({ error: 'Produk tidak ditemukan di database' });
+    }
+
+    const effectiveTenantId = existing.tenant_id || req.tenantId;
+
     let categoryId = undefined;
-    
     if (data.category) {
       const cat = await prisma.category.findFirst({
-        where: { name: data.category, tenant_id: req.tenantId }
+        where: { name: String(data.category).trim(), tenant_id: effectiveTenantId }
       });
       if (cat) {
         categoryId = cat.id;
       } else {
         const newCat = await prisma.category.create({
-          data: { name: data.category, tenant_id: req.tenantId }
+          data: { name: String(data.category).trim(), tenant_id: effectiveTenantId }
         });
         categoryId = newCat.id;
       }
@@ -342,47 +355,41 @@ app.put('/api/saas/products/:id', async (req, res) => {
     const hasVariants = incomingVariants.length > 0;
 
     const updateData = {};
-    if (data.sku !== undefined) updateData.sku = data.sku;
-    if (data.barcode !== undefined) updateData.barcode = data.barcode;
-    if (data.name !== undefined) updateData.name = data.name;
+    if (data.sku !== undefined) updateData.sku = data.sku ? String(data.sku).trim() : null;
+    if (data.barcode !== undefined) updateData.barcode = data.barcode ? String(data.barcode).trim() : null;
+    if (data.name !== undefined && String(data.name).trim()) updateData.name = String(data.name).trim();
     if (categoryId !== undefined) updateData.category_id = categoryId;
-    if (data.purchasePrice !== undefined) updateData.purchase_price = Number(data.purchasePrice);
-    if (data.sellingPrice !== undefined) updateData.selling_price = Number(data.sellingPrice);
-    if (data.wholesalePrice !== undefined) updateData.wholesale_price = Number(data.wholesalePrice);
+    if (data.purchasePrice !== undefined) updateData.purchase_price = Math.max(0, Number(data.purchasePrice) || 0);
+    if (data.sellingPrice !== undefined) updateData.selling_price = Math.max(0, Number(data.sellingPrice) || 0);
+    if (data.wholesalePrice !== undefined) updateData.wholesale_price = Math.max(0, Number(data.wholesalePrice) || 0);
     if (data.minWholesaleQty !== undefined) updateData.min_wholesale_qty = optNum(data.minWholesaleQty);
-    if (data.stock !== undefined && !hasVariants) updateData.stock = Number(data.stock);
-    if (data.minStock !== undefined) updateData.min_stock = Number(data.minStock);
-    if (data.unit !== undefined && data.unit) updateData.unit = String(data.unit);
+    if (data.stock !== undefined && !hasVariants) updateData.stock = Number(data.stock) || 0;
+    if (data.minStock !== undefined) updateData.min_stock = Math.max(0, Number(data.minStock) || 0);
+    if (data.unit !== undefined && data.unit) updateData.unit = String(data.unit).trim();
     if (data.image !== undefined) updateData.image_url = data.image;
-    if (data.boxBarcode !== undefined) updateData.box_barcode = data.boxBarcode;
-    if (data.boxCapacity !== undefined) updateData.box_capacity = optNum(data.boxCapacity);
-    if (data.boxPrice !== undefined) updateData.box_price = optNum(data.boxPrice);
-    if (data.midUnitName !== undefined) updateData.mid_unit_name = data.midUnitName;
-    if (data.midBarcode !== undefined) updateData.mid_barcode = data.midBarcode;
-    if (data.midCapacity !== undefined) updateData.mid_capacity = optNum(data.midCapacity);
-    if (data.midPrice !== undefined) updateData.mid_price = optNum(data.midPrice);
-    if (data.retailBarcode !== undefined) updateData.retail_barcode = data.retailBarcode;
-
-    const existing = await prisma.product.findFirst({
-      where: { id: req.params.id, tenant_id: req.tenantId }
-    });
-    if (!existing) {
-      return res.status(404).json({ error: 'Produk tidak ditemukan atau bukan milik tenant ini' });
-    }
+    if (data.boxBarcode !== undefined) updateData.box_barcode = data.boxBarcode ? String(data.boxBarcode).trim() : null;
+    if (data.boxCapacity !== undefined) updateData.box_capacity = Math.max(1, Number(data.boxCapacity) || 1);
+    if (data.boxPrice !== undefined) updateData.box_price = Math.max(0, Number(data.boxPrice) || 0);
+    if (data.midUnitName !== undefined) updateData.mid_unit_name = data.midUnitName ? String(data.midUnitName).trim() : null;
+    if (data.midBarcode !== undefined) updateData.mid_barcode = data.midBarcode ? String(data.midBarcode).trim() : null;
+    if (data.midCapacity !== undefined) updateData.mid_capacity = Math.max(0, Number(data.midCapacity) || 0);
+    if (data.midPrice !== undefined) updateData.mid_price = Math.max(0, Number(data.midPrice) || 0);
+    if (data.retailBarcode !== undefined) updateData.retail_barcode = data.retailBarcode ? String(data.retailBarcode).trim() : null;
 
     const product = await prisma.$transaction(async (tx) => {
       await tx.product.update({
-        where: { id: req.params.id },
+        where: { id: existing.id },
         data: updateData
       });
       if (variantsProvided) {
-        await syncProductVariants(tx, req.tenantId, req.params.id, incomingVariants);
+        await syncProductVariants(tx, effectiveTenantId, existing.id, incomingVariants);
       }
-      return tx.product.findUnique({ where: { id: req.params.id }, include: PRODUCT_INCLUDE });
+      return tx.product.findUnique({ where: { id: existing.id }, include: PRODUCT_INCLUDE });
     });
-    notifyTenant(req.tenantId, 'products');
+    notifyTenant(effectiveTenantId, 'products');
     res.json(product);
   } catch (err) {
+    console.error('Error updating product:', err);
     res.status(500).json({ error: err.message });
   }
 });
