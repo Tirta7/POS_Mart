@@ -27,6 +27,7 @@ import { getProductImage, handleProductImageError } from './utils/defaultProduct
 import { sound } from './utils/audioFeedback';
 import BarcodeLabelModal from './components/BarcodeLabelModal';
 import UnregisteredProductModal from './components/UnregisteredProductModal';
+import QuickRestockModal from './components/QuickRestockModal';
 import { sendCfdUpdate, subscribeCfd } from './utils/cfdSync';
 import CfdLauncherModal from './components/CfdLauncherModal';
 
@@ -363,6 +364,7 @@ function App() {
   const [quickRegModalOpen, setQuickRegModalOpen] = useState(false);
   const [quickRegBarcode, setQuickRegBarcode] = useState('');
   const [quickRegQty, setQuickRegQty] = useState<number>(1);
+  const [restockModalOpen, setRestockModalOpen] = useState(false);
 
   // Point 8: Modal Cetak Label Stiker Bluetooth / Browser (Single & Bulk)
   const [labelModalProduct, setLabelModalProduct] = useState<any | null>(null);
@@ -1413,7 +1415,15 @@ function App() {
         </div>
 
         <div className="nav-links">
-          <button className="nav-btn active hide-mobile">Register</button>
+          <button 
+            className="nav-btn active hide-mobile"
+            onClick={() => setRestockModalOpen(true)}
+            title="Restock Barang Cepat (Scan Barcode Dus/Slop/Pcs)"
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}
+          >
+            <Package size={15} />
+            <span>RESTOCK</span>
+          </button>
           <button className="nav-btn" onClick={() => setHoldListOpen(true)} style={{ position: 'relative' }}>
             <PauseCircle size={15} className="show-mobile" />
             <span className="btn-label"><span className="hide-mobile">Active </span>Tickets</span>
@@ -3868,6 +3878,17 @@ function App() {
         appName={appName}
         onClose={() => setQuickRegModalOpen(false)}
         onSuccess={handleSuccessQuickRegister}
+      />
+
+      {/* MODAL RESTOCK CEPAT VIA SCANNER KEMASAN (DUS/SLOP/PCS) */}
+      <QuickRestockModal
+        isOpen={restockModalOpen}
+        onClose={() => setRestockModalOpen(false)}
+        onOpenQuickRegister={(barcode) => {
+          setQuickRegBarcode(barcode);
+          setQuickRegQty(1);
+          setQuickRegModalOpen(true);
+        }}
       />
 
       {/* MODAL PENGHUBUNG LAYAR PELANGGAN (CFD) */}
