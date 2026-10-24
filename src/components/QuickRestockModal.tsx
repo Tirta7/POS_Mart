@@ -798,6 +798,7 @@ export default function QuickRestockModal({ isOpen, onClose, onOpenQuickRegister
             setCameraOpen(false);
             setScanInput(decoded);
             handleScanSubmit(decoded);
+            return null;
           }}
           onClose={() => setCameraOpen(false)}
         />

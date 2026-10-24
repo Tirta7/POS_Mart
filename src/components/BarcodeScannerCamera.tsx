@@ -3,7 +3,7 @@ import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { X, Camera, CheckCircle, AlertCircle } from 'lucide-react';
 
 interface BarcodeScannerCameraProps {
-  onScan: (decodedText: string) => string | null | undefined;
+  onScan: (decodedText: string) => string | null | undefined | void;
   onClose: () => void;
 }
 
