@@ -539,16 +539,16 @@ export default function UnregisteredProductModal({
                 <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#334155', marginBottom: '8px' }}>
                   Satuan Unit
                 </label>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px', marginBottom: '8px' }}>
-                  {['Pcs', 'Box', 'Kg', 'Liter'].map((u) => (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '4px', marginBottom: '8px' }}>
+                  {['Pcs', 'Bungkus', 'Renceng', 'Sachet', 'Pack', 'Box'].map((u) => (
                     <button
                       key={u}
                       type="button"
                       onClick={() => setUnit(u)}
                       style={{
-                        padding: '8px 0',
+                        padding: '7px 0',
                         borderRadius: '8px',
-                        fontSize: '12px',
+                        fontSize: '11.5px',
                         fontWeight: 700,
                         border: unit === u ? '1.5px solid #2563eb' : '1px solid #e2e8f0',
                         backgroundColor: unit === u ? '#eff6ff' : '#f8fafc',
@@ -561,28 +561,56 @@ export default function UnregisteredProductModal({
                   ))}
                 </div>
 
-                <select
-                  value={['Pcs', 'Box', 'Kg', 'Liter'].includes(unit) ? '' : unit}
-                  onChange={(e) => { if (e.target.value) setUnit(e.target.value); }}
-                  style={{
-                    width: '100%',
-                    padding: '8px 10px',
-                    borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
-                    fontSize: '12.5px',
-                    color: '#334155',
-                    backgroundColor: '#ffffff'
-                  }}
-                >
-                  <option value="">Pilih satuan lain...</option>
-                  <option value="Gram">Gram</option>
-                  <option value="Pack">Pack</option>
-                  <option value="Lusin">Lusin</option>
-                  <option value="Dus">Dus</option>
-                  <option value="Btl">Btl (Botol)</option>
-                  <option value="Bks">Bks (Bungkus)</option>
-                  <option value="Kaleng">Kaleng</option>
-                </select>
+                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '8px' }}>
+                  <select
+                    value={['Pcs', 'Bungkus', 'Renceng', 'Renteng', 'Sachet', 'Pack', 'Box', 'Pouch', 'Botol', 'Kaleng', 'Cup', 'Lusin', 'Slop', 'Sak', 'Kg', 'Liter', 'Gram'].includes(unit) ? unit : (unit ? 'CUSTOM' : '')}
+                    onChange={(e) => { 
+                      const val = e.target.value;
+                      if (val && val !== 'CUSTOM') setUnit(val);
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '8px 10px',
+                      borderRadius: '8px',
+                      border: '1px solid #cbd5e1',
+                      fontSize: '12px',
+                      color: '#334155',
+                      backgroundColor: '#ffffff'
+                    }}
+                  >
+                    <option value="">-- Satuan Lainnya --</option>
+                    <option value="Renceng">Renceng (Renteng)</option>
+                    <option value="Pouch">Pouch</option>
+                    <option value="Cup">Cup</option>
+                    <option value="Botol">Botol</option>
+                    <option value="Kaleng">Kaleng</option>
+                    <option value="Lusin">Lusin</option>
+                    <option value="Slop">Slop</option>
+                    <option value="Sak">Sak</option>
+                    <option value="Kg">Kg</option>
+                    <option value="Gram">Gram</option>
+                    <option value="Liter">Liter</option>
+                    <option value="CUSTOM">✍️ Ketik Bebas...</option>
+                  </select>
+
+                  <input
+                    type="text"
+                    value={unit}
+                    onChange={(e) => setUnit(e.target.value)}
+                    placeholder="Atau ketik sendiri..."
+                    style={{
+                      width: '100%',
+                      padding: '8px 10px',
+                      borderRadius: '8px',
+                      border: '1px solid #cbd5e1',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      color: '#1d4ed8',
+                      backgroundColor: '#eff6ff'
+                    }}
+                    title="Ketik nama satuan sendiri jika tidak ada di daftar"
+                  />
+                </div>
               </div>
 
               {/* Peringatan Stok Tipis (Min) */}

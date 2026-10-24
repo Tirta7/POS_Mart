@@ -3130,26 +3130,73 @@ const StockManagement: React.FC = () => {
 
                 {/* Pilihan Satuan Eceran */}
                 <div className="ios-row-vert" style={{ padding: '12px 16px' }}>
-                  <label style={{ marginBottom: '8px', display: 'block', fontSize: '13px', fontWeight: 600 }}>Satuan Eceran (Terkecil)</label>
-                  <div className="ios-segmented">
-                    {['Pcs', 'Bungkus', 'Sachet', 'Batang'].map(u => (
-                      <button type="button" key={u} className={unit === u ? 'active' : ''} onClick={() => setUnit(u)}>{u}</button>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                    <label style={{ fontSize: '13px', fontWeight: 700, color: '#1e293b' }}>Satuan Eceran (Terkecil Toko)</label>
+                    <span style={{ fontSize: '11px', color: '#6d28d9', fontWeight: 700, background: '#f5f3ff', border: '1px solid #ddd6fe', padding: '2px 8px', borderRadius: '6px' }}>
+                      Aktif: {unit || 'Pcs'}
+                    </span>
+                  </div>
+                  
+                  {/* Tombol Cepat Satuan Populer */}
+                  <div className="ios-segmented" style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                    {['Pcs', 'Bungkus', 'Renceng', 'Sachet', 'Pack', 'Batang'].map(u => (
+                      <button 
+                        type="button" 
+                        key={u} 
+                        className={unit?.toLowerCase() === u.toLowerCase() ? 'active' : ''} 
+                        onClick={() => setUnit(u)}
+                        style={{ flex: 1, minWidth: '60px' }}
+                      >
+                        {u}
+                      </button>
                     ))}
                   </div>
-                  <select
-                    value={['Pcs', 'Bungkus', 'Sachet', 'Batang'].indexOf(unit) === -1 ? unit : ''}
-                    onChange={(e) => { if (e.target.value) setUnit(e.target.value); }}
-                    className="ios-input-gray"
-                    style={{ marginTop: '8px' }}
-                  >
-                    <option value="">Pilih satuan lain...</option>
-                    <option value="Botol">Botol</option>
-                    <option value="Kaleng">Kaleng</option>
-                    <option value="Box">Box</option>
-                    <option value="Pack">Pack</option>
-                    <option value="Lusin">Lusin</option>
-                    <option value="Kg">Kg</option>
-                  </select>
+
+                  {/* Dropdown Lengkap & Input Bebas Dinamis */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '8px', marginTop: '8px' }}>
+                    <select
+                      value={['Pcs', 'Bungkus', 'Renceng', 'Renteng', 'Sachet', 'Pack', 'Batang', 'Box', 'Pouch', 'Botol', 'Kaleng', 'Cup', 'Lusin', 'Slop', 'Sak', 'Butir', 'Kg', 'Gram', 'Liter'].includes(unit) ? unit : (unit ? 'CUSTOM' : '')}
+                      onChange={(e) => { 
+                        const val = e.target.value;
+                        if (val && val !== 'CUSTOM') {
+                          setUnit(val);
+                        }
+                      }}
+                      className="ios-input-gray"
+                      style={{ fontSize: '12px' }}
+                    >
+                      <option value="">-- Pilih Satuan Lainnya --</option>
+                      <option value="Renceng">Renceng (Renteng 10-12 Sachet)</option>
+                      <option value="Renteng">Renteng</option>
+                      <option value="Pouch">Pouch (Minyak / Sabun Cair)</option>
+                      <option value="Cup">Cup (Minuman Gelas)</option>
+                      <option value="Pack">Pack</option>
+                      <option value="Box">Box / Kotak</option>
+                      <option value="Botol">Botol</option>
+                      <option value="Kaleng">Kaleng</option>
+                      <option value="Lusin">Lusin (12 Pcs)</option>
+                      <option value="Slop">Slop</option>
+                      <option value="Sak">Sak (Beras / Pakan)</option>
+                      <option value="Butir">Butir (Telur / Buah)</option>
+                      <option value="Kg">Kg</option>
+                      <option value="Gram">Gram</option>
+                      <option value="Liter">Liter</option>
+                      <option value="CUSTOM">✍️ Ketik Satuan Sendiri...</option>
+                    </select>
+
+                    <input
+                      type="text"
+                      value={unit}
+                      onChange={(e) => setUnit(e.target.value)}
+                      placeholder="Atau ketik sendiri..."
+                      className="ios-input-gray"
+                      style={{ fontWeight: 700, color: '#7c3aed', background: '#f5f3ff', borderColor: '#ddd6fe', fontSize: '12.5px' }}
+                      title="Ketik nama satuan sendiri secara bebas"
+                    />
+                  </div>
+                  <div style={{ fontSize: '11px', color: '#64748b', marginTop: '5px' }}>
+                    💡 <em>Contoh: Untuk Pop Ice yang dijual per renteng, pilih atau ketik <strong>Renceng</strong>.</em>
+                  </div>
                 </div>
 
                 {/* Input Jumlah Dus Masuk & Kalkulasi Total Stok */}

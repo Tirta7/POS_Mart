@@ -62,7 +62,7 @@ interface Props {
 
 const idr = (n: number) => 'Rp ' + Number(n || 0).toLocaleString('id-ID');
 
-const UNITS = ['Pcs', 'Kg', 'Gram', 'Liter', 'Botol', 'Bungkus', 'Sachet', 'Pack', 'Dus', 'Sak', 'Kaleng'];
+const UNITS = ['Pcs', 'Bungkus', 'Renceng', 'Renteng', 'Sachet', 'Batang', 'Pack', 'Box', 'Pouch', 'Botol', 'Kaleng', 'Cup', 'Lusin', 'Slop', 'Sak', 'Butir', 'Kg', 'Gram', 'Liter', 'Dus'];
 const PRESET_MID_UNITS = ['Sak', 'Karung', 'Bal', 'Slop', 'Pack', 'Lusin', 'Renceng', 'Karton', 'Ikat'];
 
 const DraftReviewDrawer: React.FC<Props> = ({ 
