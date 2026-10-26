@@ -889,7 +889,7 @@ const StockManagement: React.FC = () => {
   };
 
   const formatIDR = (num: number) => {
-    return 'Rp ' + num.toLocaleString('id-ID');
+    return 'Rp ' + Math.round(Number(num) || 0).toLocaleString('id-ID');
   };
 
   const openRestockModal = (p: any) => {
@@ -1627,7 +1627,9 @@ const StockManagement: React.FC = () => {
 
                       // Pricing & Wholesale Logic
                       const isBoxActive = boxCap > 1;
-                      const boxCost = cost * boxCap;
+                      const boxCost = (p.boxPurchasePrice !== undefined && p.boxPurchasePrice !== null && Number(p.boxPurchasePrice) > 0)
+                        ? Number(p.boxPurchasePrice)
+                        : Math.round(cost * boxCap);
                       const boxPriceVal = isBoxActive 
                         ? (Number(p.boxPrice) > 0 ? Number(p.boxPrice) : (sell * boxCap))
                         : 0;
@@ -2232,7 +2234,9 @@ const StockManagement: React.FC = () => {
               const remainderPcs = boxCap > 1 ? (stockVal % boxCap) : 0;
 
               const isBoxActive = boxCap > 1;
-              const boxCost = cost * boxCap;
+              const boxCost = (p.boxPurchasePrice !== undefined && p.boxPurchasePrice !== null && Number(p.boxPurchasePrice) > 0)
+                ? Number(p.boxPurchasePrice)
+                : Math.round(cost * boxCap);
               const boxPriceVal = isBoxActive 
                 ? (Number(p.boxPrice) > 0 ? Number(p.boxPrice) : (sell * boxCap))
                 : 0;
