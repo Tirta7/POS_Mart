@@ -595,10 +595,15 @@ const StockManagement: React.FC = () => {
 
   
   // Semua item draf (datar)
-  const draftItems: any[] = drafts
+  const draftItems: any[] = (Array.isArray(drafts) ? drafts : [])
     .slice()
-    .sort((a, b) => b.savedAt.localeCompare(a.savedAt))
-    .flatMap(d => (d.items || []).map((it: any) => ({ ...it, grNumber: d.grNumber, draftId: d.draftId, savedAt: d.savedAt })));
+    .sort((a, b) => String(b?.savedAt || '').localeCompare(String(a?.savedAt || '')))
+    .flatMap(d => (Array.isArray(d?.items) ? d.items : []).map((it: any) => ({
+      ...it,
+      grNumber: d?.grNumber || 'GLOBAL-DRAFT',
+      draftId: d?.draftId || 'DRAFT-GLOBAL',
+      savedAt: d?.savedAt || new Date().toISOString()
+    })));
 
   const toggleSelect = (id: string) =>
     setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
