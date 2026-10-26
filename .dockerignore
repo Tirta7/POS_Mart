@@ -1,0 +1,15 @@
+node_modules
+dist
+dist-test
+.git
+.github
+.agents
+.claude
+.windsurf
+backups
+INSTALLER_*
+docs
+tests
+scratch
+*.log
+.env
