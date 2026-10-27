@@ -419,11 +419,9 @@ const StockManagement: React.FC = () => {
             'Varian dihapus via Edit Master Data');
         }
 
-        // c. Simpan master data multi-tier (PENTING: gunakan original.id, jangan ubah id primary key!)
-        // Pisahkan stock lama agar updateProduct tidak menimpa mutasi stok
+        // c. Siapkan payload data produk baru
         const { stock: _oldStock, variants: _oldVars, ...cleanOriginal } = original as any;
-
-        await updateProduct(original.id, {
+        const newProductPayload = {
           ...cleanOriginal,
           id: original.id,
           barcode: effectiveBarcode,
@@ -446,59 +444,67 @@ const StockManagement: React.FC = () => {
           midCapacity: finalMidCap,
           midPrice: finalMidPrice,
           retailBarcode: finalRetailBarcode,
-          variants: namedVariants.map(v => {
-            const origV = origVariants.find((ov: any) => ov.id === v.id || ov.name.trim().toLowerCase() === v.name.trim().toLowerCase());
-            return {
-              id: v.id || makeVariantId(),
-              name: v.name.trim(),
-              barcode: v.barcode ? v.barcode.trim() : null,
-              // Kirim stok lama ke master data agar tidak double increment sebelum mutasi dicatat
-              stock: origV ? (Number(origV.stock) || 0) : 0,
-              sellingPrice: v.sellingPrice !== '' && cleanNum(v.sellingPrice) > 0 ? cleanNum(v.sellingPrice) : null,
-              wholesalePrice: v.wholesalePrice !== '' && cleanNum(v.wholesalePrice) > 0 ? cleanNum(v.wholesalePrice) : null,
-              image: v.image ? v.image.trim() : null,
-            };
-          })
-        } as any);
+          stock: hasVariants ? sumVariantQty(namedVariants) : totalQty,
+          variants: namedVariants.map(v => ({
+            id: v.id || makeVariantId(),
+            name: v.name.trim(),
+            barcode: v.barcode ? v.barcode.trim() : null,
+            stock: cleanNum(v.qty),
+            sellingPrice: v.sellingPrice !== '' && cleanNum(v.sellingPrice) > 0 ? cleanNum(v.sellingPrice) : null,
+            wholesalePrice: v.wholesalePrice !== '' && cleanNum(v.wholesalePrice) > 0 ? cleanNum(v.wholesalePrice) : null,
+            image: v.image ? v.image.trim() : null,
+          }))
+        };
 
-        // d. Mutasi stok jika ada selisih
-        if (hasVariants) {
-          const varLines: MutationLine[] = [];
-          for (const nv of namedVariants) {
-            const origV = origVariants.find((ov: any) => ov.id === nv.id || ov.name.trim().toLowerCase() === nv.name.trim().toLowerCase());
-            const origStock = origV ? (Number(origV.stock) || 0) : 0;
-            const newStock = cleanNum(nv.qty);
-            const vDiff = newStock - origStock;
-            if (vDiff !== 0) {
-              varLines.push({
-                productId: original.id,
-                variantId: nv.id,
-                variantName: nv.name,
-                qty: vDiff,
-                purchasePrice: baseCost,
-                name: cleanName,
-                unit
-              });
-            }
-          }
-          if (varLines.length > 0) {
-            await recordStockMutation('ADJUSTMENT', docNo, varLines, `Koreksi stok varian via Edit Master Data`);
-          }
-        } else {
-          const diffQty = totalQty - original.stock;
-          if (diffQty !== 0) {
-            const lines: MutationLine[] = [{ productId: original.id, qty: diffQty, purchasePrice: baseCost, name: cleanName, unit }];
-            await recordStockMutation('ADJUSTMENT', docNo, lines, `Koreksi stok via Edit Master Data (${original.stock} → ${totalQty} ${unit})`);
-          }
-        }
+        // 1. OPTIMISTIC UPDATE: Tampilan layar & tabel langsung berubah dalam 0 ms!
+        useInventoryStore.setState(state => ({
+          products: state.products.map(p => p.id === original.id ? { ...p, ...newProductPayload } : p)
+        }));
 
-        // e. Tutup drawer dan tampilkan notifikasi seketika (State sudah diupdate instan oleh updateProduct/recordStockMutation)
+        // 2. Tutup drawer dan tampilkan toast sukses seketika (Pengguna tidak perlu menunggu respons server)
         setDraftToast(`Perubahan data & harga "${cleanName}" berhasil disimpan!`);
         setTimeout(() => setDraftToast(null), 3500);
         resetForm();
 
-        // Background sync: sinkronkan daftar produk tanpa memblokir UI
-        useInventoryStore.getState().fetchProducts().catch(console.error);
+        // 3. Simpan perubahan ke server & mutasi stok di background
+        (async () => {
+          try {
+            await updateProduct(original.id, newProductPayload as any);
+
+            // Mutasi stok jika ada selisih
+            if (hasVariants) {
+              const varLines: MutationLine[] = [];
+              for (const nv of namedVariants) {
+                const origV = origVariants.find((ov: any) => ov.id === nv.id || ov.name.trim().toLowerCase() === nv.name.trim().toLowerCase());
+                const origStock = origV ? (Number(origV.stock) || 0) : 0;
+                const newStock = cleanNum(nv.qty);
+                const vDiff = newStock - origStock;
+                if (vDiff !== 0) {
+                  varLines.push({
+                    productId: original.id,
+                    variantId: nv.id,
+                    variantName: nv.name,
+                    qty: vDiff,
+                    purchasePrice: baseCost,
+                    name: cleanName,
+                    unit
+                  });
+                }
+              }
+              if (varLines.length > 0) {
+                await recordStockMutation('ADJUSTMENT', docNo, varLines, `Koreksi stok varian via Edit Master Data`);
+              }
+            } else {
+              const diffQty = totalQty - original.stock;
+              if (diffQty !== 0) {
+                const lines: MutationLine[] = [{ productId: original.id, qty: diffQty, purchasePrice: baseCost, name: cleanName, unit }];
+                await recordStockMutation('ADJUSTMENT', docNo, lines, `Koreksi stok via Edit Master Data (${original.stock} → ${totalQty} ${unit})`);
+              }
+            }
+          } catch (bgErr) {
+            console.error("Gagal simpan di background:", bgErr);
+          }
+        })();
       } catch (err: any) {
         console.error("Gagal simpan edit produk:", err);
         alert(err.message || 'Gagal menyimpan perubahan produk.');

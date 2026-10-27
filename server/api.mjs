@@ -28,7 +28,13 @@ const knownTenants = new Set();
   } catch (e) {}
 })();
 
+// In-Memory RAM Cache untuk produk (bekerja seperti Redis dengan latensi 0ms langsung di memori)
+const productsCache = new Map();
+
 const notifyTenant = (tenantId, entity) => {
+  if (entity === 'products') {
+    productsCache.delete(tenantId);
+  }
   const io = getIo();
   if (io) {
     io.to(tenantId).emit('data_updated', entity);
@@ -248,10 +254,16 @@ app.put('/api/saas/settings', async (req, res) => {
 // ==========================================
 app.get('/api/saas/products', async (req, res) => {
   try {
+    const cached = productsCache.get(req.tenantId);
+    if (cached && Date.now() < cached.expiresAt) {
+      return res.json(cached.data);
+    }
     const products = await prisma.product.findMany({
       where: { tenant_id: req.tenantId, deleted_at: null },
-      include: PRODUCT_INCLUDE
+      include: PRODUCT_INCLUDE,
+      orderBy: { name: 'asc' }
     });
+    productsCache.set(req.tenantId, { data: products, expiresAt: Date.now() + 60000 });
     res.json(products);
   } catch (err) {
     res.status(500).json({ error: err.message });
