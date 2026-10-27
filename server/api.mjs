@@ -41,6 +41,17 @@ const PRODUCT_INCLUDE = {
   variants: { orderBy: { created_at: 'asc' } }
 };
 
+// Proyeksi produk ringan untuk riwayat transaksi (mencegah payload bengkak dari image_url base64)
+const ITEM_PRODUCT_SELECT = {
+  select: {
+    id: true,
+    name: true,
+    unit: true,
+    sku: true,
+    barcode: true
+  }
+};
+
 const optNum = (v) => (v === undefined || v === null || v === '' || Number(v) <= 0 ? null : Number(v));
 // Qty boleh desimal (mis. 2,5 kg). Dibulatkan 3 angka di belakang koma agar tidak muncul sisa floating point.
 const round3 = (n) => Math.round(Number(n || 0) * 1000) / 1000;
@@ -641,13 +652,13 @@ app.get('/api/saas/customers', async (req, res) => {
 
     const transactions = await prisma.transaction.findMany({
       where: { tenant_id: req.tenantId },
-      include: { items: { include: { product: true } } },
+      include: { items: { include: { product: ITEM_PRODUCT_SELECT } } },
       orderBy: { created_at: 'desc' }
     });
 
     const stockTransactions = await prisma.stockTransaction.findMany({
       where: { tenant_id: req.tenantId, type: 'OUT' },
-      include: { items: { include: { product: true } } },
+      include: { items: { include: { product: ITEM_PRODUCT_SELECT } } },
       orderBy: { date: 'desc' }
     });
 
@@ -820,11 +831,12 @@ app.get('/api/saas/transactions', async (req, res) => {
     const transactions = await prisma.transaction.findMany({
       where: { tenant_id: req.tenantId },
       include: { 
-        items: { include: { product: true } },
+        items: { include: { product: ITEM_PRODUCT_SELECT } },
         payments: { orderBy: { payment_date: 'asc' } },
-        returns: { include: { items: { include: { product: true } } }, orderBy: { created_at: 'desc' } }
+        returns: { include: { items: { include: { product: ITEM_PRODUCT_SELECT } } }, orderBy: { created_at: 'desc' } }
       },
-      orderBy: { created_at: 'desc' }
+      orderBy: { created_at: 'desc' },
+      take: 200
     });
 
     const result = transactions.map(t => {
@@ -854,9 +866,9 @@ app.get('/api/saas/transactions/:id', async (req, res) => {
         tenant_id: req.tenantId 
       },
       include: { 
-        items: { include: { product: true } },
+        items: { include: { product: ITEM_PRODUCT_SELECT } },
         payments: { orderBy: { payment_date: 'asc' } },
-        returns: { include: { items: { include: { product: true } } }, orderBy: { created_at: 'desc' } }
+        returns: { include: { items: { include: { product: ITEM_PRODUCT_SELECT } } }, orderBy: { created_at: 'desc' } }
       }
     });
     if (!transaction) return res.status(404).json({ error: "Not found" });
@@ -1234,9 +1246,9 @@ app.put('/api/saas/transactions/:id', async (req, res) => {
           total_amount: newTotalAmount
         },
         include: {
-          items: { include: { product: true } },
+          items: { include: { product: ITEM_PRODUCT_SELECT } },
           payments: { orderBy: { payment_date: 'asc' } },
-          returns: { include: { items: { include: { product: true } } } }
+          returns: { include: { items: { include: { product: ITEM_PRODUCT_SELECT } } } }
         }
       });
 
@@ -1299,9 +1311,9 @@ app.post('/api/saas/transactions/:id/payments', async (req, res) => {
           payment_status: newStatus
         },
         include: {
-          items: { include: { product: true } },
+          items: { include: { product: ITEM_PRODUCT_SELECT } },
           payments: { orderBy: { payment_date: 'asc' } },
-          returns: { include: { items: { include: { product: true } } } }
+          returns: { include: { items: { include: { product: ITEM_PRODUCT_SELECT } } } }
         }
       });
 
@@ -1570,8 +1582,9 @@ app.get('/api/saas/stock-transactions', async (req, res) => {
   try {
     const txs = await prisma.stockTransaction.findMany({
       where: { tenant_id: req.tenantId },
-      include: { items: { include: { product: true } } },
-      orderBy: { date: 'desc' }
+      include: { items: { include: { product: ITEM_PRODUCT_SELECT } } },
+      orderBy: { date: 'desc' },
+      take: 250
     });
     res.json(txs);
   } catch (err) {

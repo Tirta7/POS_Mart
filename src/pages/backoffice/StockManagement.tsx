@@ -492,15 +492,13 @@ const StockManagement: React.FC = () => {
           }
         }
 
-        // e. Pastikan state lokal dan server 100% tersinkronisasi
-        await Promise.all([
-          useInventoryStore.getState().fetchProducts(),
-          useInventoryStore.getState().fetchTransactions?.() || Promise.resolve()
-        ]);
-
+        // e. Tutup drawer dan tampilkan notifikasi seketika (State sudah diupdate instan oleh updateProduct/recordStockMutation)
         setDraftToast(`Perubahan data & harga "${cleanName}" berhasil disimpan!`);
         setTimeout(() => setDraftToast(null), 3500);
         resetForm();
+
+        // Background sync: sinkronkan daftar produk tanpa memblokir UI
+        useInventoryStore.getState().fetchProducts().catch(console.error);
       } catch (err: any) {
         console.error("Gagal simpan edit produk:", err);
         alert(err.message || 'Gagal menyimpan perubahan produk.');
@@ -666,9 +664,10 @@ const StockManagement: React.FC = () => {
   // Terapkan item ke stok (stok bertambah / produk baru muncul di Kasir POS)
   const applyItemsToStock = async (items: any[], docNo: string) => {
     const mutationLines: MutationLine[] = [];
-    for (const item of items) {
+    // Proses seluruh item secara paralel (jauh lebih cepat daripada loop serial satu-per-satu)
+    await Promise.all(items.map(async (item) => {
       // Item draf lama (sebelum fitur ini) sudah pernah masuk stok -> jangan ditambah dua kali
-      if (!item.pending) continue;
+      if (!item.pending) return;
       const live = useInventoryStore.getState().products;
       const existing = live.find(p => 
         p.id === item.id || 
@@ -783,21 +782,25 @@ const StockManagement: React.FC = () => {
           mutationLines.push({ productId: createdProd.id, qty: qtyIn, purchasePrice: buyPrice, name: item.name, unit: item.unit });
         }
       }
-    }
+    }));
     // Mutasi stok: Barang Masuk (IN) per dokumen GR
     await recordStockMutation('IN', docNo, mutationLines, 'Penerimaan Barang (GR)');
   };
 
   const writePostedLog = (ref: string, items: any[]) => {
+    // Bersihkan base64 image dari log localStorage agar tidak memenuhi kuota browser dan bikin freeze
+    const cleanItems = items.map(({ image, ...rest }: any) => rest);
     const log = {
       grNumber: ref,
       postedAt: new Date().toISOString(),
-      items,
+      items: cleanItems,
       totalItems: items.length,
       totalValue: items.reduce((sum, i) => sum + (Number(i.purchasePrice) * Number(i.qty)), 0),
     };
     const existingLogs: any[] = JSON.parse(localStorage.getItem('grPosted') || '[]');
     existingLogs.push(log);
+    // Simpan maksimal 50 log terakhir
+    if (existingLogs.length > 50) existingLogs.splice(0, existingLogs.length - 50);
     localStorage.setItem('grPosted', JSON.stringify(existingLogs));
   };
 
@@ -3804,15 +3807,15 @@ const StockManagement: React.FC = () => {
                             const canvas = document.createElement('canvas');
                             let width = img.width;
                             let height = img.height;
-                            const MAX_SIZE = 800;
+                            const MAX_SIZE = 360;
                             if (width > height) {
                               if (width > MAX_SIZE) {
-                                height *= MAX_SIZE / width;
+                                height = Math.round(height * (MAX_SIZE / width));
                                 width = MAX_SIZE;
                               }
                             } else {
                               if (height > MAX_SIZE) {
-                                width *= MAX_SIZE / height;
+                                width = Math.round(width * (MAX_SIZE / height));
                                 height = MAX_SIZE;
                               }
                             }
@@ -3820,6 +3823,7 @@ const StockManagement: React.FC = () => {
                             canvas.height = height;
                             const ctx = canvas.getContext('2d');
                             ctx?.drawImage(img, 0, 0, width, height);
+                            // Kualitas 0.6 menghasilkan file ~25KB yang ringan & cepat dikirim ke server
                             const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
                             setImage(dataUrl);
                           };
