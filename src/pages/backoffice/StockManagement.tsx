@@ -381,8 +381,9 @@ const StockManagement: React.FC = () => {
       const finalMidPrice = hasMidTier ? cleanNum(midPrice) : 0;
       const finalMidUnitName = hasMidTier && midUnitName.trim() ? midUnitName.trim() : null;
       const finalMidBarcode = hasMidTier && midBarcode.trim() ? midBarcode.trim() : null;
-      const finalBoxBarcode = boxBarcode.trim() || finalBarcode;
-      const finalRetailBarcode = retailBarcode.trim();
+      const finalBoxBarcode = boxBarcode.trim() ? boxBarcode.trim() : null;
+      const finalRetailBarcode = retailBarcode.trim() ? retailBarcode.trim() : (finalBarcode || null);
+      const effectiveBarcode = finalRetailBarcode || finalBoxBarcode || null;
 
       // Cek duplikat barcode terhadap produk lain (bukan diri sendiri)
       const isDuplicate = products.some(p => {
@@ -393,7 +394,7 @@ const StockManagement: React.FC = () => {
         return false;
       });
       if (isDuplicate) {
-        alert(`Peringatan: Barcode "${finalBoxBarcode || finalRetailBarcode}" sudah digunakan oleh produk lain!`);
+        alert(`Peringatan: Barcode "${finalRetailBarcode || finalBoxBarcode}" sudah digunakan oleh produk lain!`);
         return;
       }
 
@@ -425,7 +426,7 @@ const StockManagement: React.FC = () => {
         await updateProduct(original.id, {
           ...cleanOriginal,
           id: original.id,
-          barcode: finalBoxBarcode,
+          barcode: effectiveBarcode,
           sku: finalSku,
           name: cleanName,
           category,
@@ -526,14 +527,15 @@ const StockManagement: React.FC = () => {
       const finalMidPrice = hasMidTier ? cleanNum(midPrice) : 0;
       const finalMidUnitName = hasMidTier && midUnitName.trim() ? midUnitName.trim() : undefined;
       const finalMidBarcode = hasMidTier && midBarcode.trim() ? midBarcode.trim() : undefined;
-      const finalBoxBarcode = boxBarcode.trim() || finalBarcode;
-      const finalRetailBarcode = retailBarcode.trim();
+      const finalBoxBarcode = boxBarcode.trim() ? boxBarcode.trim() : undefined;
+      const finalRetailBarcode = retailBarcode.trim() ? retailBarcode.trim() : (finalBarcode || undefined);
+      const effectiveBarcode = finalRetailBarcode || finalBoxBarcode || '';
 
       // Masuk ke Draf (BELUM masuk stok / Kasir POS sampai di-Posting)
       const newItem = {
         pending: true,
         id: finalId,
-        barcode: finalBoxBarcode,
+        barcode: effectiveBarcode,
         sku: finalSku, 
         name: cleanName, 
         category, 
@@ -554,7 +556,7 @@ const StockManagement: React.FC = () => {
         midBarcode: finalMidBarcode,
         midCapacity: finalMidCap,
         midPrice: finalMidPrice,
-        retailBarcode: finalRetailBarcode || undefined,
+        retailBarcode: finalRetailBarcode,
         variants: namedVariants.map(v => ({
           id: v.id || makeVariantId(),
           name: v.name.trim(),

@@ -295,7 +295,7 @@ app.post('/api/saas/products', async (req, res) => {
           min_stock: Number(data.minStock || 0),
           unit: data.unit ? String(data.unit) : 'Pcs',
           image_url: data.image,
-          box_barcode: data.boxBarcode || data.barcode || null,
+          box_barcode: data.boxBarcode ? String(data.boxBarcode).trim() : null,
           box_capacity: optNum(data.boxCapacity) || 1,
           box_price: optNum(data.boxPrice) || Number(data.wholesalePrice || 0),
           box_purchase_price: data.boxPurchasePrice !== undefined && data.boxPurchasePrice !== null && data.boxPurchasePrice !== '' ? Math.max(0, Number(data.boxPurchasePrice)) : null,
@@ -303,7 +303,7 @@ app.post('/api/saas/products', async (req, res) => {
           mid_barcode: data.midBarcode || null,
           mid_capacity: optNum(data.midCapacity) || 0,
           mid_price: optNum(data.midPrice) || 0,
-          retail_barcode: data.retailBarcode || null
+          retail_barcode: data.retailBarcode ? String(data.retailBarcode).trim() : (data.barcode ? String(data.barcode).trim() : null)
         }
       });
       if (incomingVariants.length > 0) {
@@ -2402,18 +2402,38 @@ app.post('/api/saas/import/master', async (req, res) => {
         const pCategory = p.category || p.kategori ? String(p.category || p.kategori).trim() : null;
         const pUnit = p.unit || p.satuan ? String(p.unit || p.satuan).trim() : 'Pcs';
 
-        const pSellPrice = Number(p.selling_price ?? p.sellingPrice ?? p.harga_jual ?? p.hargaJual ?? 0);
-        const pBuyPrice = Number(p.purchase_price ?? p.purchasePrice ?? p.harga_beli ?? p.hargaBeli ?? 0);
-        const pWholesalePrice = Number(p.wholesale_price ?? p.wholesalePrice ?? p.harga_grosir ?? p.hargaGrosir ?? pSellPrice);
-        const pMinWholesaleQty = Number(p.min_wholesale_qty ?? p.minWholesaleQty ?? 0) || 0;
-        const pStock = Number(p.stock ?? p.stok ?? 0);
+        let pSellPrice = Number(p.selling_price ?? p.sellingPrice ?? p.harga_jual ?? p.hargaJual ?? 0);
+        let pBuyPrice = Number(p.purchase_price ?? p.purchasePrice ?? p.harga_beli ?? p.hargaBeli ?? 0);
+        let pWholesalePrice = Number(p.wholesale_price ?? p.wholesalePrice ?? p.harga_grosir ?? p.hargaGrosir ?? pSellPrice);
+        let pMinWholesaleQty = Number(p.min_wholesale_qty ?? p.minWholesaleQty ?? 0) || 0;
+        const pStock = (p.stock !== undefined && p.stock !== null && p.stock !== '') ? Number(p.stock) : (p.stok !== undefined ? Number(p.stok) : undefined);
         const pMinStock = Number(p.min_stock ?? p.minStock ?? p.min_stok ?? 0);
 
-        const pBoxBarcode = (p.box_barcode ?? p.boxBarcode) ? String(p.box_barcode ?? p.boxBarcode).trim() : (pBarcode || null);
-        const pRetailBarcode = (p.retail_barcode ?? p.retailBarcode) ? String(p.retail_barcode ?? p.retailBarcode).trim() : null;
+        const rawBoxBarcode = (p.box_barcode ?? p.boxBarcode) ? String(p.box_barcode ?? p.boxBarcode).trim() : '';
+        const pBoxBarcode = (rawBoxBarcode && rawBoxBarcode !== '-') ? rawBoxBarcode : null;
+        const rawRetailBarcode = (p.retail_barcode ?? p.retailBarcode) ? String(p.retail_barcode ?? p.retailBarcode).trim() : (pBarcode || '');
+        const pRetailBarcode = (rawRetailBarcode && rawRetailBarcode !== '-') ? rawRetailBarcode : null;
+        const effectiveBarcode = pRetailBarcode || pBoxBarcode || null;
+
         const pBoxCapacity = Number(p.box_capacity ?? p.boxCapacity ?? 1) || 1;
-        const pBoxPrice = Number(p.box_price ?? p.boxPrice ?? 0) || 0;
-        const pBoxPurchasePrice = Number(p.box_purchase_price ?? p.boxPurchasePrice ?? p.modal_dus ?? p.harga_beli_dus ?? 0) || 0;
+        let pBoxPrice = Number(p.box_price ?? p.boxPrice ?? 0) || 0;
+        let pBoxPurchasePrice = Number(p.box_purchase_price ?? p.boxPurchasePrice ?? p.modal_dus ?? p.harga_beli_dus ?? 0) || 0;
+
+        // Auto-sinkronisasi harga satu arah yang hilang saat import
+        if (pBuyPrice === 0 && pBoxPurchasePrice > 0 && pBoxCapacity > 0) {
+          pBuyPrice = Math.round(pBoxPurchasePrice / pBoxCapacity);
+        } else if (pBoxPurchasePrice === 0 && pBuyPrice > 0 && pBoxCapacity > 1) {
+          pBoxPurchasePrice = Math.round(pBuyPrice * pBoxCapacity);
+        }
+        if (pBoxPrice === 0 && pSellPrice > 0 && pBoxCapacity > 1) {
+          pBoxPrice = Math.round(pSellPrice * pBoxCapacity);
+        }
+        if (pWholesalePrice === 0 && pSellPrice > 0) {
+          pWholesalePrice = pSellPrice;
+        }
+        if (pMinWholesaleQty === 0) {
+          pMinWholesaleQty = 1;
+        }
 
         const pMidUnitName = (p.mid_unit_name ?? p.midUnitName) ? String(p.mid_unit_name ?? p.midUnitName).trim() : null;
         const pMidBarcode = (p.mid_barcode ?? p.midBarcode) ? String(p.mid_barcode ?? p.midBarcode).trim() : null;
@@ -2440,20 +2460,7 @@ app.post('/api/saas/import/master', async (req, res) => {
             where: { tenant_id: tenantId, deleted_at: null, id: pId }
           });
         }
-        // Priority 2: Match by Barcode (Dus atau Satuan)
-        if (!existing && pBarcode) {
-          existing = await prisma.product.findFirst({
-            where: {
-              tenant_id: tenantId,
-              deleted_at: null,
-              OR: [
-                { barcode: pBarcode },
-                { box_barcode: pBarcode },
-                { retail_barcode: pBarcode }
-              ]
-            }
-          });
-        }
+        // Priority 2: Match by Barcode (Retail, Dus, atau Barcode utama)
         if (!existing && pRetailBarcode) {
           existing = await prisma.product.findFirst({
             where: {
@@ -2462,6 +2469,31 @@ app.post('/api/saas/import/master', async (req, res) => {
               OR: [
                 { retail_barcode: pRetailBarcode },
                 { barcode: pRetailBarcode }
+              ]
+            }
+          });
+        }
+        if (!existing && pBoxBarcode) {
+          existing = await prisma.product.findFirst({
+            where: {
+              tenant_id: tenantId,
+              deleted_at: null,
+              OR: [
+                { box_barcode: pBoxBarcode },
+                { barcode: pBoxBarcode }
+              ]
+            }
+          });
+        }
+        if (!existing && pBarcode) {
+          existing = await prisma.product.findFirst({
+            where: {
+              tenant_id: tenantId,
+              deleted_at: null,
+              OR: [
+                { barcode: pBarcode },
+                { retail_barcode: pBarcode },
+                { box_barcode: pBarcode }
               ]
             }
           });
@@ -2494,7 +2526,7 @@ app.post('/api/saas/import/master', async (req, res) => {
             data: {
               name: pName,
               sku: pSku || existing.sku,
-              barcode: pBarcode || existing.barcode,
+              barcode: effectiveBarcode || existing.barcode,
               unit: pUnit || existing.unit || 'Pcs',
               category_id: categoryId || existing.category_id,
               // Jangan timpa harga valid dengan 0 jika data impor bernilai 0/kosong
@@ -2502,11 +2534,11 @@ app.post('/api/saas/import/master', async (req, res) => {
               purchase_price: pBuyPrice > 0 ? pBuyPrice : existing.purchase_price,
               wholesale_price: pWholesalePrice > 0 ? pWholesalePrice : existing.wholesale_price,
               min_wholesale_qty: pMinWholesaleQty > 0 ? pMinWholesaleQty : existing.min_wholesale_qty,
-              box_barcode: pBoxBarcode || existing.box_barcode,
+              box_barcode: pBoxBarcode !== null ? pBoxBarcode : existing.box_barcode,
               box_capacity: pBoxCapacity > 0 ? pBoxCapacity : existing.box_capacity,
               box_price: pBoxPrice > 0 ? pBoxPrice : existing.box_price,
               box_purchase_price: pBoxPurchasePrice > 0 ? pBoxPurchasePrice : existing.box_purchase_price,
-              retail_barcode: pRetailBarcode || existing.retail_barcode,
+              retail_barcode: pRetailBarcode !== null ? pRetailBarcode : existing.retail_barcode,
               mid_unit_name: pMidUnitName || existing.mid_unit_name,
               mid_barcode: pMidBarcode || existing.mid_barcode,
               mid_capacity: pMidCapacity > 0 ? pMidCapacity : existing.mid_capacity,
@@ -2514,8 +2546,9 @@ app.post('/api/saas/import/master', async (req, res) => {
               // Produk bervarian: stok dihitung dari total varian, jangan ditimpa lewat import
               stock: (await prisma.productVariant.count({ where: { product_id: existing.id } })) > 0
                 ? existing.stock
-                : (pStock !== undefined && !isNaN(pStock) && pStock !== 0 ? pStock : existing.stock),
-              min_stock: !isNaN(pMinStock) && pMinStock >= 0 ? pMinStock : existing.min_stock
+                : (pStock !== undefined && !isNaN(pStock) ? pStock : existing.stock),
+              min_stock: !isNaN(pMinStock) && pMinStock >= 0 ? pMinStock : existing.min_stock,
+              is_active: p.isActive !== undefined ? Boolean(p.isActive) : existing.is_active
             }
           });
           targetProdId = existing.id;
@@ -2533,24 +2566,25 @@ app.post('/api/saas/import/master', async (req, res) => {
               tenant_id: tenantId,
               name: pName,
               sku: pSku,
-              barcode: pBarcode,
+              barcode: effectiveBarcode,
               unit: pUnit,
               category_id: categoryId,
               selling_price: !isNaN(pSellPrice) && pSellPrice >= 0 ? pSellPrice : 0,
               purchase_price: !isNaN(pBuyPrice) && pBuyPrice >= 0 ? pBuyPrice : 0,
               wholesale_price: !isNaN(pWholesalePrice) && pWholesalePrice >= 0 ? pWholesalePrice : pSellPrice,
-              min_wholesale_qty: !isNaN(pMinWholesaleQty) && pMinWholesaleQty >= 0 ? pMinWholesaleQty : 0,
+              min_wholesale_qty: !isNaN(pMinWholesaleQty) && pMinWholesaleQty >= 0 ? pMinWholesaleQty : 1,
               box_barcode: pBoxBarcode,
               box_capacity: pBoxCapacity,
               box_price: pBoxPrice,
               box_purchase_price: pBoxPurchasePrice > 0 ? pBoxPurchasePrice : null,
-              retail_barcode: pRetailBarcode,
+              retail_barcode: pRetailBarcode || effectiveBarcode,
               mid_unit_name: pMidUnitName,
               mid_barcode: pMidBarcode,
               mid_capacity: pMidCapacity,
               mid_price: pMidPrice,
-              stock: !isNaN(pStock) ? pStock : 0,
-              min_stock: !isNaN(pMinStock) ? pMinStock : 0
+              stock: (pStock !== undefined && !isNaN(pStock)) ? pStock : 0,
+              min_stock: !isNaN(pMinStock) ? pMinStock : 0,
+              is_active: p.isActive !== undefined ? Boolean(p.isActive) : true
             }
           });
           targetProdId = created.id;

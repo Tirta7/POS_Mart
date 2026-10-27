@@ -124,7 +124,32 @@ export const exportMasterExcel = (data: ExportDataPayload, customName?: string) 
   setSheetCols(wsAnalytics, [40, 45]);
   XLSX.utils.book_append_sheet(wb, wsAnalytics, 'Laporan & Analitik');
 
+  // Helper untuk memastikan kolom barcode, SKU, ID, dan telepon disimpan sebagai teks murni (mencegah format ilmiah 8.99E+12 di Excel)
+  const ensureTextColumns = (ws: XLSX.WorkSheet, colKeys: string[]) => {
+    if (!ws || !ws['!ref']) return;
+    const range = XLSX.utils.decode_range(ws['!ref']);
+    const headers: string[] = [];
+    for (let C = range.s.c; C <= range.e.c; ++C) {
+      const cell = ws[XLSX.utils.encode_cell({ r: 0, c: C })];
+      headers[C] = cell ? String(cell.v).trim() : '';
+    }
+    for (let R = range.s.r + 1; R <= range.e.r; ++R) {
+      for (let C = range.s.c; C <= range.e.c; ++C) {
+        if (colKeys.includes(headers[C])) {
+          const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
+          const cell = ws[cellRef];
+          if (cell && cell.v !== undefined && cell.v !== null && cell.v !== '') {
+            cell.t = 's';
+            cell.v = String(cell.v).trim();
+            cell.z = '@';
+          }
+        }
+      }
+    }
+  };
+
   // 2. SHEET: MANAJEMEN STOK (PRODUK)
+  // Urutan kolom disesuaikan persis 1:1 dari kiri ke kanan dengan tampilan Tabel Manajemen Stok di Web
   const productRows = (data.products || []).map((p, idx) => {
     const stock = parseNumber(p.stock, 0);
     const minStock = parseNumber(p.minStock ?? p.min_stock, 0);
@@ -134,36 +159,52 @@ export const exportMasterExcel = (data: ExportDataPayload, customName?: string) 
     const boxCapacity = parseNumber(p.boxCapacity ?? p.box_capacity, 1);
     const minWholesaleQty = parseNumber(p.minWholesaleQty ?? p.min_wholesale_qty, 1);
     const boxPriceVal = parseNumber(p.boxPrice ?? p.box_price, 0);
-    const boxPrice = boxPriceVal > 0 ? boxPriceVal : (boxCapacity > 1 ? sellPrice * boxCapacity : '');
-    const boxCost = boxCapacity > 1 ? (parseNumber(p.boxPurchasePrice ?? p.box_purchase_price, 0) || (buyPrice * boxCapacity)) : '';
+    const boxPrice = boxPriceVal > 0 ? boxPriceVal : (boxCapacity > 1 && sellPrice > 0 ? Math.round(sellPrice * boxCapacity) : '');
+    const boxCostVal = parseNumber(p.boxPurchasePrice ?? p.box_purchase_price, 0);
+    const boxCost = boxCapacity > 1 ? (boxCostVal > 0 ? boxCostVal : (buyPrice > 0 ? Math.round(buyPrice * boxCapacity) : '')) : '';
     const estBoxStock = boxCapacity > 1 ? Math.floor(stock / boxCapacity) : '-';
     const remRetailStock = boxCapacity > 1 ? (stock % boxCapacity) : stock;
+
+    // Modal satuan HPP riil
+    const effectiveUnitCost = (boxCapacity > 1 && boxCostVal > 0) ? Math.round(boxCostVal / boxCapacity) : Math.round(buyPrice);
+    const unitProfit = sellPrice > 0 && effectiveUnitCost > 0 ? (sellPrice - effectiveUnitCost) : 0;
+    const marginPct = effectiveUnitCost > 0 && sellPrice > 0 ? Number(((sellPrice - effectiveUnitCost) / effectiveUnitCost * 100).toFixed(1)) : 0;
+    const boxProfit = (boxCapacity > 1 && Number(boxPrice) > 0 && Number(boxCost) > 0) ? (Number(boxPrice) - Number(boxCost)) : '';
 
     let status = 'Aman';
     if (stock <= 0) status = 'Habis';
     else if (stock <= minStock) status = 'Menipis';
 
     const boxBarcodeVal = p.boxBarcode || p.box_barcode || '';
-    const retailBarcodeVal = p.retailBarcode || p.retail_barcode || p.barcode || p.id || '';
+    const retailBarcodeVal = p.retailBarcode || p.retail_barcode || p.barcode || '';
     const skuVal = p.sku || '';
     const categoryName = typeof p.category === 'object' ? (p.category?.name || '-') : (p.category || p.category_name || '-');
+    const catalogStatus = (p.isActive === false || p.is_active === false) ? 'Nonaktif' : 'Aktif';
 
     const variantSummary = (p.variants && Array.isArray(p.variants) && p.variants.length > 0)
       ? p.variants.map((v: any) => `${v.name}:${v.stock}`).join(', ')
       : '-';
 
+    const totalModalVal = (boxCapacity > 1 && boxCostVal > 0)
+      ? (Math.floor(stock / boxCapacity) * boxCostVal) + ((stock % boxCapacity) * effectiveUnitCost)
+      : Math.round(stock * effectiveUnitCost);
+    const totalJualVal = Math.round(stock * sellPrice);
+
     return {
       'No': idx + 1,
-      'ID Produk': p.id,
-      'Barcode Dus (Karton)': boxBarcodeVal,
-      'Barcode Eceran (Satuan)': retailBarcodeVal,
-      'SKU / Kode Rak': skuVal,
+      'ID Produk': p.id ? String(p.id) : '',
       'Nama Produk': p.name,
       'Kategori': categoryName,
+      'SKU / Kode Rak': skuVal ? String(skuVal) : '',
+      'Barcode Dus (Karton)': boxBarcodeVal ? String(boxBarcodeVal) : '',
+      'Barcode Eceran (Satuan)': retailBarcodeVal ? String(retailBarcodeVal) : '',
       'Satuan Eceran': p.unit || 'Pcs',
       'Isi per 1 Dus (Pcs)': boxCapacity > 1 ? boxCapacity : (boxBarcodeVal ? 1 : ''),
-      'Modal Satuan (Rp)': buyPrice,
+      'Total Stok Fisik (Satuan)': stock,
+      'Estimasi Stok Dus': estBoxStock,
+      'Sisa Satuan Ecer': remRetailStock,
       'Modal per 1 Dus (Rp)': boxCost,
+      'Modal Satuan (Rp)': effectiveUnitCost > 0 ? effectiveUnitCost : buyPrice,
       'Harga Jual Eceran (Rp)': sellPrice,
       'Harga Grosir Satuan (Rp)': wholesalePrice,
       'Min. Beli Grosir (Pcs)': minWholesaleQty > 1 ? minWholesaleQty : 1,
@@ -171,20 +212,22 @@ export const exportMasterExcel = (data: ExportDataPayload, customName?: string) 
       'Satuan Menengah': p.midUnitName || p.mid_unit_name || '',
       'Isi Satuan Menengah': p.midCapacity || p.mid_capacity || '',
       'Harga Satuan Menengah (Rp)': p.midPrice || p.mid_price || '',
-      'Barcode Satuan Menengah': p.midBarcode || p.mid_barcode || '',
-      'Total Stok Fisik (Satuan)': stock,
-      'Estimasi Stok Dus': estBoxStock,
-      'Sisa Satuan Ecer': remRetailStock,
+      'Barcode Satuan Menengah': p.midBarcode || p.mid_barcode ? String(p.midBarcode || p.mid_barcode) : '',
+      'Margin Eceran (%)': marginPct,
+      'Profit Eceran (Rp)': unitProfit,
+      'Profit per Dus (Rp)': boxProfit,
+      'Total Nilai Modal (Rp)': totalModalVal,
+      'Total Nilai Jual (Rp)': totalJualVal,
       'Min. Stok (Alert Tipis)': minStock,
       'Status Stok': status,
-      'Daftar Varian': variantSummary,
-      'Total Nilai Modal (Rp)': stock * buyPrice,
-      'Total Nilai Jual (Rp)': stock * sellPrice
+      'Status Katalog': catalogStatus,
+      'Daftar Varian': variantSummary
     };
   });
 
   const wsProducts = XLSX.utils.json_to_sheet(productRows);
-  setSheetCols(wsProducts, [6, 20, 22, 22, 18, 32, 18, 14, 16, 18, 18, 20, 20, 18, 20, 16, 18, 22, 22, 22, 16, 16, 16, 14, 25, 22, 22]);
+  setSheetCols(wsProducts, [6, 20, 32, 18, 18, 22, 22, 14, 16, 22, 16, 16, 18, 18, 20, 20, 18, 20, 16, 18, 22, 22, 16, 16, 16, 22, 22, 16, 14, 14, 25]);
+  ensureTextColumns(wsProducts, ['ID Produk', 'SKU / Kode Rak', 'Barcode Dus (Karton)', 'Barcode Eceran (Satuan)', 'Barcode Satuan Menengah']);
   XLSX.utils.book_append_sheet(wb, wsProducts, 'Manajemen Stok');
 
   // 2b. SHEET: VARIAN PRODUK (RINCIAN VARIAN PER ITEM)
@@ -495,23 +538,32 @@ export const parseExcelFile = async (file: File): Promise<ParsedImportData> => {
               const name = n.nama_produk || n.nama || n.name || n.product_name || n.deskripsi || n.namaproduk;
               if (!name) return;
 
-              // Barcode Dus & Eceran
-              const boxBarcodeRaw = String(
-                n.barcode_dus_karton_luar ?? n.barcode_dus_karton ?? n.barcode_dus ?? n.barcodedus ?? n.barcode_karton ?? n.box_barcode ?? n.boxbarcode ?? ''
-              ).trim();
-              const boxBarcode = (boxBarcodeRaw === '-' || boxBarcodeRaw === '0') ? '' : boxBarcodeRaw;
+              // Helper pembersih barcode dari formatting angka excel (mis. 8999909013278.0)
+              const cleanCode = (v: any) => {
+                if (v === undefined || v === null || v === '') return '';
+                let s = String(v).trim();
+                if (s === '-' || s === '0') return '';
+                if (/^\d+\.0+$/.test(s)) s = s.split('.')[0];
+                return s;
+              };
 
-              const retailBarcodeRaw = String(
+              // Barcode Dus & Eceran
+              const boxBarcode = cleanCode(
+                n.barcode_dus_karton_luar ?? n.barcode_dus_karton ?? n.barcode_dus ?? n.barcodedus ?? n.barcode_karton ?? n.box_barcode ?? n.boxbarcode ?? ''
+              );
+
+              const retailBarcode = cleanCode(
                 n.barcode_eceran_bungkus_satuan ?? n.barcode_eceran_satuan ?? n.barcode_eceran ?? n.barcode_satuan ?? n.barcodeeceran ??
                 n.retail_barcode ?? n.retailbarcode ?? n.barcode_scan_angka ?? n.barcode ?? n.kode_barcode ?? n.barcode_sku ?? n.kode_barang ?? n.kode ?? ''
-              ).trim();
-              const retailBarcode = (retailBarcodeRaw === '-' || retailBarcodeRaw === '0') ? '' : retailBarcodeRaw;
+              );
 
-              // Barcode utama (fallback jika salah satu ada)
+              // Barcode utama (prioritas eceran, jika tidak ada baru gunakan dus)
               const barcode = retailBarcode || boxBarcode || '';
 
-              const skuRaw = String(n.sku_kode_unik_rak ?? n.sku ?? (n.barcode_sku && !barcode ? n.barcode_sku : '') ?? '').trim();
-              const sku = skuRaw === '-' ? '' : skuRaw;
+              const skuRaw = String(
+                n.sku_kode_unik_rak ?? n.sku_kode_rak ?? n.sku_rak ?? n.kode_rak ?? n.sku ?? (n.barcode_sku && !barcode ? n.barcode_sku : '') ?? ''
+              ).trim();
+              const sku = (skuRaw === '-' || skuRaw === '0') ? '' : skuRaw;
 
               const idRaw = String(n.id_produk_opsional ?? n.id_produk ?? n.id ?? '').trim();
               const id = idRaw === '-' ? '' : idRaw;
@@ -523,7 +575,7 @@ export const parseExcelFile = async (file: File): Promise<ParsedImportData> => {
               );
 
               // Modal per dus
-              const boxCost = parseNumber(
+              let boxCost = parseNumber(
                 n.modal_per_1_dus_rp ?? n.modal_per_dus_rp ?? n.modal_per_dus ?? n.modal_dus ?? n.harga_beli_dus ?? n.modaldus,
                 0
               );
@@ -533,8 +585,12 @@ export const parseExcelFile = async (file: File): Promise<ParsedImportData> => {
                 n.modal_satuan_rp ?? n.harga_beli_modal ?? n.harga_beli ?? n.modal ?? n.harga_modal ?? n.beli ?? n.purchase_price ?? n.hpp ?? n.hargabelimodal ?? n.hargabeli,
                 0
               );
+
+              // Sinkronisasi otomatis dua arah modal dus & satuan
               if (buyPrice === 0 && boxCost > 0 && boxCapacity > 0) {
-                buyPrice = Number((boxCost / boxCapacity).toFixed(4));
+                buyPrice = Math.round(boxCost / boxCapacity);
+              } else if (boxCost === 0 && buyPrice > 0 && boxCapacity > 1) {
+                boxCost = Math.round(buyPrice * boxCapacity);
               }
 
               // Harga Jual Eceran Satuan
@@ -561,14 +617,14 @@ export const parseExcelFile = async (file: File): Promise<ParsedImportData> => {
                 0
               );
               if (boxPrice === 0 && boxCapacity > 1 && sellPrice > 0) {
-                boxPrice = sellPrice * boxCapacity;
+                boxPrice = Math.round(sellPrice * boxCapacity);
               }
 
               // Kemasan Menengah (Renceng/Slop/Pack)
               const midUnitName = String(n.satuan_menengah_opsional ?? n.satuan_menengah ?? n.nama_satuan_menengah ?? n.mid_unit_name ?? n.midunitname ?? n.unit_menengah ?? '').trim();
               const midCapacity = parseNumber(n.isi_satuan_menengah ?? n.isi_menengah ?? n.mid_capacity ?? n.midcapacity, 0);
               const midPrice = parseNumber(n.harga_satuan_menengah_rp ?? n.harga_satuan_menengah ?? n.harga_menengah ?? n.mid_price ?? n.midprice, 0);
-              const midBarcode = String(n.barcode_satuan_menengah ?? n.barcode_menengah ?? n.mid_barcode ?? n.midbarcode ?? '').trim();
+              const midBarcode = cleanCode(n.barcode_satuan_menengah ?? n.barcode_menengah ?? n.mid_barcode ?? n.midbarcode ?? '');
 
               // Stok Fisik Satuan & Estimasi Dus
               const stokDus = parseNumber(n.estimasi_stok_dus ?? n.stok_dus ?? n.jumlah_dus, 0);
@@ -586,7 +642,7 @@ export const parseExcelFile = async (file: File): Promise<ParsedImportData> => {
                 0
               );
 
-              const statusRaw = String(n.status ?? n.status_produk ?? n.status_aktif_non_aktif ?? n.aktif ?? n.is_active ?? 'Aktif').toLowerCase().trim();
+              const statusRaw = String(n.status_katalog ?? n.status ?? n.status_produk ?? n.status_aktif_non_aktif ?? n.aktif ?? n.is_active ?? 'Aktif').toLowerCase().trim();
               const isActive = !(statusRaw.includes('non') || statusRaw.includes('tidak') || statusRaw === 'false' || statusRaw === '0');
 
               const existingIdx = products.findIndex(p => 
