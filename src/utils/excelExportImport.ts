@@ -1532,3 +1532,4 @@ export const downloadExcelTemplate = (type: 'MASTER' | 'PRODUCT' | 'CUSTOMER' | 
   const filename = type === 'MASTER' ? 'Template_Master_Lengkap_POS_Mart.xlsx' : `Template_Import_${type}.xlsx`;
   XLSX.writeFile(wb, filename);
 };
+

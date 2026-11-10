@@ -118,6 +118,16 @@ const Settings: React.FC = () => {
     }
   }, [activeTab]);
 
+  // Sinkronisasi status lisensi real-time di tab Pengaturan -> Lisensi
+  useEffect(() => {
+    const handleLicenseChanged = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail) setLicenseData(detail);
+    };
+    window.addEventListener('voc:license-changed', handleLicenseChanged);
+    return () => window.removeEventListener('voc:license-changed', handleLicenseChanged);
+  }, []);
+
   useEffect(() => {
     setLocalAppName(appName);
     setLocalAppLogo(appLogo);

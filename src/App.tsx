@@ -65,6 +65,26 @@ function App() {
     fetchEmployees();
   }, []);
 
+  // Refresh seluruh data API otomatis saat lisensi terbuka tanpa perlu reload halaman manual
+  useEffect(() => {
+    const handleLicenseUnlocked = () => {
+      fetchSettings();
+      fetchEmployees();
+      if (useAuthStore.getState().currentUser) {
+        fetchProducts();
+        fetchCategories();
+        fetchTransactions();
+        fetchSales();
+        fetchCustomers();
+        fetchSuppliers();
+        fetchDrafts();
+        fetchHeldOrders();
+      }
+    };
+    window.addEventListener('voc:license-unlocked', handleLicenseUnlocked);
+    return () => window.removeEventListener('voc:license-unlocked', handleLicenseUnlocked);
+  }, []);
+
   // Fetch data dari API ketika user sudah login (Fase SaaS)
   useEffect(() => {
     if (currentUser) {

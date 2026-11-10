@@ -5,6 +5,7 @@ import QRCode from 'qrcode';
 import { checkLicense, activateLicense, verifyLicenseKey, saveOfflineKey, isNetworkError } from './vocml-client.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const IS_VITE_BUILD = process.argv.some(arg => arg.includes('vite')) && process.argv.includes('build');
 
 // 1. Konfigurasi VOCML
 const VOCML_SERVER_URL = process.env.VOCML_SERVER_URL || 'https://vocml.vocpos.id';
@@ -94,79 +95,90 @@ setInterval(() => {
 let checkTimer = null;
 let messagesTimer = null;
 let lastLoggedStatus = null;
+let verifyInFlight = null;
 
 /** Verifikasi lisensi ke VOCML atau offline cache */
 export async function verifikasiAplikasi() {
-  const machineId = getMachineId();
+  if (verifyInFlight) return verifyInFlight;
 
-  if (process.env.SKIP_LICENSE === 'true') {
-    licenseState = {
-      allowed: true,
-      status: 'active',
-      reason: 'Lisensi lokal diaktifkan (SKIP_LICENSE=true)',
-      machineId,
-      expiresAt: '2099-12-31',
-      daysLeft: 9999,
-      licenseKey: 'SKIP_LICENSE',
-      lockReason: '',
-      billing: null,
-      offline: false,
-    };
-    broadcastLicense(licenseState);
-    return licenseState;
-  }
+  verifyInFlight = (async () => {
+    const machineId = getMachineId();
 
-  try {
-    const lisensi = await checkLicense({
-      serverUrl: VOCML_SERVER_URL,
-      product: VOCML_PRODUCT,
-      machineId: machineId,
-      publicKeyPem: PUBLIC_KEY,
-      cacheFile: CACHE_FILE,
-      offlineFile: OFFLINE_FILE,
-      apiKey: VOCML_API_KEY,
-      storeName: 'POS Mart Swalayan',
-      appVersion: '1.0.0',
-    });
-
-    licenseState = {
-      ...lisensi,
-      lockReason: lisensi.lockReason || (lisensi.status === 'locked' ? (lisensi.reason || 'Aplikasi dikunci') : ''),
-    };
-
-    if (!lisensi.allowed) {
-      if (lastLoggedStatus !== 'denied_' + lisensi.status) {
-        lastLoggedStatus = 'denied_' + lisensi.status;
-        console.log(`[License] AKSES DITOLAK: ${lisensi.status} - ${lisensi.reason}`);
-        if (lisensi.billing) {
-          console.log(`[License] Tagihan QRIS aktif: ${lisensi.billing.amount_text} (${lisensi.billing.merchant_name})`);
-        }
-      }
-    } else {
-      if (lastLoggedStatus !== 'allowed_' + lisensi.status) {
-        lastLoggedStatus = 'allowed_' + lisensi.status;
-        console.log(`[License] AKSES DIIZINKAN. Status: ${lisensi.status} (Berlaku s/d: ${lisensi.expiresAt})`);
-      }
+    if (process.env.SKIP_LICENSE === 'true') {
+      licenseState = {
+        allowed: true,
+        status: 'active',
+        reason: 'Lisensi lokal diaktifkan (SKIP_LICENSE=true)',
+        machineId,
+        expiresAt: '2099-12-31',
+        daysLeft: 9999,
+        licenseKey: 'SKIP_LICENSE',
+        lockReason: '',
+        billing: null,
+        offline: false,
+      };
+      broadcastLicense(licenseState);
+      return licenseState;
     }
 
-    broadcastLicense(licenseState);
-  } catch (err) {
-    console.error('[License] Error saat verifikasi lisensi:', err?.message || err);
-  }
+    try {
+      const lisensi = await checkLicense({
+        serverUrl: VOCML_SERVER_URL,
+        product: VOCML_PRODUCT,
+        machineId: machineId,
+        publicKeyPem: PUBLIC_KEY,
+        cacheFile: CACHE_FILE,
+        offlineFile: OFFLINE_FILE,
+        apiKey: VOCML_API_KEY,
+        storeName: 'POS Mart Swalayan',
+        appVersion: '1.0.0',
+      });
 
-  // Jadwalkan pengecekan berikutnya
-  if (checkTimer) clearTimeout(checkTimer);
+      licenseState = {
+        ...lisensi,
+        lockReason: lisensi.lockReason || (lisensi.status === 'locked' ? (lisensi.reason || 'Aplikasi dikunci') : ''),
+      };
 
-  if (process.argv.some(arg => arg.includes('vite') && arg.includes('build'))) {
+      if (!lisensi.allowed) {
+        if (lastLoggedStatus !== 'denied_' + lisensi.status) {
+          lastLoggedStatus = 'denied_' + lisensi.status;
+          console.log(`[License] AKSES DITOLAK: ${lisensi.status} - ${lisensi.reason}`);
+          if (lisensi.billing) {
+            console.log(`[License] Tagihan QRIS aktif: ${lisensi.billing.amount_text} (${lisensi.billing.merchant_name})`);
+          }
+        }
+      } else {
+        if (lastLoggedStatus !== 'allowed_' + lisensi.status) {
+          lastLoggedStatus = 'allowed_' + lisensi.status;
+          console.log(`[License] AKSES DIIZINKAN. Status: ${lisensi.status} (Berlaku s/d: ${lisensi.expiresAt})`);
+        }
+      }
+
+      broadcastLicense(licenseState);
+    } catch (err) {
+      console.error('[License] Error saat verifikasi lisensi:', err?.message || err);
+    }
+
+    // Jadwalkan pengecekan berikutnya
+    if (checkTimer) clearTimeout(checkTimer);
+
+    if (IS_VITE_BUILD) {
+      return licenseState;
+    }
+
+    // Cek setiap 30 detik (jika aktif) atau 5 detik (jika terkunci) agar pembukaan kunci QRIS real-time
+    const nextInterval = licenseState?.allowed ? 30000 : 5000;
+    checkTimer = setTimeout(() => { verifikasiAplikasi(); }, nextInterval);
+    if (checkTimer?.unref) checkTimer.unref();
+
     return licenseState;
+  })();
+
+  try {
+    return await verifyInFlight;
+  } finally {
+    verifyInFlight = null;
   }
-
-  // Cek setiap 30 detik (jika aktif) atau 10 detik (jika terkunci) agar server tetap ringan dan responsif
-  const nextInterval = licenseState?.allowed ? 30000 : 10000;
-  checkTimer = setTimeout(verifikasiAplikasi, nextInterval);
-  if (checkTimer?.unref) checkTimer.unref();
-
-  return licenseState;
 }
 
 /** Ambil pesan siaran dinamis (Dynamic Island) dari VOCML */
@@ -199,33 +211,92 @@ export async function fetchMessagesFromVocml() {
   }
 
   if (messagesTimer) clearTimeout(messagesTimer);
-  if (!process.argv.some(arg => arg.includes('vite') && arg.includes('build'))) {
+  if (!IS_VITE_BUILD) {
     messagesTimer = setTimeout(fetchMessagesFromVocml, 5000);
     if (messagesTimer?.unref) messagesTimer.unref();
   }
 }
 
 // Mulai verifikasi dan fetching pesan saat server start (kecuali saat vite build)
-if (!process.argv.some(arg => arg.includes('vite') && arg.includes('build'))) {
+if (!IS_VITE_BUILD) {
   verifikasiAplikasi();
   fetchMessagesFromVocml();
 }
 
+function crc16Ccitt(str) {
+  let crc = 0xFFFF;
+  for (let i = 0; i < str.length; i++) {
+    crc ^= str.charCodeAt(i) << 8;
+    for (let j = 0; j < 8; j++) {
+      crc = (crc & 0x8000) ? ((crc << 1) ^ 0x1021) : (crc << 1);
+      crc &= 0xFFFF;
+    }
+  }
+  return crc.toString(16).toUpperCase().padStart(4, '0');
+}
+
+function patchQrisAmount(qrisString, amount) {
+  if (!qrisString || !Number.isFinite(amount) || amount <= 0) return qrisString;
+  const amtStr = String(Math.round(amount));
+  const amtTag = `54${String(amtStr.length).padStart(2, '0')}${amtStr}`;
+  const tags = [];
+  let pos = 0;
+  while (pos + 4 <= qrisString.length) {
+    const id = qrisString.slice(pos, pos + 2);
+    const len = parseInt(qrisString.slice(pos + 2, pos + 4), 10);
+    if (!Number.isFinite(len) || pos + 4 + len > qrisString.length) return qrisString;
+    if (id !== '63') tags.push({ id, raw: qrisString.slice(pos, pos + 4 + len) });
+    pos += 4 + len;
+  }
+  if (pos !== qrisString.length) return qrisString;
+
+  let replaced = false;
+  const rebuilt = [];
+  for (const t of tags) {
+    if (t.id === '54') {
+      rebuilt.push(amtTag);
+      replaced = true;
+    } else {
+      if (!replaced && Number(t.id) > 54) {
+        rebuilt.push(amtTag);
+        replaced = true;
+      }
+      rebuilt.push(t.raw);
+    }
+  }
+  if (!replaced) rebuilt.push(amtTag);
+  const body = `${rebuilt.join('')}6304`;
+  return `${body}${crc16Ccitt(body)}`;
+}
+
 /**
  * Proxy gambar PNG QRIS:
- * 1) Ambil billing.qris_image_url dari VOCML (dengan X-VOCML-Key bila ada)
- * 2) Fallback: render sendiri dari billing.qris menggunakan qrcode
+ * 1) Ambil qris_image_url sesuai paket/nominal terpilih dari VOCML (dengan X-VOCML-Key bila ada)
+ * 2) Fallback: render sendiri dari QRIS string menggunakan qrcode (dengan nominal disesuaikan jika perlu)
  */
-export async function getBillingQrisPng(size = 512) {
+export async function getBillingQrisPng(size = 512, requestedAmount = null, packageId = null) {
   const billing = licenseState.billing;
   if (!billing) return null;
 
   const px = Math.min(1024, Math.max(240, Math.round(size) || 512));
+  const packages = Array.isArray(billing.packages) ? billing.packages : [];
+  const matchedPkg =
+    (packageId ? packages.find(p => p.id === packageId) : null) ||
+    (requestedAmount ? packages.find(p => Number(p.final_amount ?? p.amount) === Number(requestedAmount)) : null) ||
+    null;
 
-  // Opsi 1: Tarik dari server VOCML
-  if (billing.qris_image_url) {
+  const targetAmount = matchedPkg
+    ? Number(matchedPkg.final_amount ?? matchedPkg.amount)
+    : (requestedAmount && Number(requestedAmount) > 0 ? Number(requestedAmount) : Number(billing.amount));
+
+  // Opsi 1: Tarik dari server VOCML sesuai paket/nominal
+  const rawImageUrl = matchedPkg?.qris_image_url || billing.qris_image_url;
+  if (rawImageUrl) {
     try {
-      const url = new URL(billing.qris_image_url);
+      const url = new URL(rawImageUrl);
+      if (!matchedPkg && targetAmount > 0) {
+        url.searchParams.set('amount', String(Math.round(targetAmount)));
+      }
       if (!url.searchParams.has('size')) url.searchParams.set('size', String(px));
       const res = await fetch(url.toString(), {
         headers: VOCML_API_KEY ? { 'X-VOCML-Key': VOCML_API_KEY } : {},
@@ -241,9 +312,15 @@ export async function getBillingQrisPng(size = 512) {
   }
 
   // Opsi 2: Fallback render lokal via modul `qrcode`
-  if (billing.qris) {
+  const qrisPayload = matchedPkg?.qris
+    ? matchedPkg.qris
+    : (billing.qris && targetAmount > 0 && targetAmount !== Number(billing.amount)
+      ? patchQrisAmount(billing.qris, targetAmount)
+      : billing.qris);
+
+  if (qrisPayload) {
     try {
-      return await QRCode.toBuffer(billing.qris, {
+      return await QRCode.toBuffer(qrisPayload, {
         type: 'png',
         errorCorrectionLevel: 'M',
         margin: 2,
@@ -303,7 +380,10 @@ export function licenseMiddleware() {
     // 3. Endpoint proxy gambar QRIS PNG (Cache-Control: no-store)
     if (pathname === '/api/license/billing/qris.png') {
       const size = parseInt(parsedUrl.searchParams.get('size') || '512', 10);
-      const pngBuffer = await getBillingQrisPng(size);
+      const amountParam = parsedUrl.searchParams.get('amount');
+      const requestedAmount = amountParam ? Number(amountParam) : null;
+      const packageId = parsedUrl.searchParams.get('package_id') || null;
+      const pngBuffer = await getBillingQrisPng(size, requestedAmount, packageId);
       if (pngBuffer) {
         res.statusCode = 200;
         res.setHeader('Content-Type', 'image/png');
@@ -336,6 +416,7 @@ export function licenseMiddleware() {
       res.setHeader('Cache-Control', 'no-cache, no-transform');
       res.setHeader('Connection', 'keep-alive');
       res.setHeader('X-Accel-Buffering', 'no');
+      if (typeof res.flushHeaders === 'function') res.flushHeaders();
 
       // Kirim initial state ke client yang baru terhubung
       res.write(`event: license\ndata: ${JSON.stringify(licenseState)}\n\n`);
@@ -413,6 +494,7 @@ export function licenseMiddleware() {
       const updated = await verifikasiAplikasi();
       res.statusCode = 200;
       res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Cache-Control', 'no-store');
       res.end(JSON.stringify(updated));
       return;
     }
