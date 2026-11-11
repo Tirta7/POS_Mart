@@ -13,6 +13,7 @@ import {
   Tag,
   ArrowRight,
 } from 'lucide-react';
+import { subscribeLicenseStream } from '../utils/licenseStream';
 
 export interface LicensePackage {
   id: string;
@@ -121,6 +122,7 @@ export const LicenseLockScreen: React.FC = () => {
   const prevLockedRef = useRef<boolean | null>(null);
   const lastStateJsonRef = useRef<string>('');
   const isLockedRef = useRef<boolean>(false);
+  const lastWakeCheckRef = useRef<number>(0);
 
   const isLocked = isStateLocked(license);
   isLockedRef.current = isLocked;
@@ -230,29 +232,10 @@ export const LicenseLockScreen: React.FC = () => {
       .then(applyState)
       .catch(() => {});
 
-    // 2. Setup SSE real-time stream
-    let evtSource: EventSource | null = null;
-    let retryTimer: ReturnType<typeof setTimeout> | null = null;
-    let disposed = false;
-
-    const connectSSE = () => {
-      if (disposed) return;
-      evtSource = new EventSource('/api/license/stream');
-      evtSource.addEventListener('license', (event: MessageEvent) => {
-        if (!event.data) return;
-        try {
-          applyState(JSON.parse(event.data));
-        } catch {}
-      });
-      evtSource.onerror = () => {
-        evtSource?.close();
-        if (!disposed) {
-          retryTimer = setTimeout(connectSSE, 2500);
-        }
-      };
-    };
-
-    connectSSE();
+    // 2. Subscribe ke singleton SSE lintas tab (maksimal 1 koneksi SSE per browser)
+    const unsubscribe = subscribeLicenseStream((data) => {
+      applyState(data);
+    });
 
     // 3. Cadangan polling cepat setiap 4 detik saat terkunci (jika proxy menahan SSE)
     const pollInterval = setInterval(() => {
@@ -263,20 +246,20 @@ export const LicenseLockScreen: React.FC = () => {
         .catch(() => {});
     }, 4000);
 
-    // 4. Cek langsung ke server VOCML saat tab kembali aktif / online
+    // 4. Cek langsung ke server VOCML saat tab kembali aktif / fokus / online (baik saat terkunci maupun aktif)
     const handleWakeCheck = () => {
-      if (isLockedRef.current && document.visibilityState !== 'hidden') {
-        triggerImmediateCheck();
-      }
+      if (document.visibilityState === 'hidden') return;
+      const now = Date.now();
+      if (now - lastWakeCheckRef.current < 1500) return;
+      lastWakeCheckRef.current = now;
+      triggerImmediateCheck();
     };
     window.addEventListener('focus', handleWakeCheck);
     window.addEventListener('online', handleWakeCheck);
     document.addEventListener('visibilitychange', handleWakeCheck);
 
     return () => {
-      disposed = true;
-      evtSource?.close();
-      if (retryTimer) clearTimeout(retryTimer);
+      unsubscribe();
       clearInterval(pollInterval);
       window.removeEventListener('focus', handleWakeCheck);
       window.removeEventListener('online', handleWakeCheck);

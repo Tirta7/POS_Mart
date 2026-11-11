@@ -18,7 +18,6 @@ import EditInvoiceModal from '../../components/EditInvoiceModal';
 import SalesReturnModal from '../../components/SalesReturnModal';
 import InstallmentPaymentModal from '../../components/InstallmentPaymentModal';
 import VoidTransactionModal from '../../components/VoidTransactionModal';
-import { exportMasterExcel } from '../../utils/excelExportImport';
 
 const Reports: React.FC = () => {
   const { sales, fetchSales } = useSalesStore();
@@ -319,7 +318,8 @@ const Reports: React.FC = () => {
     setIsExportModalOpen(true);
   };
 
-  const handleDownloadExcel = () => {
+  const handleDownloadExcel = async () => {
+    const { exportMasterExcel } = await import('../../utils/excelExportImport');
     exportMasterExcel({
       storeName: appName || 'HERO PRO SHOP',
       exportedAt: new Date().toISOString(),

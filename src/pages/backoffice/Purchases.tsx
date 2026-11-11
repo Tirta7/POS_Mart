@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, lazy, Suspense } from 'react';
 import { useInventoryStore } from '../../store/useInventoryStore';
 import { useSupplierStore } from '../../store/useSupplierStore';
 import { useAuthStore } from '../../store/useAuthStore';
@@ -9,11 +9,12 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import type { StockTransaction, Supplier, VariantDraft } from '../../types';
-import BarcodeScannerCamera from '../../components/BarcodeScannerCamera';
 import VariantEditor, { makeVariantId, sumVariantQty } from '../../components/VariantEditor';
 import { generateInternalBarcode } from '../../utils/barcode';
 import { printPurchaseInvoiceA4 } from '../../utils/distributorInvoice';
 import { getProductImage } from '../../utils/defaultProductImage';
+
+const BarcodeScannerCamera = lazy(() => import('../../components/BarcodeScannerCamera'));
 
 interface CartItem {
   key: string; // productId::variantId|new:nama  (unik per baris belanja)
@@ -2425,23 +2426,25 @@ const Purchases: React.FC = () => {
           MODAL: BARCODE SCANNER CAMERA
           ===================================================================== */}
       {isScannerOpen && (
-        <BarcodeScannerCamera 
-          onScan={(decodedText) => {
-            const foundProduct = products.find(p => p.id === decodedText || p.barcode === decodedText);
-            if (foundProduct) {
-              handleAddItem(foundProduct);
+        <Suspense fallback={null}>
+          <BarcodeScannerCamera 
+            onScan={(decodedText) => {
+              const foundProduct = products.find(p => p.id === decodedText || p.barcode === decodedText);
+              if (foundProduct) {
+                handleAddItem(foundProduct);
+                setIsScannerOpen(false);
+                return foundProduct.name;
+              }
               setIsScannerOpen(false);
-              return foundProduct.name;
-            }
-            setIsScannerOpen(false);
-            
-            if (window.confirm('Produk belum terdaftar. Tambahkan sekarang sebagai produk baru?')) {
-              openNewProductDrawer(decodedText);
-            }
-            return null;
-          }} 
-          onClose={() => setIsScannerOpen(false)} 
-        />
+              
+              if (window.confirm('Produk belum terdaftar. Tambahkan sekarang sebagai produk baru?')) {
+                openNewProductDrawer(decodedText);
+              }
+              return null;
+            }} 
+            onClose={() => setIsScannerOpen(false)} 
+          />
+        </Suspense>
       )}
 
       {/* =====================================================================
@@ -2800,15 +2803,17 @@ const Purchases: React.FC = () => {
 
       {/* MODAL SCANNER KHUSUS DRAWER TAMBAH PRODUK BARU */}
       {newProdScannerOpen && (
-        <BarcodeScannerCamera
-          onScan={(decodedText) => {
-            setNewProdBarcode(decodedText);
-            if (!newProdSku) setNewProdSku(decodedText);
-            setNewProdScannerOpen(false);
-            return decodedText;
-          }}
-          onClose={() => setNewProdScannerOpen(false)}
-        />
+        <Suspense fallback={null}>
+          <BarcodeScannerCamera
+            onScan={(decodedText) => {
+              setNewProdBarcode(decodedText);
+              if (!newProdSku) setNewProdSku(decodedText);
+              setNewProdScannerOpen(false);
+              return decodedText;
+            }}
+            onClose={() => setNewProdScannerOpen(false)}
+          />
+        </Suspense>
       )}
 
       <style>{`

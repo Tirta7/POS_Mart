@@ -10,7 +10,6 @@ import {
   Search, FileText, X, User, Truck, Copy, Filter, Download, Check
 } from 'lucide-react';
 import { getSocket } from '../../utils/socket';
-import { exportMasterExcel } from '../../utils/excelExportImport';
 
 type MutType = 'IN' | 'OUT' | 'ADJUSTMENT';
 
@@ -238,7 +237,8 @@ const StockMutation: React.FC = () => {
   ];
 
   // Excel Export Handler
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
+    const { exportMasterExcel } = await import('../../utils/excelExportImport');
     exportMasterExcel({
       storeName: 'HERO PRO SHOP',
       exportedAt: new Date().toISOString(),

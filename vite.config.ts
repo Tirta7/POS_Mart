@@ -88,6 +88,14 @@ export default defineConfig({
     host: true,
     // Izinkan akses lewat tunnel (ngrok / Cloudflare Tunnel) agar iOS mendapat HTTPS valid.
     allowedHosts: true,
+    // Pre-transform rute utama saat dev server menyala agar klik Back-Office langsung instan
+    warmup: {
+      clientFiles: [
+        './src/Pos.tsx',
+        './src/pages/backoffice/Layout.tsx',
+        './src/pages/backoffice/StockManagement.tsx',
+      ],
+    },
   },
   preview: {
     host: true,

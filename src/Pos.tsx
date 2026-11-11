@@ -1443,7 +1443,7 @@ function App() {
             <Monitor size={15} color="#0284c7" />
             <span className="btn-label" style={{ color: '#0369a1', fontWeight: 600 }}>Layar CFD</span>
           </button>
-          <Link to="/backoffice" className="nav-btn" style={{ textDecoration: 'none' }}>
+          <Link to="/backoffice/stock" className="nav-btn" style={{ textDecoration: 'none' }}>
             <Settings2 size={15} className="show-mobile" />
             <span className="btn-label">Back-Office</span>
           </Link>

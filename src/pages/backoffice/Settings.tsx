@@ -23,6 +23,7 @@ import {
 import NotificationSettings from './NotificationSettings';
 import ExportImportSettings from './ExportImportSettings';
 import PrinterSettings from './PrinterSettings';
+import { subscribeLicenseStream } from '../../utils/licenseStream';
 
 const ROUNDING_OPTIONS = [
   { label: 'Tanpa Pembulatan', value: 0 },
@@ -115,17 +116,28 @@ const Settings: React.FC = () => {
   useEffect(() => {
     if (activeTab === 'license') {
       fetchLicense(false);
+      // Sekaligus sinkronkan ke server VOCML di latar belakang agar langsung terbaru
+      fetch('/api/license/check', { method: 'POST', cache: 'no-store' })
+        .then(r => r.json())
+        .then(data => { if (data) setLicenseData(data); })
+        .catch(() => {});
     }
   }, [activeTab]);
 
   // Sinkronisasi status lisensi real-time di tab Pengaturan -> Lisensi
   useEffect(() => {
+    const unsubscribe = subscribeLicenseStream((data) => {
+      if (data) setLicenseData(data);
+    });
     const handleLicenseChanged = (e: Event) => {
       const detail = (e as CustomEvent).detail;
       if (detail) setLicenseData(detail);
     };
     window.addEventListener('voc:license-changed', handleLicenseChanged);
-    return () => window.removeEventListener('voc:license-changed', handleLicenseChanged);
+    return () => {
+      unsubscribe();
+      window.removeEventListener('voc:license-changed', handleLicenseChanged);
+    };
   }, []);
 
   useEffect(() => {

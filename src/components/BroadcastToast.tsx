@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { X, AlertTriangle, Info, CheckCircle, AlertOctagon } from 'lucide-react';
+import { subscribeMessagesStream } from '../utils/licenseStream';
 
 /**
  * Notifikasi "Dynamic Island" untuk pesan yang dikirim dari VOCML dashboard.
@@ -117,7 +118,7 @@ export function BroadcastToast() {
     evaluate();
   }, [evaluate, hide]);
 
-  // Init: riwayat + snapshot awal + SSE real-time
+  // Init: riwayat + snapshot awal + shared SSE real-time
   useEffect(() => {
     lastShownRef.current = loadLastShown();
     fetch('/api/license/messages')
@@ -125,32 +126,11 @@ export function BroadcastToast() {
       .then(applyMessages)
       .catch(() => {});
 
-    let evtSource: EventSource | null = null;
-    let retry: ReturnType<typeof setTimeout> | null = null;
-    const connect = () => {
-      evtSource = new EventSource('/api/license/stream');
-      evtSource.addEventListener('messages', (event: MessageEvent) => {
-        if (!event.data) return;
-        try { applyMessages(JSON.parse(event.data)); } catch {}
-      });
-      evtSource.onmessage = (event) => {
-        if (!event.data) return;
-        try {
-          const parsed = JSON.parse(event.data);
-          if (Array.isArray(parsed) || parsed.messages) applyMessages(parsed);
-        } catch {}
-      };
-      evtSource.onerror = () => {
-        evtSource?.close();
-        retry = setTimeout(connect, 15000); // reconnect
-      };
-    };
-    connect();
+    const unsubscribe = subscribeMessagesStream(applyMessages);
 
     const tick = setInterval(evaluate, 1000);
     return () => {
-      evtSource?.close();
-      if (retry) clearTimeout(retry);
+      unsubscribe();
       clearInterval(tick);
       Object.values(hideTimersRef.current).forEach(clearTimeout);
     };

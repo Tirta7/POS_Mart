@@ -14,19 +14,34 @@ import GlobalNotification from './components/GlobalNotification';
 import BroadcastToast from './components/BroadcastToast';
 import UpdateWatcher from './components/UpdateWatcher';
 import LicenseLockScreen from './components/LicenseLockScreen';
+import BackofficeLayout from './pages/backoffice/Layout';
+import StockManagement from './pages/backoffice/StockManagement';
 
-// Code-splitting via lazy loading untuk seluruh halaman Back-Office & Login agar startup/refresh kasir instan!
-const BackofficeLayout = lazy(() => import('./pages/backoffice/Layout'));
-const StockManagement = lazy(() => import('./pages/backoffice/StockManagement'));
-const StockMutation = lazy(() => import('./pages/backoffice/StockMutation'));
-const Purchases = lazy(() => import('./pages/backoffice/Purchases'));
-const SupplierData = lazy(() => import('./pages/backoffice/SupplierData'));
-const EmployeeData = lazy(() => import('./pages/backoffice/EmployeeData'));
-const Settings = lazy(() => import('./pages/backoffice/Settings'));
-const CustomerData = lazy(() => import('./pages/backoffice/CustomerData'));
-const Reports = lazy(() => import('./pages/backoffice/Reports'));
-const LoginPage = lazy(() => import('./pages/LoginPage'));
-const CustomerFacingDisplay = lazy(() => import('./pages/CustomerFacingDisplay'));
+// Retry wrapper untuk lazy route jika koneksi sempat putus atau server baru saja restart
+function lazyWithRetry<T extends React.ComponentType<any>>(
+  factory: () => Promise<{ default: T }>
+): React.LazyExoticComponent<T> {
+  return lazy(() =>
+    factory().catch(() =>
+      new Promise<{ default: T }>((resolve, reject) => {
+        setTimeout(() => {
+          factory().then(resolve).catch(reject);
+        }, 600);
+      })
+    )
+  );
+}
+
+// Code-splitting via lazy loading untuk halaman sekunder Back-Office & Login
+const StockMutation = lazyWithRetry(() => import('./pages/backoffice/StockMutation'));
+const Purchases = lazyWithRetry(() => import('./pages/backoffice/Purchases'));
+const SupplierData = lazyWithRetry(() => import('./pages/backoffice/SupplierData'));
+const EmployeeData = lazyWithRetry(() => import('./pages/backoffice/EmployeeData'));
+const Settings = lazyWithRetry(() => import('./pages/backoffice/Settings'));
+const CustomerData = lazyWithRetry(() => import('./pages/backoffice/CustomerData'));
+const Reports = lazyWithRetry(() => import('./pages/backoffice/Reports'));
+const LoginPage = lazyWithRetry(() => import('./pages/LoginPage'));
+const CustomerFacingDisplay = lazyWithRetry(() => import('./pages/CustomerFacingDisplay'));
 
 // Fallback spinner saat transisi antar halaman
 const RouteLoading = () => (

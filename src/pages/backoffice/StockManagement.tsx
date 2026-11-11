@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, lazy, Suspense } from 'react';
 import { useInventoryStore } from '../../store/useInventoryStore';
 import { useSettingsStore } from '../../store/useSettingsStore';
 import { useDraftStore } from '../../store/useDraftStore';
@@ -8,16 +8,16 @@ import {
   Camera, Search, FileText, AlertTriangle, Printer, LayoutGrid, Package, 
   Eye, EyeOff, RefreshCw, Download, DollarSign, TrendingUp, Copy, Check, Tag, Layers 
 } from 'lucide-react';
-import BarcodeScannerCamera from '../../components/BarcodeScannerCamera';
-import BarcodeLabelModal from '../../components/BarcodeLabelModal';
-import DraftReviewDrawer from '../../components/DraftReviewDrawer';
 import { generateInternalBarcode, isInternalBarcode, generateAutoSKU } from '../../utils/barcode';
 import { recordStockMutation, makeDocNo } from '../../utils/stockMutation';
 import type { MutationLine } from '../../utils/stockMutation';
 import VariantEditor, { makeVariantId, sumVariantQty, findDuplicateVariant } from '../../components/VariantEditor';
 import type { VariantDraft } from '../../types';
-import { exportMasterExcel } from '../../utils/excelExportImport';
 import { getProductImage } from '../../utils/defaultProductImage';
+
+const BarcodeScannerCamera = lazy(() => import('../../components/BarcodeScannerCamera'));
+const BarcodeLabelModal = lazy(() => import('../../components/BarcodeLabelModal'));
+const DraftReviewDrawer = lazy(() => import('../../components/DraftReviewDrawer'));
 
 const makeGrNumber = () => {
   const d = new Date();
@@ -601,7 +601,7 @@ const StockManagement: React.FC = () => {
 
   
   // Semua item draf (datar)
-  const draftItems: any[] = (Array.isArray(drafts) ? drafts : [])
+  const draftItems: any[] = useMemo(() => (Array.isArray(drafts) ? drafts : [])
     .slice()
     .sort((a, b) => String(b?.savedAt || '').localeCompare(String(a?.savedAt || '')))
     .flatMap(d => (Array.isArray(d?.items) ? d.items : []).map((it: any) => ({
@@ -609,7 +609,7 @@ const StockManagement: React.FC = () => {
       grNumber: d?.grNumber || 'GLOBAL-DRAFT',
       draftId: d?.draftId || 'DRAFT-GLOBAL',
       savedAt: d?.savedAt || new Date().toISOString()
-    })));
+    }))), [drafts]);
 
   const toggleSelect = (id: string) =>
     setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
@@ -994,45 +994,46 @@ const StockManagement: React.FC = () => {
   };
 
   // Combine database products with pending draft items
-  const pendingDisplayProducts = draftItems.map(si => ({
-    id: si.id,
-    sku: si.sku,
-    barcode: si.barcode,
-    name: si.name,
-    category: si.category,
-    location: si.location,
-    unit: si.unit,
-    stock: si.qty,
-    purchasePrice: si.purchasePrice,
-    sellingPrice: si.sellingPrice,
-    wholesalePrice: si.wholesalePrice,
-    minWholesaleQty: si.minWholesaleQty || 0,
-    minStock: si.minStock,
-    image: si.image,
-    boxBarcode: si.boxBarcode || si.barcode,
-    boxCapacity: si.boxCapacity || 40,
-    boxPrice: si.boxPrice || 0,
-    boxPurchasePrice: si.boxPurchasePrice || undefined,
-    midUnitName: si.midUnitName || '',
-    midBarcode: si.midBarcode || '',
-    midCapacity: Number(si.midCapacity || 0),
-    midPrice: Number(si.midPrice || 0),
-    retailBarcode: si.retailBarcode || '',
-    variants: (si.variants || []).map((v: any) => ({
-      id: v.id,
-      name: v.name,
-      barcode: v.barcode || '',
-      sku: v.sku || '',
-      stock: Number(v.qty) || 0,
-      sellingPrice: Number(v.sellingPrice) || 0,
-      wholesalePrice: Number(v.wholesalePrice) || 0,
-      minWholesaleQty: Number(v.minWholesaleQty) || 0
-    })),
-    isActive: true,
-    isPending: true
-  }));
-
-  const allDisplayProducts = [...pendingDisplayProducts, ...products];
+  const allDisplayProducts = useMemo(() => {
+    const pendingDisplayProducts = draftItems.map(si => ({
+      id: si.id,
+      sku: si.sku,
+      barcode: si.barcode,
+      name: si.name,
+      category: si.category,
+      location: si.location,
+      unit: si.unit,
+      stock: si.qty,
+      purchasePrice: si.purchasePrice,
+      sellingPrice: si.sellingPrice,
+      wholesalePrice: si.wholesalePrice,
+      minWholesaleQty: si.minWholesaleQty || 0,
+      minStock: si.minStock,
+      image: si.image,
+      boxBarcode: si.boxBarcode || si.barcode,
+      boxCapacity: si.boxCapacity || 40,
+      boxPrice: si.boxPrice || 0,
+      boxPurchasePrice: si.boxPurchasePrice || undefined,
+      midUnitName: si.midUnitName || '',
+      midBarcode: si.midBarcode || '',
+      midCapacity: Number(si.midCapacity || 0),
+      midPrice: Number(si.midPrice || 0),
+      retailBarcode: si.retailBarcode || '',
+      variants: (si.variants || []).map((v: any) => ({
+        id: v.id,
+        name: v.name,
+        barcode: v.barcode || '',
+        sku: v.sku || '',
+        stock: Number(v.qty) || 0,
+        sellingPrice: Number(v.sellingPrice) || 0,
+        wholesalePrice: Number(v.wholesalePrice) || 0,
+        minWholesaleQty: Number(v.minWholesaleQty) || 0
+      })),
+      isActive: true,
+      isPending: true
+    }));
+    return [...pendingDisplayProducts, ...products];
+  }, [draftItems, products]);
 
   // Dynamic list of categories from both store categories and active products with case-insensitive deduplication
   const categoryMap = new Map<string, string>();
@@ -1092,12 +1093,38 @@ const StockManagement: React.FC = () => {
     }).length;
   }, [products]);
 
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
+    const { exportMasterExcel } = await import('../../utils/excelExportImport');
     exportMasterExcel({
       storeName: appName || 'HERO PRO SHOP',
       exportedAt: new Date().toISOString(),
       products: products
     }, `Master_Stok_Produk_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
+  // Hitung jumlah produk per kategori dalam satu pass O(N)
+  const categoryCounts = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const p of allDisplayProducts) {
+      if (p.category) {
+        const key = p.category.toLowerCase();
+        map.set(key, (map.get(key) || 0) + 1);
+      }
+    }
+    return map;
+  }, [allDisplayProducts]);
+
+  // Render bertahap agar masuk Back-Office tetap instan meski produk ribuan
+  const [visibleLimit, setVisibleLimit] = useState(80);
+  React.useEffect(() => {
+    setVisibleLimit(80);
+  }, [currentCategory, searchQuery, stockFilter, showInactive]);
+
+  const handleListScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 240) {
+      setVisibleLimit((prev) => (prev < filteredProducts.length ? prev + 80 : prev));
+    }
   };
 
   const filteredProducts = allDisplayProducts.filter(p => {
@@ -1528,7 +1555,7 @@ const StockManagement: React.FC = () => {
             </span>
           </button>
           {displayCategories.map(cat => {
-            const count = allDisplayProducts.filter(p => p.category && p.category.toLowerCase() === cat.toLowerCase()).length;
+            const count = categoryCounts.get(cat.toLowerCase()) || 0;
             const isActive = currentCategory.toLowerCase() === cat.toLowerCase();
             return (
               <button
@@ -1567,7 +1594,7 @@ const StockManagement: React.FC = () => {
               flexDirection: 'column'
             }}
           >
-            <div style={{ flex: 1, overflow: 'auto' }}>
+            <div style={{ flex: 1, overflow: 'auto' }} onScroll={handleListScroll}>
               <table
                 style={{
                   width: '100%',
@@ -1605,7 +1632,7 @@ const StockManagement: React.FC = () => {
                       </td>
                     </tr>
                   ) : (
-                    filteredProducts.map((p, idx) => {
+                    filteredProducts.slice(0, visibleLimit).map((p, idx) => {
                       const cost = Number(p.purchasePrice) || 0;
                       const sell = Number(p.sellingPrice) || 0;
                       const profit = sell - cost;
@@ -2192,6 +2219,32 @@ const StockManagement: React.FC = () => {
                       );
                     })
                   )}
+                  {filteredProducts.length > visibleLimit && (
+                    <tr>
+                      <td colSpan={10} style={{ textAlign: 'center', padding: '14px', background: '#f8fafc' }}>
+                        <button
+                          type="button"
+                          onClick={() => setVisibleLimit(prev => prev + 120)}
+                          style={{
+                            background: '#ffffff', border: '1px solid #cbd5e1', color: '#334155',
+                            padding: '6px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', marginRight: '8px'
+                          }}
+                        >
+                          Muat 120 Lagi ({filteredProducts.length - visibleLimit} tersisa)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setVisibleLimit(filteredProducts.length)}
+                          style={{
+                            background: '#0f172a', border: 'none', color: '#ffffff',
+                            padding: '6px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, cursor: 'pointer'
+                          }}
+                        >
+                          Tampilkan Semua ({filteredProducts.length})
+                        </button>
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -2216,7 +2269,7 @@ const StockManagement: React.FC = () => {
           /* ===================================================================
              MOBILE CARD LIST (KHUSUS IOS & ANDROID)
              =================================================================== */
-          <div className="mobile-cards-view stock-mobile-list" style={{ overflowY: 'auto', WebkitOverflowScrolling: 'touch', padding: '12px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div className="mobile-cards-view stock-mobile-list" onScroll={handleListScroll} style={{ overflowY: 'auto', WebkitOverflowScrolling: 'touch', padding: '12px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {filteredProducts.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '48px 16px', background: 'white', borderRadius: '16px', border: '0.5px solid rgba(60,60,67,0.12)' }}>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
@@ -2226,7 +2279,7 @@ const StockManagement: React.FC = () => {
               </div>
             </div>
           ) : (
-            filteredProducts.map(p => {
+            filteredProducts.slice(0, visibleLimit).map(p => {
               const cost = Number(p.purchasePrice) || 0;
               const sell = Number(p.sellingPrice) || 0;
               const profit = sell - cost;
@@ -2411,6 +2464,30 @@ const StockManagement: React.FC = () => {
                 </div>
               );
             })
+          )}
+          {filteredProducts.length > visibleLimit && (
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', padding: '8px 0 16px' }}>
+              <button
+                type="button"
+                onClick={() => setVisibleLimit(prev => prev + 120)}
+                style={{
+                  background: '#ffffff', border: '1px solid #cbd5e1', color: '#334155',
+                  padding: '8px 14px', borderRadius: '10px', fontSize: '12px', fontWeight: 700, cursor: 'pointer'
+                }}
+              >
+                Muat 120 Lagi ({filteredProducts.length - visibleLimit})
+              </button>
+              <button
+                type="button"
+                onClick={() => setVisibleLimit(filteredProducts.length)}
+                style={{
+                  background: '#0f172a', border: 'none', color: '#ffffff',
+                  padding: '8px 14px', borderRadius: '10px', fontSize: '12px', fontWeight: 700, cursor: 'pointer'
+                }}
+              >
+                Semua ({filteredProducts.length})
+              </button>
+            </div>
           )}
         </div>
       )}
@@ -2873,87 +2950,89 @@ const StockManagement: React.FC = () => {
       })()}
 
       {/* ===== DRAWER KANAN: DETAIL / REVIEW ITEM DRAF ===== */}
-      {reviewItems && (
-        <DraftReviewDrawer
-          items={reviewItems}
-          mode={reviewMode}
-          categories={categories}
-          onSaveItem={handleSaveDraftItem}
-          onClose={() => setReviewItems(null)}
-          onOpenDraftList={() => {
-            setReviewItems(null);
-            setShowDraftModal(true);
-          }}
-          onRemoveItem={(id) => {
-            const next = reviewItems.filter(i => i.id !== id);
-            setSelectedIds(prev => prev.filter(x => x !== id));
-            setReviewItems(next.length > 0 ? next : null);
-          }}
-          onPost={handlePostFromDrawer}
-        />
-      )}
+      <Suspense fallback={null}>
+        {reviewItems && (
+          <DraftReviewDrawer
+            items={reviewItems}
+            mode={reviewMode}
+            categories={categories}
+            onSaveItem={handleSaveDraftItem}
+            onClose={() => setReviewItems(null)}
+            onOpenDraftList={() => {
+              setReviewItems(null);
+              setShowDraftModal(true);
+            }}
+            onRemoveItem={(id) => {
+              const next = reviewItems.filter(i => i.id !== id);
+              setSelectedIds(prev => prev.filter(x => x !== id));
+              setReviewItems(next.length > 0 ? next : null);
+            }}
+            onPost={handlePostFromDrawer}
+          />
+        )}
 
-      {/* CETAK LABEL BARCODE */}
-      {labelProduct && (
-        <BarcodeLabelModal
-          product={labelProduct}
-          initialCopies={labelCopies}
-          initialTier={labelTier}
-          onClose={() => setLabelProduct(null)}
-        />
-      )}
+        {/* CETAK LABEL BARCODE */}
+        {labelProduct && (
+          <BarcodeLabelModal
+            product={labelProduct}
+            initialCopies={labelCopies}
+            initialTier={labelTier}
+            onClose={() => setLabelProduct(null)}
+          />
+        )}
 
-      {/* CAMERA SCANNER MODAL */}
-      {cameraScannerOpen && (
-        <BarcodeScannerCamera 
-          onScan={(decodedText) => {
-            const scannedCode = decodedText.trim();
-            if (isFormOpen) {
-              setCameraScannerOpen(false);
-              if (scannerTarget === 'retail') {
-                setRetailBarcode(scannedCode);
-              } else if (scannerTarget === 'mid') {
-                setMidBarcode(scannedCode);
-              } else {
-                setBoxBarcode(scannedCode);
-                setProductId(scannedCode);
-                if (editingId) {
-                  const isDuplicate = products.some(p => p.id !== editingId && (p.id === scannedCode || p.barcode === scannedCode || p.boxBarcode === scannedCode));
-                  if (isDuplicate) {
-                    alert(`Peringatan: Barcode "${scannedCode}" sudah digunakan oleh produk lain!`);
-                  }
+        {/* CAMERA SCANNER MODAL */}
+        {cameraScannerOpen && (
+          <BarcodeScannerCamera 
+            onScan={(decodedText) => {
+              const scannedCode = decodedText.trim();
+              if (isFormOpen) {
+                setCameraScannerOpen(false);
+                if (scannerTarget === 'retail') {
+                  setRetailBarcode(scannedCode);
+                } else if (scannerTarget === 'mid') {
+                  setMidBarcode(scannedCode);
                 } else {
-                  const foundProduct = products.find(p => p.id === scannedCode || p.barcode === scannedCode || p.boxBarcode === scannedCode || p.retailBarcode === scannedCode);
-                  if (foundProduct) {
-                    if (confirm(`Barcode "${scannedCode}" sudah terdaftar sebagai "${foundProduct.name}". Buka data produk ini untuk diedit?`)) {
-                      handleEditClick(foundProduct);
+                  setBoxBarcode(scannedCode);
+                  setProductId(scannedCode);
+                  if (editingId) {
+                    const isDuplicate = products.some(p => p.id !== editingId && (p.id === scannedCode || p.barcode === scannedCode || p.boxBarcode === scannedCode));
+                    if (isDuplicate) {
+                      alert(`Peringatan: Barcode "${scannedCode}" sudah digunakan oleh produk lain!`);
+                    }
+                  } else {
+                    const foundProduct = products.find(p => p.id === scannedCode || p.barcode === scannedCode || p.boxBarcode === scannedCode || p.retailBarcode === scannedCode);
+                    if (foundProduct) {
+                      if (confirm(`Barcode "${scannedCode}" sudah terdaftar sebagai "${foundProduct.name}". Buka data produk ini untuk diedit?`)) {
+                        handleEditClick(foundProduct);
+                      }
                     }
                   }
                 }
+                return scannedCode;
               }
-              return scannedCode;
-            }
 
-            // Jika drawer form TIDAK terbuka (scan langsung dari tombol scan navbar/header):
-            const foundProduct = products.find(p => p.id === scannedCode || p.barcode === scannedCode || p.boxBarcode === scannedCode || p.retailBarcode === scannedCode || p.midBarcode === scannedCode);
-            if (foundProduct) {
-              openRestockModal(foundProduct);
-              setProductId('');
-              setCameraScannerOpen(false);
-              return foundProduct.name;
-            } else {
-              setCameraScannerOpen(false);
-              resetForm();
-              setProductId(scannedCode);
-              setBoxBarcode(scannedCode);
-              setSku(scannedCode);
-              setIsFormOpen(true);
-              return null;
-            }
-          }} 
-          onClose={() => setCameraScannerOpen(false)} 
-        />
-      )}
+              // Jika drawer form TIDAK terbuka (scan langsung dari tombol scan navbar/header):
+              const foundProduct = products.find(p => p.id === scannedCode || p.barcode === scannedCode || p.boxBarcode === scannedCode || p.retailBarcode === scannedCode || p.midBarcode === scannedCode);
+              if (foundProduct) {
+                openRestockModal(foundProduct);
+                setProductId('');
+                setCameraScannerOpen(false);
+                return foundProduct.name;
+              } else {
+                setCameraScannerOpen(false);
+                resetForm();
+                setProductId(scannedCode);
+                setBoxBarcode(scannedCode);
+                setSku(scannedCode);
+                setIsFormOpen(true);
+                return null;
+              }
+            }} 
+            onClose={() => setCameraScannerOpen(false)} 
+          />
+        )}
+      </Suspense>
       {/* ===== IOS STYLE DRAWER: FORM TAMBAH / EDIT PRODUK ===== */}
       {isFormOpen && (
         <div className="ios-modal-overlay" style={{

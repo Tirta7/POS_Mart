@@ -166,8 +166,8 @@ export async function verifikasiAplikasi() {
       return licenseState;
     }
 
-    // Cek setiap 30 detik (jika aktif) atau 5 detik (jika terkunci) agar pembukaan kunci QRIS real-time
-    const nextInterval = licenseState?.allowed ? 30000 : 5000;
+    // Cek setiap 5 detik (aktif) atau 4 detik (terkunci) agar perubahan dari VOCML maupun QRIS langsung real-time
+    const nextInterval = licenseState?.allowed ? 5000 : 4000;
     checkTimer = setTimeout(() => { verifikasiAplikasi(); }, nextInterval);
     if (checkTimer?.unref) checkTimer.unref();
 
@@ -424,9 +424,10 @@ export function licenseMiddleware() {
       res.write(`data: ${JSON.stringify(messagesState)}\n\n`);
 
       sseClients.add(res);
-      req.on('close', () => {
-        sseClients.delete(res);
-      });
+      const cleanup = () => { sseClients.delete(res); };
+      req.on('close', cleanup);
+      res.on('close', cleanup);
+      res.on('error', cleanup);
       return;
     }
 
