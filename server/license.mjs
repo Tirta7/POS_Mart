@@ -96,6 +96,143 @@ let checkTimer = null;
 let messagesTimer = null;
 let lastLoggedStatus = null;
 let verifyInFlight = null;
+let lastLockedSnapshot = null;
+
+function toWibDayIndex(isoOrYmd) {
+  if (!isoOrYmd) return null;
+  const raw = String(isoOrYmd).trim();
+  let ymd = '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    ymd = raw;
+  } else {
+    const d = new Date(raw);
+    if (Number.isNaN(d.getTime())) return null;
+    ymd = d.toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
+  }
+  const ms = Date.parse(`${ymd}T00:00:00Z`);
+  return Number.isFinite(ms) ? Math.round(ms / 86400000) : null;
+}
+
+function buildCanonicalUnlockReceipt(nextLicense, { manualActivation = false } = {}) {
+  const prevSnap = lastLockedSnapshot;
+  const prevBilling = prevSnap?.billing || null;
+  const packages = Array.isArray(prevBilling?.packages) ? prevBilling.packages : [];
+
+  const now = new Date();
+  const ymd = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' }).replace(/-/g, '');
+  const hm = now.toLocaleTimeString('id-ID', {
+    timeZone: 'Asia/Jakarta',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).replace(/\D/g, '');
+  const mid = String(nextLicense.machineId || 'POS').replace(/[^A-Za-z0-9]/g, '').slice(-4).toUpperCase() || '0001';
+  const paidAtText = now.toLocaleString('id-ID', {
+    timeZone: 'Asia/Jakarta',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).replace(/\./g, ':');
+
+  // 1. Jika server VOCML langsung mengirimkan metadata pembayaran terakhir
+  const serverPayment = nextLicense.lastPayment && typeof nextLicense.lastPayment === 'object'
+    ? nextLicense.lastPayment
+    : null;
+
+  const todayDay = toWibDayIndex(now.toISOString());
+  const prevExpDay = toWibDayIndex(prevSnap?.expiresAt);
+  const newExpDay = toWibDayIndex(nextLicense.expiresAt);
+  const baseDay = (prevExpDay !== null && todayDay !== null && prevExpDay > todayDay) ? prevExpDay : todayDay;
+  const addedDays = (newExpDay !== null && baseDay !== null)
+    ? Math.max(0, newExpDay - baseDay)
+    : Math.max(0, Number(nextLicense.daysLeft) || 0);
+
+  let matchedPkg = null;
+  if (!manualActivation && packages.length > 0) {
+    if (serverPayment?.package_id) {
+      matchedPkg = packages.find(p => p.id === serverPayment.package_id) || null;
+    } else if (serverPayment?.amount && Number(serverPayment.amount) > 0) {
+      matchedPkg = packages.find(p => Number(p.final_amount ?? p.amount) === Number(serverPayment.amount)) || null;
+    } else if (serverPayment?.days && Number(serverPayment.days) > 0) {
+      matchedPkg = packages.find(p => Number(p.days) === Number(serverPayment.days)) || null;
+    } else if (addedDays > 0) {
+      let bestDiff = Infinity;
+      for (const p of packages) {
+        const diff = Math.abs(Number(p.days) - addedDays);
+        if (diff <= 1 && diff < bestDiff) {
+          bestDiff = diff;
+          matchedPkg = p;
+        }
+      }
+    }
+  }
+
+  const amountNumber = manualActivation
+    ? 0
+    : matchedPkg
+    ? Number(matchedPkg.final_amount ?? matchedPkg.amount)
+    : Number(serverPayment?.final_amount ?? serverPayment?.amount ?? 0);
+
+  const amountText = manualActivation
+    ? ''
+    : matchedPkg?.amount_text ||
+      serverPayment?.amount_text ||
+      (amountNumber > 0 ? `Rp${Math.round(amountNumber).toLocaleString('id-ID')}` : '');
+
+  const uniqueCode = manualActivation
+    ? 0
+    : Number(matchedPkg?.unique_code ?? serverPayment?.unique_code ?? (amountNumber > 0 ? prevBilling?.unique_code : 0) ?? 0);
+
+  const packageLabel =
+    matchedPkg?.label ||
+    serverPayment?.label ||
+    (addedDays > 0
+      ? `${addedDays} Hari`
+      : nextLicense.daysLeft != null
+      ? `${nextLicense.daysLeft} Hari`
+      : 'Aktivasi Lisensi');
+
+  return {
+    invoiceNumber: serverPayment?.invoice_number || `INV/VOCML/${ymd}/${mid}-${hm}`,
+    method: manualActivation ? 'manual' : (amountNumber > 0 ? 'qris' : 'admin'),
+    paidAt: paidAtText,
+    addedDays,
+    packageId: matchedPkg?.id || serverPayment?.package_id || null,
+    packageLabel,
+    amountNumber,
+    amountText,
+    uniqueCode,
+    merchantName: prevBilling?.merchant_name || 'VIRTUAL OPERATION CONTROL',
+    adminContact: prevBilling?.contact || '',
+  };
+}
+
+function applyServerLicenseState(nextLisensi, { manualActivation = false } = {}) {
+  const prevWasLocked = licenseState.allowed === false;
+  let unlockReceipt = licenseState.unlockReceipt || null;
+
+  if (!nextLisensi.allowed) {
+    unlockReceipt = null;
+    lastLockedSnapshot = {
+      expiresAt: nextLisensi.expiresAt || null,
+      daysLeft: nextLisensi.daysLeft ?? null,
+      billing: nextLisensi.billing || lastLockedSnapshot?.billing || null,
+    };
+  } else if (prevWasLocked) {
+    unlockReceipt = buildCanonicalUnlockReceipt(nextLisensi, { manualActivation });
+    lastLockedSnapshot = null;
+  }
+
+  licenseState = {
+    ...nextLisensi,
+    lockReason: nextLisensi.lockReason || (nextLisensi.status === 'locked' ? (nextLisensi.reason || 'Aplikasi dikunci') : ''),
+    unlockReceipt: nextLisensi.allowed ? unlockReceipt : null,
+  };
+  return licenseState;
+}
 
 /** Verifikasi lisensi ke VOCML atau offline cache */
 export async function verifikasiAplikasi() {
@@ -134,10 +271,7 @@ export async function verifikasiAplikasi() {
         appVersion: '1.0.0',
       });
 
-      licenseState = {
-        ...lisensi,
-        lockReason: lisensi.lockReason || (lisensi.status === 'locked' ? (lisensi.reason || 'Aplikasi dikunci') : ''),
-      };
+      applyServerLicenseState(lisensi);
 
       if (!lisensi.allowed) {
         if (lastLoggedStatus !== 'denied_' + lisensi.status) {
@@ -445,10 +579,7 @@ export function licenseMiddleware() {
           cacheFile: CACHE_FILE,
           apiKey: VOCML_API_KEY,
         });
-        licenseState = {
-          ...result,
-          lockReason: result.lockReason || '',
-        };
+        applyServerLicenseState(result, { manualActivation: true });
         broadcastLicense(licenseState);
         res.statusCode = 200;
         res.setHeader('Content-Type', 'application/json');
@@ -460,7 +591,7 @@ export function licenseMiddleware() {
           const v = verifyLicenseKey(key, mid, VOCML_PRODUCT, PUBLIC_KEY);
           if (v.valid && !v.expired) {
             saveOfflineKey(OFFLINE_FILE, key);
-            licenseState = {
+            applyServerLicenseState({
               allowed: true,
               status: 'active',
               reason: 'Aktivasi offline (server lisensi tidak terjangkau)',
@@ -471,7 +602,7 @@ export function licenseMiddleware() {
               lockReason: '',
               billing: null,
               offline: true,
-            };
+            }, { manualActivation: true });
             broadcastLicense(licenseState);
             res.statusCode = 200;
             res.setHeader('Content-Type', 'application/json');

@@ -193,6 +193,7 @@ export async function checkLicense({
       daysLeft: payload.days_left ?? null,
       licenseKey: payload.license_key,
       lockReason: '',
+      lastPayment: body.last_payment || body.payment || payload.last_payment || null,
       // Jangan tampilkan QRIS saat status aktif / segera berakhir
       billing: null,
     });

@@ -12,8 +12,14 @@ import {
   Lock,
   Tag,
   ArrowRight,
+  ShieldCheck,
+  CalendarCheck2,
+  Receipt,
+  Download,
 } from 'lucide-react';
 import { subscribeLicenseStream } from '../utils/licenseStream';
+import { useSettingsStore } from '../store/useSettingsStore';
+import { downloadLicenseInvoicePdf } from '../utils/licenseInvoice';
 
 export interface LicensePackage {
   id: string;
@@ -51,6 +57,20 @@ export interface LicenseBilling {
   contact: string;
 }
 
+export interface UnlockReceiptPayload {
+  invoiceNumber: string;
+  method: 'qris' | 'manual' | 'admin';
+  paidAt: string;
+  addedDays?: number;
+  packageId?: string | null;
+  packageLabel: string;
+  amountNumber: number;
+  amountText: string;
+  uniqueCode: number;
+  merchantName: string;
+  adminContact?: string;
+}
+
 export interface LicenseState {
   allowed: boolean;
   status: 'active' | 'expiring' | 'expired' | 'locked' | 'pending' | 'offline';
@@ -61,6 +81,7 @@ export interface LicenseState {
   daysLeft?: number | null;
   licenseKey?: string | null;
   billing?: LicenseBilling | null;
+  unlockReceipt?: UnlockReceiptPayload | null;
   offline?: boolean;
 }
 
@@ -71,6 +92,68 @@ const toWaNumber = (contact: string) => {
 
 const formatRupiah = (amount: number) =>
   `Rp${Math.round(amount || 0).toLocaleString('id-ID')}`;
+
+const formatIndoDate = (iso?: string | null) => {
+  if (!iso) return '-';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString('id-ID', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  });
+};
+
+const formatDateTimeNow = () =>
+  new Date().toLocaleString('id-ID', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).replace(/\./g, ':');
+
+const buildInvoiceNumber = (machineId: string) => {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  const tail = String(machineId || 'POS').replace(/[^A-Za-z0-9]/g, '').slice(-4).toUpperCase() || '0001';
+  const timeCode = `${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}`;
+  return `INV/VOCML/${y}${m}${day}/${tail}-${timeCode}`;
+};
+
+const toWibDayIndex = (isoOrYmd?: string | null): number | null => {
+  if (!isoOrYmd) return null;
+  const raw = String(isoOrYmd).trim();
+  let ymd = '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    ymd = raw;
+  } else {
+    const d = new Date(raw);
+    if (Number.isNaN(d.getTime())) return null;
+    ymd = d.toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
+  }
+  const ms = Date.parse(`${ymd}T00:00:00Z`);
+  return Number.isFinite(ms) ? Math.round(ms / 86400000) : null;
+};
+
+interface UnlockSuccessInfo {
+  invoiceNumber: string;
+  method: 'qris' | 'manual' | 'admin';
+  paidAt: string;
+  packageLabel: string;
+  amountNumber: number;
+  amountText: string;
+  uniqueCode: number;
+  merchantName: string;
+  adminContact?: string;
+  machineId: string;
+  expiresAt?: string | null;
+  daysLeft?: number | null;
+  licenseKey?: string | null;
+}
 
 const isStateLocked = (data: LicenseState | null): boolean =>
   data !== null &&
@@ -118,14 +201,41 @@ export const LicenseLockScreen: React.FC = () => {
   const [activateMsg, setActivateMsg] = useState<{ text: string; isError: boolean } | null>(null);
   const [checkingNow, setCheckingNow] = useState(false);
   const [checkMsg, setCheckMsg] = useState<{ text: string; isError: boolean } | null>(null);
+  const appName = useSettingsStore((s) => s.appName);
+  const [unlockSuccess, setUnlockSuccess] = useState<UnlockSuccessInfo | null>(null);
+  const [downloadingInvoice, setDownloadingInvoice] = useState(false);
 
   const prevLockedRef = useRef<boolean | null>(null);
   const lastStateJsonRef = useRef<string>('');
   const isLockedRef = useRef<boolean>(false);
   const lastWakeCheckRef = useRef<number>(0);
+  const machineIdRef = useRef<string>('');
+  const pendingUnlockMethodRef = useRef<'qris' | 'manual'>('qris');
+  const unlockBillingSnapRef = useRef<{
+    hadBilling: boolean;
+    prevExpiresAt: string | null;
+    packages: LicensePackage[];
+    packageLabel: string;
+    amountNumber: number;
+    amountText: string;
+    uniqueCode: number;
+    merchantName: string;
+    adminContact: string;
+  }>({
+    hadBilling: false,
+    prevExpiresAt: null,
+    packages: [],
+    packageLabel: '',
+    amountNumber: 0,
+    amountText: '',
+    uniqueCode: 0,
+    merchantName: '',
+    adminContact: '',
+  });
 
   const isLocked = isStateLocked(license);
   isLockedRef.current = isLocked;
+  if (license?.machineId) machineIdRef.current = license.machineId;
 
   const billing: LicenseBilling | null =
     isLocked && (license?.status === 'locked' || license?.status === 'expired')
@@ -137,27 +247,37 @@ export const LicenseLockScreen: React.FC = () => {
     [billing?.packages]
   );
 
-  // Pilih paket default saat billing pertama kali tersedia, pertahankan pilihan user saat polling
+  const defaultPkg = useMemo(() => {
+    if (packages.length === 0) return null;
+    const pkg30 = packages.find(
+      (p) => Number(p.days) === 30 || /30\s*hari/i.test(p.label || p.name || '') || /30d/i.test(p.id)
+    );
+    if (pkg30) return pkg30;
+    if (billing?.package?.id) {
+      const fromBilling = packages.find((p) => p.id === billing.package?.id);
+      if (fromBilling) return fromBilling;
+    }
+    const byAmount = packages.find(
+      (p) => Number(p.final_amount ?? p.amount) === Number(billing?.amount)
+    );
+    return byAmount || packages[0];
+  }, [packages, billing?.package?.id, billing?.amount]);
+
+  // Pilih paket default 30 Hari saat billing pertama kali tersedia, pertahankan pilihan user saat polling
   useEffect(() => {
-    if (packages.length === 0) {
+    if (!defaultPkg) {
       setSelectedPkgId(null);
       return;
     }
     setSelectedPkgId((prev) => {
       if (prev && packages.some((p) => p.id === prev)) return prev;
-      if (billing?.package?.id && packages.some((p) => p.id === billing.package?.id)) {
-        return billing.package.id!;
-      }
-      const byAmount = packages.find(
-        (p) => Number(p.final_amount ?? p.amount) === Number(billing?.amount)
-      );
-      return byAmount?.id || packages[0].id;
+      return defaultPkg.id;
     });
-  }, [packages, billing?.package?.id, billing?.amount]);
+  }, [packages, defaultPkg]);
 
   const selectedPkg = useMemo(
-    () => packages.find((p) => p.id === selectedPkgId) || packages[0] || null,
-    [packages, selectedPkgId]
+    () => packages.find((p) => p.id === selectedPkgId) || defaultPkg || null,
+    [packages, selectedPkgId, defaultPkg]
   );
 
   const activeAmount = selectedPkg
@@ -171,6 +291,21 @@ export const LicenseLockScreen: React.FC = () => {
     selectedPkg?.label || billing?.package?.label || '';
 
   const uniqueCode = Number(selectedPkg?.unique_code ?? billing?.unique_code ?? 0);
+
+  useEffect(() => {
+    if (!isLocked) return;
+    unlockBillingSnapRef.current = {
+      hadBilling: Boolean(billing),
+      prevExpiresAt: license?.expiresAt || null,
+      packages,
+      packageLabel: activeDurationLabel || (license?.daysLeft ? `${license.daysLeft} Hari` : ''),
+      amountNumber: billing ? Math.round(activeAmount || 0) : 0,
+      amountText: billing ? activeAmountText : '',
+      uniqueCode: billing ? uniqueCode : 0,
+      merchantName: billing?.merchant_name || 'VOCML Payment',
+      adminContact: billing?.contact || '',
+    };
+  }, [isLocked, billing, packages, license?.expiresAt, activeDurationLabel, activeAmount, activeAmountText, uniqueCode, license?.daysLeft]);
 
   const qrisImageSrc = useMemo(() => {
     if (!billing || !activeAmount) return '';
@@ -201,9 +336,85 @@ export const LicenseLockScreen: React.FC = () => {
       window.dispatchEvent(new CustomEvent('voc:license-changed', { detail: data }));
     }
 
+    if (newLocked) {
+      setUnlockSuccess(null);
+    }
+
     if (wasLocked === true && !newLocked) {
       setCheckMsg(null);
       setActivateMsg(null);
+      const snap = unlockBillingSnapRef.current;
+      const localMethod = pendingUnlockMethodRef.current;
+      pendingUnlockMethodRef.current = 'qris';
+      const resolvedMachineId = data.machineId || machineIdRef.current || '-';
+      const srvReceipt = data.unlockReceipt;
+
+      if (srvReceipt) {
+        setUnlockSuccess({
+          invoiceNumber: srvReceipt.invoiceNumber || buildInvoiceNumber(resolvedMachineId),
+          method: localMethod === 'manual' ? 'manual' : (srvReceipt.method || 'qris'),
+          paidAt: srvReceipt.paidAt || formatDateTimeNow(),
+          packageLabel: srvReceipt.packageLabel,
+          amountNumber: localMethod === 'manual' ? 0 : (srvReceipt.amountNumber || 0),
+          amountText: localMethod === 'manual' ? '' : (srvReceipt.amountText || ''),
+          uniqueCode: localMethod === 'manual' ? 0 : (srvReceipt.uniqueCode || 0),
+          merchantName: srvReceipt.merchantName || snap.merchantName || 'VOCML Payment',
+          adminContact: srvReceipt.adminContact || snap.adminContact || '',
+          machineId: resolvedMachineId,
+          expiresAt: data.expiresAt || null,
+          daysLeft: data.daysLeft ?? null,
+          licenseKey: data.licenseKey || null,
+        });
+      } else {
+        // Fallback jika endpoint tidak menyertakan unlockReceipt: cocokkan paket dari penambahan hari lisensi
+        const todayDay = toWibDayIndex(new Date().toISOString());
+        const prevExpDay = toWibDayIndex(snap.prevExpiresAt);
+        const newExpDay = toWibDayIndex(data.expiresAt);
+        const baseDay = (prevExpDay !== null && todayDay !== null && prevExpDay > todayDay) ? prevExpDay : todayDay;
+        const addedDays = (newExpDay !== null && baseDay !== null)
+          ? Math.max(0, newExpDay - baseDay)
+          : Math.max(0, Number(data.daysLeft) || 0);
+
+        let matchedPkg: LicensePackage | null = null;
+        if (localMethod !== 'manual' && addedDays > 0 && snap.packages.length > 0) {
+          let bestDiff = Infinity;
+          for (const p of snap.packages) {
+            const diff = Math.abs(Number(p.days) - addedDays);
+            if (diff <= 1 && diff < bestDiff) {
+              bestDiff = diff;
+              matchedPkg = p;
+            }
+          }
+        }
+
+        const resolvedAmt = localMethod === 'manual'
+          ? 0
+          : matchedPkg
+          ? Number(matchedPkg.final_amount ?? matchedPkg.amount)
+          : 0;
+
+        setUnlockSuccess({
+          invoiceNumber: buildInvoiceNumber(resolvedMachineId),
+          method: localMethod === 'manual' ? 'manual' : (matchedPkg ? 'qris' : 'admin'),
+          paidAt: formatDateTimeNow(),
+          packageLabel:
+            matchedPkg?.label ||
+            (addedDays > 0 ? `${addedDays} Hari` : data.daysLeft != null ? `${data.daysLeft} Hari` : 'Aktivasi Lisensi'),
+          amountNumber: resolvedAmt,
+          amountText:
+            localMethod === 'manual'
+              ? ''
+              : matchedPkg?.amount_text || (resolvedAmt > 0 ? formatRupiah(resolvedAmt) : ''),
+          uniqueCode: localMethod === 'manual' ? 0 : Number(matchedPkg?.unique_code ?? (matchedPkg ? snap.uniqueCode : 0)),
+          merchantName: snap.merchantName || 'VOCML Payment',
+          adminContact: snap.adminContact || '',
+          machineId: resolvedMachineId,
+          expiresAt: data.expiresAt || null,
+          daysLeft: data.daysLeft ?? null,
+          licenseKey: data.licenseKey || null,
+        });
+      }
+
       window.dispatchEvent(new CustomEvent('voc:license-unlocked', { detail: data }));
     }
 
@@ -315,7 +526,8 @@ export const LicenseLockScreen: React.FC = () => {
       });
       const data = await res.json();
       if (res.ok && data.allowed) {
-        setActivateMsg({ text: 'Aktivasi berhasil! Membuka aplikasi...', isError: false });
+        pendingUnlockMethodRef.current = 'manual';
+        setActivateMsg({ text: 'Aktivasi berhasil!', isError: false });
         setManualKey('');
         applyState(data);
       } else {
@@ -330,6 +542,430 @@ export const LicenseLockScreen: React.FC = () => {
       setActivating(false);
     }
   };
+
+  const handleDownloadInvoice = () => {
+    if (!unlockSuccess || downloadingInvoice) return;
+    setDownloadingInvoice(true);
+    try {
+      downloadLicenseInvoicePdf({
+        invoiceNumber: unlockSuccess.invoiceNumber,
+        storeName: appName || 'Outlet POS Mart',
+        merchantName: unlockSuccess.merchantName,
+        adminContact: unlockSuccess.adminContact,
+        machineId: unlockSuccess.machineId,
+        method: unlockSuccess.method,
+        packageLabel: unlockSuccess.packageLabel,
+        amountNumber: unlockSuccess.amountNumber,
+        amountText: unlockSuccess.amountText || 'LUNAS',
+        uniqueCode: unlockSuccess.uniqueCode,
+        paidAt: unlockSuccess.paidAt,
+        expiresAtText: formatIndoDate(unlockSuccess.expiresAt),
+        daysLeft: unlockSuccess.daysLeft,
+        licenseKey: unlockSuccess.licenseKey,
+      });
+    } finally {
+      window.setTimeout(() => setDownloadingInvoice(false), 600);
+    }
+  };
+
+  // Jika baru saja sukses bayar/aktivasi dari kondisi terkunci, tampilkan konfirmasi detail sebelum masuk aplikasi
+  if (!isLocked && unlockSuccess) {
+    const isManualUnlock = unlockSuccess.method === 'manual';
+    const isAdminUnlock = unlockSuccess.method === 'admin';
+    const isNonQrisUnlock = isManualUnlock || isAdminUnlock;
+    return (
+      <div
+        id="pos-license-success-screen"
+        style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 999998,
+          background: 'radial-gradient(ellipse at top, #0f2922 0%, #070b14 58%, #030712 100%)',
+          color: '#f8fafc',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'flex-start',
+          paddingTop: 'max(18px, calc(env(safe-area-inset-top, 0px) + 12px))',
+          paddingBottom: 'max(22px, calc(env(safe-area-inset-bottom, 0px) + 16px))',
+          paddingLeft: 'max(14px, env(safe-area-inset-left, 0px))',
+          paddingRight: 'max(14px, env(safe-area-inset-right, 0px))',
+          overflowY: 'auto',
+          overflowX: 'hidden',
+          WebkitOverflowScrolling: 'touch',
+          touchAction: 'pan-y',
+          overscrollBehaviorY: 'contain',
+          fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+        }}
+      >
+        <div
+          className="voc-success-shell"
+          style={{
+            width: '100%',
+            maxWidth: '510px',
+            flexShrink: 0,
+            margin: 'auto 0',
+            background: 'rgba(13, 19, 34, 0.92)',
+            backdropFilter: 'blur(20px)',
+            WebkitBackdropFilter: 'blur(20px)',
+            border: '1px solid rgba(16, 185, 129, 0.28)',
+            borderRadius: '20px',
+            boxShadow: '0 25px 60px rgba(0, 0, 0, 0.65), 0 0 40px rgba(16, 185, 129, 0.12)',
+            overflow: 'hidden',
+            animation: 'lockFadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1)',
+          }}
+        >
+          {/* Hero Sukses Header */}
+          <div
+            style={{
+              padding: '18px 22px 14px',
+              textAlign: 'center',
+              background: 'linear-gradient(180deg, rgba(16, 185, 129, 0.14) 0%, rgba(16, 185, 129, 0) 100%)',
+              borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+            }}
+          >
+            <div
+              style={{
+                width: '48px',
+                height: '48px',
+                borderRadius: '50%',
+                margin: '0 auto 8px',
+                background: 'linear-gradient(135deg, #10b981, #059669)',
+                color: '#ffffff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 0 0 6px rgba(16, 185, 129, 0.16), 0 8px 20px rgba(16, 185, 129, 0.35)',
+              }}
+            >
+              <CheckCircle2 size={26} strokeWidth={2.4} />
+            </div>
+
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '3px 10px',
+                borderRadius: '9999px',
+                background: 'rgba(16, 185, 129, 0.14)',
+                border: '1px solid rgba(16, 185, 129, 0.3)',
+                color: '#34d399',
+                fontSize: '10.5px',
+                fontWeight: 800,
+                letterSpacing: '0.06em',
+                textTransform: 'uppercase',
+                marginBottom: '6px',
+              }}
+            >
+              <ShieldCheck size={12} />
+              {isNonQrisUnlock ? 'Lisensi Diaktifkan' : 'Pembayaran Berhasil'}
+            </div>
+
+            <h2 style={{ margin: 0, fontSize: '18.5px', fontWeight: 800, color: '#ffffff', letterSpacing: '-0.02em' }}>
+              {isManualUnlock ? 'Aktivasi Lisensi Berhasil' : isAdminUnlock ? 'Lisensi Telah Diaktifkan' : 'Terima Kasih, Pembayaran Lunas!'}
+            </h2>
+            <p style={{ margin: '4px 0 0', fontSize: '12px', color: '#94a3b8', lineHeight: 1.4 }}>
+              Lisensi aplikasi telah aktif secara real-time. Seluruh modul kasir &amp; back-office siap digunakan.
+            </p>
+          </div>
+
+          {/* Detail Informasi Pembayaran / Aktivasi */}
+          <div style={{ padding: '14px 22px 18px' }}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '7px',
+                fontSize: '10.5px',
+                fontWeight: 800,
+                color: '#94a3b8',
+                letterSpacing: '0.06em',
+                textTransform: 'uppercase',
+                marginBottom: '8px',
+              }}
+            >
+              <Receipt size={13} color="#34d399" />
+              Detail Konfirmasi
+            </div>
+
+            <div
+              style={{
+                background: 'rgba(2, 6, 23, 0.55)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                borderRadius: '14px',
+                padding: '2px 14px',
+                marginBottom: '14px',
+              }}
+            >
+              {unlockSuccess.amountText && (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '12px',
+                    padding: '8px 0',
+                    borderBottom: '1px solid rgba(255, 255, 255, 0.07)',
+                  }}
+                >
+                  <span style={{ fontSize: '12px', color: '#94a3b8' }}>Total Dibayar</span>
+                  <span style={{ fontSize: '16.5px', fontWeight: 900, color: '#34d399', letterSpacing: '-0.01em' }}>
+                    {unlockSuccess.amountText}
+                  </span>
+                </div>
+              )}
+
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '12px',
+                  padding: '7px 0',
+                  borderBottom: '1px solid rgba(255, 255, 255, 0.07)',
+                }}
+              >
+                <span style={{ fontSize: '12px', color: '#94a3b8' }}>Status Lisensi</span>
+                <span
+                  style={{
+                    fontSize: '10.5px',
+                    fontWeight: 800,
+                    color: '#34d399',
+                    background: 'rgba(16, 185, 129, 0.14)',
+                    border: '1px solid rgba(16, 185, 129, 0.3)',
+                    borderRadius: '6px',
+                    padding: '2px 8px',
+                  }}
+                >
+                  AKTIF / LUNAS
+                </span>
+              </div>
+
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '12px',
+                  padding: '7px 0',
+                  borderBottom: '1px solid rgba(255, 255, 255, 0.07)',
+                }}
+              >
+                <span style={{ fontSize: '12px', color: '#94a3b8' }}>Metode</span>
+                <span style={{ fontSize: '12px', fontWeight: 700, color: '#e2e8f0', textAlign: 'right' }}>
+                  {isManualUnlock ? 'License Key Manual' : isAdminUnlock ? 'Aktivasi Server VOCML' : `QRIS Otomatis · ${unlockSuccess.merchantName}`}
+                </span>
+              </div>
+
+              {unlockSuccess.packageLabel && (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '12px',
+                    padding: '7px 0',
+                    borderBottom: '1px solid rgba(255, 255, 255, 0.07)',
+                  }}
+                >
+                  <span style={{ fontSize: '12px', color: '#94a3b8' }}>Paket / Durasi</span>
+                  <span style={{ fontSize: '12px', fontWeight: 700, color: '#f8fafc' }}>
+                    {unlockSuccess.packageLabel}
+                  </span>
+                </div>
+              )}
+
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '12px',
+                  padding: '7px 0',
+                  borderBottom: '1px solid rgba(255, 255, 255, 0.07)',
+                }}
+              >
+                <span style={{ fontSize: '12px', color: '#94a3b8', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                  <CalendarCheck2 size={13} /> Masa Aktif s/d
+                </span>
+                <span style={{ fontSize: '12px', fontWeight: 700, color: '#f8fafc', textAlign: 'right' }}>
+                  {formatIndoDate(unlockSuccess.expiresAt)}
+                  {unlockSuccess.daysLeft != null ? ` (${unlockSuccess.daysLeft} hari)` : ''}
+                </span>
+              </div>
+
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '12px',
+                  padding: '7px 0',
+                  borderBottom: '1px solid rgba(255, 255, 255, 0.07)',
+                }}
+              >
+                <span style={{ fontSize: '12px', color: '#94a3b8' }}>Waktu Konfirmasi</span>
+                <span style={{ fontSize: '12px', fontWeight: 600, color: '#cbd5e1' }}>
+                  {unlockSuccess.paidAt}
+                </span>
+              </div>
+
+              {unlockSuccess.licenseKey && (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '12px',
+                    padding: '7px 0',
+                    borderBottom: '1px solid rgba(255, 255, 255, 0.07)',
+                  }}
+                >
+                  <span style={{ fontSize: '12px', color: '#94a3b8' }}>License Key</span>
+                  <span
+                    style={{
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      color: '#cbd5e1',
+                      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                      maxWidth: '240px',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                    title={unlockSuccess.licenseKey}
+                  >
+                    {unlockSuccess.licenseKey}
+                  </span>
+                </div>
+              )}
+
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '12px',
+                  padding: '7px 0',
+                  borderBottom: '1px solid rgba(255, 255, 255, 0.07)',
+                }}
+              >
+                <span style={{ fontSize: '12px', color: '#94a3b8' }}>No. Invoice</span>
+                <span
+                  style={{
+                    fontSize: '11.5px',
+                    fontWeight: 700,
+                    color: '#e2e8f0',
+                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                  }}
+                >
+                  {unlockSuccess.invoiceNumber}
+                </span>
+              </div>
+
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '12px',
+                  padding: '7px 0',
+                }}
+              >
+                <span style={{ fontSize: '12px', color: '#94a3b8' }}>Machine ID</span>
+                <span
+                  style={{
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    color: '#cbd5e1',
+                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                    wordBreak: 'break-all',
+                    textAlign: 'right',
+                  }}
+                >
+                  {unlockSuccess.machineId}
+                </span>
+              </div>
+            </div>
+
+            <div className="voc-success-actions">
+              <button
+                id="license-download-invoice-btn"
+                type="button"
+                onClick={handleDownloadInvoice}
+                disabled={downloadingInvoice}
+                style={{
+                  width: '100%',
+                  background: 'rgba(16, 185, 129, 0.12)',
+                  color: '#34d399',
+                  border: '1px solid rgba(16, 185, 129, 0.35)',
+                  borderRadius: '12px',
+                  padding: '12px 14px',
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  cursor: downloadingInvoice ? 'wait' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '7px',
+                  whiteSpace: 'nowrap',
+                  transition: 'background 0.15s ease',
+                }}
+              >
+                <Download size={15} />
+                <span>{downloadingInvoice ? 'Mengunduh...' : 'Download Invoice'}</span>
+              </button>
+
+              <button
+                id="license-open-app-btn"
+                type="button"
+                onClick={() => setUnlockSuccess(null)}
+                style={{
+                  width: '100%',
+                  background: 'linear-gradient(135deg, #10b981, #059669)',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: '12px',
+                  padding: '12px 16px',
+                  fontSize: '13.5px',
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  whiteSpace: 'nowrap',
+                  boxShadow: '0 10px 26px rgba(16, 185, 129, 0.35)',
+                  transition: 'transform 0.15s ease',
+                }}
+              >
+                <span>Buka Aplikasi Sekarang</span>
+                <ArrowRight size={16} strokeWidth={2.5} />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <style>{`
+          .voc-success-actions {
+            display: grid;
+            grid-template-columns: 1fr 1.35fr;
+            gap: 10px;
+          }
+          @media (max-width: 460px) {
+            .voc-success-actions {
+              grid-template-columns: 1fr;
+            }
+          }
+          @keyframes lockFadeIn {
+            from { opacity: 0; transform: translateY(10px) scale(0.985); }
+            to   { opacity: 1; transform: translateY(0) scale(1); }
+          }
+        `}</style>
+      </div>
+    );
+  }
 
   // Jangan render apa pun jika lisensi aktif / diizinkan
   if (!isLocked) return null;
@@ -363,9 +999,16 @@ export const LicenseLockScreen: React.FC = () => {
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        justifyContent: 'center',
-        padding: '24px 16px',
+        justifyContent: 'flex-start',
+        paddingTop: 'max(20px, calc(env(safe-area-inset-top, 0px) + 14px))',
+        paddingBottom: 'max(24px, calc(env(safe-area-inset-bottom, 0px) + 18px))',
+        paddingLeft: 'max(14px, env(safe-area-inset-left, 0px))',
+        paddingRight: 'max(14px, env(safe-area-inset-right, 0px))',
         overflowY: 'auto',
+        overflowX: 'hidden',
+        WebkitOverflowScrolling: 'touch',
+        touchAction: 'pan-y',
+        overscrollBehaviorY: 'contain',
         fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
       }}
     >
@@ -374,6 +1017,8 @@ export const LicenseLockScreen: React.FC = () => {
         style={{
           width: '100%',
           maxWidth: billing ? '940px' : '540px',
+          flexShrink: 0,
+          margin: 'auto 0',
           background: 'rgba(13, 19, 34, 0.88)',
           backdropFilter: 'blur(20px)',
           WebkitBackdropFilter: 'blur(20px)',
@@ -497,6 +1142,7 @@ export const LicenseLockScreen: React.FC = () => {
 
               {!qrFailed ? (
                 <div
+                  className="voc-qr-box"
                   style={{
                     background: '#ffffff',
                     padding: '12px',
@@ -521,6 +1167,7 @@ export const LicenseLockScreen: React.FC = () => {
                   )}
                   <img
                     id="billing-qris-image"
+                    className="voc-qr-img"
                     key={qrisImageSrc}
                     src={qrisImageSrc}
                     alt={`QRIS ${billing.merchant_name} ${activeAmountText}`}
@@ -1023,23 +1670,62 @@ export const LicenseLockScreen: React.FC = () => {
           .voc-lock-body.voc-two-col {
             flex-direction: column;
           }
+          .voc-right-col {
+            order: 1;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 18px 16px;
+          }
           .voc-left-col {
+            order: 2;
             flex: none;
             border-right: none;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 18px 16px;
           }
           .voc-pkg-grid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
           }
         }
         @media (max-width: 480px) {
-          .voc-lock-header,
-          .voc-left-col,
-          .voc-right-col {
-            padding: 16px;
+          .voc-lock-header {
+            padding: 14px 16px;
+            gap: 10px;
+          }
+          .voc-right-col,
+          .voc-left-col {
+            padding: 15px 14px;
+          }
+          .voc-mid-wrap {
+            width: 100%;
+            justify-content: space-between;
+          }
+          .voc-mid-wrap > div {
+            max-width: 100%;
+            min-width: 0;
+            flex: 1;
+            justify-content: space-between;
+          }
+          .voc-mid-wrap > div span:first-child {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-size: 11px !important;
+          }
+          .voc-qr-box {
+            width: 176px !important;
+            height: 176px !important;
+            padding: 10px !important;
+          }
+          .voc-qr-img {
+            width: 156px !important;
+            height: 156px !important;
           }
           .voc-pkg-grid {
-            grid-template-columns: 1fr;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 9px;
+          }
+          .voc-pkg-card {
+            padding: 12px 10px 10px;
           }
         }
         @keyframes lockFadeIn {
