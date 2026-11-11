@@ -163,8 +163,8 @@ export function BroadcastToast() {
             onClick={() => setExpandedKey(expanded ? null : key)}
             className="voc-island"
             style={{
-              background: '#0a0a0c',
-              border: `1px solid ${cfg.color}40`,
+              background: '#000000',
+              border: '1px solid rgba(255, 255, 255, 0.12)',
               borderRadius: expanded ? '20px' : '9999px',
               minHeight: '38px',
               padding: expanded ? '10px 14px 10px 10px' : '4px 12px 4px 5px',
@@ -175,7 +175,7 @@ export function BroadcastToast() {
               maxWidth: '92vw',
               pointerEvents: 'auto',
               cursor: 'pointer',
-              boxShadow: `0 10px 30px rgba(0,0,0,.6), 0 0 15px ${cfg.color}25`,
+              boxShadow: 'none',
               transition: 'all .3s cubic-bezier(0.16, 1, 0.3, 1)',
               animation: 'vocIslandIn .4s cubic-bezier(0.16, 1, 0.3, 1)',
             }}
@@ -184,7 +184,6 @@ export function BroadcastToast() {
               background: cfg.color,
               width: '28px', height: '28px', borderRadius: '50%',
               display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-              boxShadow: `0 0 12px ${cfg.color}88`,
             }}>
               <Icon size={15} color="#fff" />
             </div>

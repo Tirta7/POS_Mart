@@ -446,10 +446,12 @@ const BarcodeLabelModal: React.FC<Props> = ({ product, products, initialCopies =
         }
       `}</style>
       <div
+        className="modal-overlay"
         style={{
           position: 'fixed',
           inset: 0,
-          backgroundColor: 'rgba(0,0,0,0.5)',
+          backgroundColor: 'rgba(15, 23, 42, 0.55)',
+          backdropFilter: 'blur(4px)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -460,6 +462,7 @@ const BarcodeLabelModal: React.FC<Props> = ({ product, products, initialCopies =
         onClick={onClose}
       >
         <div
+          className="modal-content barcode-label-modal"
           onClick={(e) => e.stopPropagation()}
           style={{
             backgroundColor: 'white',

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   Search, Printer, ShoppingBag, Truck, Package, ShoppingCart,
   CreditCard, QrCode, Banknote, Ticket, Trash2, PauseCircle,
@@ -30,6 +31,7 @@ import UnregisteredProductModal from './components/UnregisteredProductModal';
 import QuickRestockModal from './components/QuickRestockModal';
 import { sendCfdUpdate, subscribeCfd } from './utils/cfdSync';
 import CfdLauncherModal from './components/CfdLauncherModal';
+import DeliveryPosView from './components/DeliveryPosView';
 
 /** Tanggal & jam real-time (mengikuti jam perangkat), diperbarui tiap detik. */
 function LiveClock() {
@@ -145,6 +147,9 @@ function App() {
   
   const [activeCat, setActiveCat] = useState('all');
   const [orderType, setOrderType] = useState('DINE_IN');
+  const [deliveryStep, setDeliveryStep] = useState<'catalog' | 'checkout'>('catalog');
+  const [deliveryAddressDetail, setDeliveryAddressDetail] = useState('');
+  const [deliveryNote, setDeliveryNote] = useState('');
   const [cart, setCart] = useState<any[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
   const [customerSelectPopupOpen, setCustomerSelectPopupOpen] = useState(false);
@@ -357,8 +362,17 @@ function App() {
   // Varian multiplier saat discan dengan perkalian (misal 5*kode)
   const [pendingVariantQty, setPendingVariantQty] = useState<number>(1);
 
-  // Floating Toast notification
-  const [toastNotice, setToastNotice] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
+  // Floating Dynamic Island Toast notification
+  const toastSeqRef = useRef(0);
+  const [toastNotice, setToastNoticeState] = useState<{ id: number; type: 'success' | 'error' | 'info'; message: string } | null>(null);
+  const setToastNotice = useCallback((next: { type: 'success' | 'error' | 'info'; message: string } | null) => {
+    if (!next) {
+      setToastNoticeState(null);
+      return;
+    }
+    toastSeqRef.current += 1;
+    setToastNoticeState({ ...next, id: toastSeqRef.current });
+  }, []);
 
   // Point 7: Modal Pendaftaran Produk Baru saat Barcode tak ditemukan (Form Lengkap)
   const [quickRegModalOpen, setQuickRegModalOpen] = useState(false);
@@ -377,10 +391,10 @@ function App() {
   // Auto-dismiss toast notice
   useEffect(() => {
     if (toastNotice) {
-      const timer = setTimeout(() => setToastNotice(null), 3200);
+      const timer = setTimeout(() => setToastNotice(null), 2600);
       return () => clearTimeout(timer);
     }
-  }, [toastNotice]);
+  }, [toastNotice, setToastNotice]);
 
   const CATEGORIES = [
     { id: 'all', name: cart.length > 0 ? 'PESANAN' : 'SEMUA (ALL)', icon: <LayoutGrid size={16} /> },
@@ -767,6 +781,17 @@ function App() {
 
   const removeRow = (cartId: string) => {
     setCart(prev => prev.filter(item => item.cartId !== cartId));
+  };
+
+  const handleDecrementDeliveryProduct = (productId: string) => {
+    const matchingLines = cart.filter(i => i.id === productId);
+    const targetLine = matchingLines[matchingLines.length - 1];
+    if (!targetLine) return;
+    if (targetLine.qty <= 1) {
+      removeRow(targetLine.cartId);
+    } else {
+      updateQty(targetLine.cartId, -1);
+    }
   };
 
   const sameLine = (a: any, b: any) =>
@@ -1392,6 +1417,51 @@ function App() {
 
   return (
     <div className="app-container">
+      {orderType === 'DRIVETHRU' ? (
+        <DeliveryPosView
+          appName={appName}
+          appLogo={appLogo}
+          step={deliveryStep}
+          onStepChange={(nextStep) => {
+            if (nextStep === 'checkout') setToastNotice(null);
+            setDeliveryStep(nextStep);
+          }}
+          onExitDelivery={() => {
+            setDeliveryStep('catalog');
+            setOrderType('DINE_IN');
+          }}
+          products={PRODUCTS}
+          categories={CATEGORIES}
+          activeCat={activeCat}
+          onSelectCat={setActiveCat}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          onOpenCameraScanner={() => setCameraScannerOpen(true)}
+          cart={cart}
+          total={total}
+          selectedCustomer={selectedCustomer}
+          onOpenCustomerSelect={() => setCustomerSelectPopupOpen(true)}
+          deliveryAddressDetail={deliveryAddressDetail}
+          onChangeAddressDetail={setDeliveryAddressDetail}
+          deliveryNote={deliveryNote}
+          onChangeDeliveryNote={setDeliveryNote}
+          onProductAdd={(product) => handleProductClick(product, 1)}
+          onDecrementProduct={handleDecrementDeliveryProduct}
+          onUpdateCartQty={updateQty}
+          onRemoveCartRow={removeRow}
+          paymentMethod={paymentMethod}
+          onSelectPaymentMethod={setPaymentMethod}
+          onProceedPayment={() => {
+            if (cart.length === 0 || total <= 0) {
+              sound.playScanError();
+              setToastNotice({ type: 'info', message: 'Keranjang belanja kosong! Silakan pilih/scan produk terlebih dahulu.' });
+              return;
+            }
+            setPaymentPopupOpen(true);
+          }}
+        />
+      ) : (
+        <>
       {/* TOP NAVBAR */}
       <div className="top-navbar">
         <div className="logo-section">
@@ -1489,6 +1559,7 @@ function App() {
           <button 
             className={`type-btn ${orderType === 'DRIVETHRU' ? 'active' : ''}`}
             onClick={() => {
+              setDeliveryStep('catalog');
               setOrderType('DRIVETHRU');
             }}
           >
@@ -2118,7 +2189,7 @@ function App() {
               <button className="icon-btn" onClick={() => {
                 setCart([]);
               }}><Trash2 size={16} /></button>
-              <button className="hold-btn" onClick={handleHold} disabled={cart.length === 0} style={{ opacity: cart.length === 0 ? 0.5 : 1 }}><PauseCircle size={16} /> Hold [F5]</button>
+              <button className="hold-btn" onClick={handleHold} disabled={cart.length === 0} style={{ opacity: cart.length === 0 ? 0.5 : 1, whiteSpace: 'nowrap' }}><PauseCircle size={16} /> Hold<span className="hide-mobile"> [F5]</span></button>
             </div>
           </div>
 
@@ -2232,26 +2303,28 @@ function App() {
                 </div>
 
                 <div className="item-controls">
-                  <div className="qty-wrapper" style={{ display: 'flex', alignItems: 'center' }}>
-                    <button className="qty-btn" onClick={() => updateQty(item.cartId, -1)}><Minus size={14}/></button>
-                    <input 
-                      type="text" 
-                      inputMode="decimal"
-                      value={item.qty}
-                      onChange={(e) => {
-                        const val = e.target.value.replace(/[^0-9.]/g, '');
-                        if (val.split('.').length <= 2) {
-                          setQtyValue(item.cartId, Number(val));
-                        }
-                      }}
-                      style={{ width: '55px', minWidth: '40px', textAlign: 'center', fontWeight: 'bold', border: 'none', background: 'transparent', outline: 'none', padding: '0 4px' }}
-                    />
-                    <button className="qty-btn" onClick={() => updateQty(item.cartId, 1)}><Plus size={14}/></button>
+                  <div className="item-qty-group" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <div className="qty-wrapper" style={{ display: 'flex', alignItems: 'center' }}>
+                      <button className="qty-btn" onClick={() => updateQty(item.cartId, -1)}><Minus size={14}/></button>
+                      <input 
+                        type="text" 
+                        inputMode="decimal"
+                        value={item.qty}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/[^0-9.]/g, '');
+                          if (val.split('.').length <= 2) {
+                            setQtyValue(item.cartId, Number(val));
+                          }
+                        }}
+                        style={{ width: '55px', minWidth: '40px', textAlign: 'center', fontWeight: 'bold', border: 'none', background: 'transparent', outline: 'none', padding: '0 4px' }}
+                      />
+                      <button className="qty-btn" onClick={() => updateQty(item.cartId, 1)}><Plus size={14}/></button>
+                    </div>
+                    <span className="item-unit-label" style={{ fontSize: '11px', color: '#888', minWidth: '28px', width: 'auto', textAlign: 'left', marginLeft: '4px' }}>
+                      {item.tierUnit || item.unit}
+                    </span>
                   </div>
-                  <span style={{ fontSize: '11px', color: '#888', minWidth: '28px', width: 'auto', textAlign: 'left', marginLeft: '4px' }}>
-                    {item.tierUnit || item.unit}
-                  </span>
-                  <button className="remove-btn" onClick={() => removeRow(item.cartId)} style={{ marginLeft: 'auto' }}><X size={16}/></button>
+                  <button className="remove-btn" onClick={() => removeRow(item.cartId)} style={{ marginLeft: 'auto' }} aria-label="Hapus item"><X size={16}/></button>
                 </div>
               </div>
             ))}
@@ -2402,6 +2475,8 @@ function App() {
           </span>
           <span className="mcb-total">{formatIDR(total)} <ChevronUp size={18} /></span>
         </button>
+      )}
+        </>
       )}
 
       {/* RECEIPT PREVIEW / PRINT */}
@@ -2689,11 +2764,21 @@ function App() {
                   paidAmount: effPaidAmount,
                   remainingAmount: effRemaining,
                   dueDate: isTempo ? tempoDueDate : undefined,
-                  notes: isTempo ? tempoNotes : undefined,
+                  notes: (() => {
+                    const deliveryMeta = orderType === 'DRIVETHRU'
+                      ? [
+                          selectedCustomer?.address ? `Alamat: ${selectedCustomer.address}` : '',
+                          deliveryAddressDetail.trim() ? `Detail: ${deliveryAddressDetail.trim()}` : '',
+                          deliveryNote.trim() ? `Catatan: ${deliveryNote.trim()}` : '',
+                        ].filter(Boolean).join(' | ')
+                      : '';
+                    if (isTempo) return deliveryMeta ? `${tempoNotes} (${deliveryMeta})` : tempoNotes;
+                    return deliveryMeta || undefined;
+                  })(),
                   tendered: isTempo ? dpNum : tendered,
                   change: isTempo ? 0 : change,
                   customerId: effectiveCustomer?.id || undefined,
-                  customerName: effectiveCustomer?.name || (orderType === 'TAKEAWAY' ? 'Grosir' : 'Retail'),
+                  customerName: effectiveCustomer?.name || (orderType === 'TAKEAWAY' ? 'Grosir' : orderType === 'DRIVETHRU' ? 'Delivery' : 'Retail'),
                   employeeId: currentUser?.id,
                   employeeName: currentUser?.name,
                   items: cart.map(item => ({
@@ -2747,6 +2832,9 @@ function App() {
                 setCart([]);
                 setTenderedStr('');
                 setSelectedCustomer(null);
+                setDeliveryStep('catalog');
+                setDeliveryAddressDetail('');
+                setDeliveryNote('');
                 setOrderType('DINE_IN');
                 setSearchQuery('');
               }}
@@ -2766,8 +2854,20 @@ function App() {
         <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
           <div className="modal-content" style={{ backgroundColor: 'white', borderRadius: '12px', padding: '24px', width: '500px', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 'bold' }}>Pilih Pelanggan Grosir / Partai</h3>
-              <button onClick={() => { setCustomerSelectPopupOpen(false); setOrderType('DINE_IN'); }} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={20} color="#666" /></button>
+              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 'bold' }}>
+                {orderType === 'DRIVETHRU' ? 'Pilih Lokasi / Pelanggan Delivery' : 'Pilih Pelanggan Grosir / Partai'}
+              </h3>
+              <button
+                onClick={() => {
+                  setCustomerSelectPopupOpen(false);
+                  if (orderType !== 'DRIVETHRU') {
+                    setOrderType('DINE_IN');
+                  }
+                }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer' }}
+              >
+                <X size={20} color="#666" />
+              </button>
             </div>
             
             <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
@@ -3004,11 +3104,11 @@ function App() {
 
         return (
           <div className="modal-overlay" onClick={() => setTierModalProduct(null)} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
-            <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ backgroundColor: '#ffffff', borderRadius: '20px', padding: '24px', width: modalWidth, maxWidth: '95vw', maxHeight: '92vh', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.3)', border: '1px solid #e2e8f0', overflowY: 'auto' }}>
+            <div className="modal-content tier-modal" onClick={(e) => e.stopPropagation()} style={{ backgroundColor: '#ffffff', borderRadius: '20px', padding: '24px', width: modalWidth, maxWidth: '95vw', maxHeight: '92vh', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.3)', border: '1px solid #e2e8f0', overflowY: 'auto' }}>
               
               {/* Header Modal */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
-                <div>
+              <div className="tier-modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px', gap: '12px' }}>
+                <div style={{ minWidth: 0, flex: 1 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                     <span style={{ background: '#eff6ff', color: '#1d4ed8', padding: '3px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 800 }}>
                       PILIH LEVEL KEMASAN & HARGA
@@ -3022,7 +3122,7 @@ function App() {
                       </span>
                     )}
                   </div>
-                  <h3 style={{ fontSize: '18px', fontWeight: 800, margin: '6px 0 2px 0', color: '#0f172a' }}>
+                  <h3 style={{ fontSize: '18px', fontWeight: 800, margin: '6px 0 2px 0', color: '#0f172a', lineHeight: 1.25 }}>
                     {p.name}
                   </h3>
                   <div style={{ fontSize: '12px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
@@ -3038,18 +3138,19 @@ function App() {
                 <button 
                   onClick={() => setTierModalProduct(null)} 
                   aria-label="Tutup" 
-                  style={{ background: '#f1f5f9', border: 'none', borderRadius: '50%', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#475569', transition: 'all 0.15s ease' }}
+                  style={{ background: '#f1f5f9', border: 'none', borderRadius: '50%', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#475569', transition: 'all 0.15s ease', flexShrink: 0 }}
                 >
                   <X size={18} />
                 </button>
               </div>
 
               {/* Grid Kartu Kemasan */}
-              <div style={{ display: 'grid', gridTemplateColumns: `repeat(${activeCardsCount}, minmax(0, 1fr))`, gap: '14px', margin: '8px 0 16px 0' }}>
+              <div className="tier-modal-grid" style={{ '--tier-cols': activeCardsCount } as React.CSSProperties}>
                 
                 {/* 1. KEMASAN DUS / KARTON (Hanya jika boxCap > 1) */}
                 {hasBox && (
                   <div 
+                    className="tier-card tier-card-box"
                     onClick={() => {
                       if (boxStock <= 0) {
                         sound.playScanError();
@@ -3075,65 +3176,71 @@ function App() {
                     onMouseOver={(e) => { if (boxStock > 0) e.currentTarget.style.transform = 'translateY(-2px)'; }}
                     onMouseOut={(e) => { e.currentTarget.style.transform = 'none'; }}
                   >
-                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', background: '#fef3c7', color: '#92400e', padding: '2px 8px', borderRadius: '6px', fontSize: '10.5px', fontWeight: 800, width: 'fit-content', marginBottom: '8px' }}>
-                      <Package size={12} />
-                      DUS / KARTON
-                    </div>
-                    <div style={{ fontSize: '13px', fontWeight: 700, color: '#1e293b' }}>
-                      Kemasan Dus
-                    </div>
-                    <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
-                      Isi: <strong>{boxCap} {retailUnit}</strong>
-                    </div>
-                    
-                    <div style={{ margin: '14px 0 12px 0' }}>
-                      <div style={{ fontSize: '10.5px', color: '#92400e', fontWeight: 700 }}>Harga Jual / Dus:</div>
-                      <div style={{ fontSize: '16px', fontWeight: 900, color: '#b45309' }}>
-                        {formatIDR(boxP)}
-                      </div>
-                      <div style={{ fontSize: '10px', color: '#78350f', marginTop: '1px' }}>
-                        @{formatIDR(Math.round(boxP / boxCap))}/{retailUnit}
-                        {retailP > boxP / boxCap && <strong style={{ color: '#16a34a' }}> • Hemat {formatIDR(Math.round(retailP - boxP / boxCap))}/{retailUnit}</strong>}
-                      </div>
-                      {Number(p.purchasePrice) > 0 && boxP / boxCap < Number(p.purchasePrice) && (
-                        <div style={{ fontSize: '10px', color: '#b91c1c', fontWeight: 800, marginTop: '2px' }}>
-                          ⚠ Di bawah modal ({formatIDR(Number(p.purchasePrice))}/{retailUnit}) — cek harga Dus
+                    <div className="tier-card-main">
+                      <div className="tier-card-info">
+                        <div className="tier-card-badge" style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', background: '#fef3c7', color: '#92400e', padding: '2px 8px', borderRadius: '6px', fontSize: '10.5px', fontWeight: 800, width: 'fit-content', marginBottom: '8px', whiteSpace: 'nowrap' }}>
+                          <Package size={12} />
+                          DUS / KARTON
                         </div>
-                      )}
+                        <div className="tier-card-title" style={{ fontSize: '13px', fontWeight: 700, color: '#1e293b' }}>
+                          Kemasan Dus
+                        </div>
+                        <div className="tier-card-sub" style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                          Isi: <strong>{boxCap} {retailUnit}</strong>
+                        </div>
+                      </div>
+                      
+                      <div className="tier-card-pricing">
+                        <div className="tier-card-price-label" style={{ fontSize: '10.5px', color: '#92400e', fontWeight: 700 }}>Harga Jual / Dus:</div>
+                        <div className="tier-card-price" style={{ fontSize: '16px', fontWeight: 900, color: '#b45309', whiteSpace: 'nowrap' }}>
+                          {formatIDR(boxP)}
+                        </div>
+                        <div className="tier-card-meta" style={{ fontSize: '10px', color: '#78350f', marginTop: '1px' }}>
+                          @{formatIDR(Math.round(boxP / boxCap))}/{retailUnit}
+                          {retailP > boxP / boxCap && <strong style={{ color: '#16a34a' }}> • Hemat {formatIDR(Math.round(retailP - boxP / boxCap))}/{retailUnit}</strong>}
+                        </div>
+                        {Number(p.purchasePrice) > 0 && boxP / boxCap < Number(p.purchasePrice) && (
+                          <div style={{ fontSize: '10px', color: '#b91c1c', fontWeight: 800, marginTop: '2px' }}>
+                            ⚠ Di bawah modal ({formatIDR(Number(p.purchasePrice))}/{retailUnit}) — cek harga Dus
+                          </div>
+                        )}
+                      </div>
                     </div>
 
-                    <div style={{ marginTop: 'auto', paddingTop: '8px', borderTop: '1px dashed #fde68a', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontSize: '11px', fontWeight: 700, color: boxStock > 0 ? '#16a34a' : '#dc2626' }}>
+                    <div className="tier-card-footer" style={{ borderTop: '1px dashed #fde68a' }}>
+                      <span className="tier-card-stock" style={{ fontSize: '11px', fontWeight: 700, color: boxStock > 0 ? '#16a34a' : '#dc2626' }}>
                         Tersedia: {boxStock} Dus
                       </span>
-                    </div>
 
-                    <button
-                      type="button"
-                      style={{
-                        marginTop: '10px',
-                        background: '#d97706',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '8px',
-                        padding: '8px 10px',
-                        fontWeight: 800,
-                        fontSize: '12px',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '4px'
-                      }}
-                    >
-                      <Check size={14} /> Beli Dus
-                    </button>
+                      <button
+                        type="button"
+                        className="tier-card-btn"
+                        style={{
+                          background: '#d97706',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '8px',
+                          padding: '8px 10px',
+                          fontWeight: 800,
+                          fontSize: '12px',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '4px',
+                          whiteSpace: 'nowrap'
+                        }}
+                      >
+                        <Check size={14} /> Beli Dus
+                      </button>
+                    </div>
                   </div>
                 )}
 
                 {/* 2. KEMASAN MENENGAH (RENCENG / LUSIN / SLOP) */}
                 {hasMid && (
                   <div 
+                    className="tier-card tier-card-mid"
                     onClick={() => {
                       if (midStock <= 0) {
                         sound.playScanError();
@@ -3159,65 +3266,71 @@ function App() {
                     onMouseOver={(e) => { if (midStock > 0) e.currentTarget.style.transform = 'translateY(-2px)'; }}
                     onMouseOut={(e) => { e.currentTarget.style.transform = 'none'; }}
                   >
-                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', background: '#bae6fd', color: '#0369a1', padding: '2px 8px', borderRadius: '6px', fontSize: '10.5px', fontWeight: 800, width: 'fit-content', marginBottom: '8px' }}>
-                      <Layers size={12} />
-                      {midUnit.toUpperCase()}
-                    </div>
-                    <div style={{ fontSize: '13px', fontWeight: 700, color: '#1e293b' }}>
-                      Kemasan Menengah
-                    </div>
-                    <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
-                      Isi: <strong>{midCap} {retailUnit}</strong>
-                    </div>
-
-                    <div style={{ margin: '14px 0 12px 0' }}>
-                      <div style={{ fontSize: '10.5px', color: '#0369a1', fontWeight: 700 }}>Harga Jual /{midUnit}:</div>
-                      <div style={{ fontSize: '16px', fontWeight: 900, color: '#0284c7' }}>
-                        {formatIDR(midP)}
-                      </div>
-                      <div style={{ fontSize: '10px', color: '#075985', marginTop: '1px' }}>
-                        @{formatIDR(Math.round(midP / midCap))}/{retailUnit}
-                        {retailP > midP / midCap && <strong style={{ color: '#16a34a' }}> • Hemat {formatIDR(Math.round(retailP - midP / midCap))}/{retailUnit}</strong>}
-                      </div>
-                      {Number(p.purchasePrice) > 0 && midP / midCap < Number(p.purchasePrice) && (
-                        <div style={{ fontSize: '10px', color: '#b91c1c', fontWeight: 800, marginTop: '2px' }}>
-                          ⚠ Di bawah modal ({formatIDR(Number(p.purchasePrice))}/{retailUnit}) — cek harga {midUnit}
+                    <div className="tier-card-main">
+                      <div className="tier-card-info">
+                        <div className="tier-card-badge" style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', background: '#bae6fd', color: '#0369a1', padding: '2px 8px', borderRadius: '6px', fontSize: '10.5px', fontWeight: 800, width: 'fit-content', marginBottom: '8px', whiteSpace: 'nowrap' }}>
+                          <Layers size={12} />
+                          {midUnit.toUpperCase()}
                         </div>
-                      )}
+                        <div className="tier-card-title" style={{ fontSize: '13px', fontWeight: 700, color: '#1e293b' }}>
+                          Kemasan Menengah
+                        </div>
+                        <div className="tier-card-sub" style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                          Isi: <strong>{midCap} {retailUnit}</strong>
+                        </div>
+                      </div>
+
+                      <div className="tier-card-pricing">
+                        <div className="tier-card-price-label" style={{ fontSize: '10.5px', color: '#0369a1', fontWeight: 700 }}>Harga Jual /{midUnit}:</div>
+                        <div className="tier-card-price" style={{ fontSize: '16px', fontWeight: 900, color: '#0284c7', whiteSpace: 'nowrap' }}>
+                          {formatIDR(midP)}
+                        </div>
+                        <div className="tier-card-meta" style={{ fontSize: '10px', color: '#075985', marginTop: '1px' }}>
+                          @{formatIDR(Math.round(midP / midCap))}/{retailUnit}
+                          {retailP > midP / midCap && <strong style={{ color: '#16a34a' }}> • Hemat {formatIDR(Math.round(retailP - midP / midCap))}/{retailUnit}</strong>}
+                        </div>
+                        {Number(p.purchasePrice) > 0 && midP / midCap < Number(p.purchasePrice) && (
+                          <div style={{ fontSize: '10px', color: '#b91c1c', fontWeight: 800, marginTop: '2px' }}>
+                            ⚠ Di bawah modal ({formatIDR(Number(p.purchasePrice))}/{retailUnit}) — cek harga {midUnit}
+                          </div>
+                        )}
+                      </div>
                     </div>
 
-                    <div style={{ marginTop: 'auto', paddingTop: '8px', borderTop: '1px dashed #bae6fd', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontSize: '11px', fontWeight: 700, color: midStock > 0 ? '#16a34a' : '#dc2626' }}>
+                    <div className="tier-card-footer" style={{ borderTop: '1px dashed #bae6fd' }}>
+                      <span className="tier-card-stock" style={{ fontSize: '11px', fontWeight: 700, color: midStock > 0 ? '#16a34a' : '#dc2626' }}>
                         Tersedia: {midStock} {midUnit}
                       </span>
-                    </div>
 
-                    <button
-                      type="button"
-                      style={{
-                        marginTop: '10px',
-                        background: '#0284c7',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '8px',
-                        padding: '8px 10px',
-                        fontWeight: 800,
-                        fontSize: '12px',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '4px'
-                      }}
-                    >
-                      <Check size={14} /> Beli {midUnit}
-                    </button>
+                      <button
+                        type="button"
+                        className="tier-card-btn"
+                        style={{
+                          background: '#0284c7',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '8px',
+                          padding: '8px 10px',
+                          fontWeight: 800,
+                          fontSize: '12px',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '4px',
+                          whiteSpace: 'nowrap'
+                        }}
+                      >
+                        <Check size={14} /> Beli {midUnit}
+                      </button>
+                    </div>
                   </div>
                 )}
 
                 {/* 3. OPSIONAL: GROSIR / PARTAI SATUAN (Jika kasir Reguler & produk memiliki harga grosir) */}
                 {hasWholesaleCard && (
                   <div 
+                    className="tier-card tier-card-wholesale"
                     onClick={() => {
                       if (retailStock <= 0) {
                         sound.playScanError();
@@ -3243,58 +3356,64 @@ function App() {
                     onMouseOver={(e) => { if (retailStock > 0) e.currentTarget.style.transform = 'translateY(-2px)'; }}
                     onMouseOut={(e) => { e.currentTarget.style.transform = 'none'; }}
                   >
-                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', background: '#dbeafe', color: '#1d4ed8', padding: '2px 8px', borderRadius: '6px', fontSize: '10.5px', fontWeight: 800, width: 'fit-content', marginBottom: '8px' }}>
-                      <Tag size={12} />
-                      GROSIR / PARTAI
-                    </div>
-                    <div style={{ fontSize: '13px', fontWeight: 700, color: '#1e293b' }}>
-                      Satuan Grosir
-                    </div>
-                    <div style={{ fontSize: '11px', color: '#1d4ed8', marginTop: '2px', fontWeight: 600 }}>
-                      Min: <strong>{minWholesaleQtyVal} {retailUnit}</strong>
+                    <div className="tier-card-main">
+                      <div className="tier-card-info">
+                        <div className="tier-card-badge" style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', background: '#dbeafe', color: '#1d4ed8', padding: '2px 8px', borderRadius: '6px', fontSize: '10.5px', fontWeight: 800, width: 'fit-content', marginBottom: '8px', whiteSpace: 'nowrap' }}>
+                          <Tag size={12} />
+                          GROSIR / PARTAI
+                        </div>
+                        <div className="tier-card-title" style={{ fontSize: '13px', fontWeight: 700, color: '#1e293b' }}>
+                          Satuan Grosir
+                        </div>
+                        <div className="tier-card-sub" style={{ fontSize: '11px', color: '#1d4ed8', marginTop: '2px', fontWeight: 600 }}>
+                          Min: <strong>{minWholesaleQtyVal} {retailUnit}</strong>
+                        </div>
+                      </div>
+
+                      <div className="tier-card-pricing">
+                        <div className="tier-card-price-label" style={{ fontSize: '10.5px', color: '#1d4ed8', fontWeight: 700 }}>Harga Jual / Grosir:</div>
+                        <div className="tier-card-price" style={{ fontSize: '16px', fontWeight: 900, color: '#1d4ed8', whiteSpace: 'nowrap' }}>
+                          {formatIDR(wholesaleP)}
+                        </div>
+                        <div className="tier-card-meta" style={{ fontSize: '10px', color: '#16a34a', marginTop: '1px', fontWeight: 700 }}>
+                          Hemat {formatIDR(retailP - wholesaleP)}/{retailUnit}
+                        </div>
+                      </div>
                     </div>
 
-                    <div style={{ margin: '14px 0 12px 0' }}>
-                      <div style={{ fontSize: '10.5px', color: '#1d4ed8', fontWeight: 700 }}>Harga Jual / Grosir:</div>
-                      <div style={{ fontSize: '16px', fontWeight: 900, color: '#1d4ed8' }}>
-                        {formatIDR(wholesaleP)}
-                      </div>
-                      <div style={{ fontSize: '10px', color: '#16a34a', marginTop: '1px', fontWeight: 700 }}>
-                        Hemat {formatIDR(retailP - wholesaleP)}/{retailUnit}
-                      </div>
-                    </div>
-
-                    <div style={{ marginTop: 'auto', paddingTop: '8px', borderTop: '1px dashed #bfdbfe', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontSize: '11px', fontWeight: 700, color: retailStock > 0 ? '#16a34a' : '#dc2626' }}>
+                    <div className="tier-card-footer" style={{ borderTop: '1px dashed #bfdbfe' }}>
+                      <span className="tier-card-stock" style={{ fontSize: '11px', fontWeight: 700, color: retailStock > 0 ? '#16a34a' : '#dc2626' }}>
                         Tersedia: {retailStock} {retailUnit}
                       </span>
-                    </div>
 
-                    <button
-                      type="button"
-                      style={{
-                        marginTop: '10px',
-                        background: '#2563eb',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '8px',
-                        padding: '8px 10px',
-                        fontWeight: 800,
-                        fontSize: '12px',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '4px'
-                      }}
-                    >
-                      <Check size={14} /> Beli Grosir (≥{minWholesaleQtyVal})
-                    </button>
+                      <button
+                        type="button"
+                        className="tier-card-btn"
+                        style={{
+                          background: '#2563eb',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '8px',
+                          padding: '8px 10px',
+                          fontWeight: 800,
+                          fontSize: '12px',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '4px',
+                          whiteSpace: 'nowrap'
+                        }}
+                      >
+                        <Check size={14} /> Beli Grosir (≥{minWholesaleQtyVal})
+                      </button>
+                    </div>
                   </div>
                 )}
 
                 {/* 4. KEMASAN SATUAN (ECERAN ATAU GROSIR SESUAI MODE KASIR) */}
                 <div 
+                  className="tier-card tier-card-retail"
                   onClick={() => {
                     if (retailStock <= 0) {
                       sound.playScanError();
@@ -3324,73 +3443,79 @@ function App() {
                   onMouseOver={(e) => { if (retailStock > 0) e.currentTarget.style.transform = 'translateY(-2px)'; }}
                   onMouseOut={(e) => { e.currentTarget.style.transform = 'none'; }}
                 >
-                  <div style={{ 
-                    display: 'inline-flex', 
-                    alignItems: 'center', 
-                    gap: '5px', 
-                    background: isTakeaway ? '#fee2e2' : '#f1f5f9', 
-                    color: isTakeaway ? '#b91c1c' : '#475569', 
-                    padding: '2px 8px', 
-                    borderRadius: '6px', 
-                    fontSize: '10.5px', 
-                    fontWeight: 800, 
-                    width: 'fit-content', 
-                    marginBottom: '8px' 
-                  }}>
-                    <ShoppingBag size={12} />
-                    {isTakeaway ? 'GROSIR / PARTAI' : 'ECERAN'}
-                  </div>
-                  <div style={{ fontSize: '13px', fontWeight: 700, color: '#1e293b' }}>
-                    {isTakeaway ? 'Satuan Grosir / Partai' : 'Satuan Ecer / Loose'}
-                  </div>
-                  <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
-                    Isi: <strong>1 {retailUnit}</strong>
+                  <div className="tier-card-main">
+                    <div className="tier-card-info">
+                      <div className="tier-card-badge" style={{ 
+                        display: 'inline-flex', 
+                        alignItems: 'center', 
+                        gap: '5px', 
+                        background: isTakeaway ? '#fee2e2' : '#f1f5f9', 
+                        color: isTakeaway ? '#b91c1c' : '#475569', 
+                        padding: '2px 8px', 
+                        borderRadius: '6px', 
+                        fontSize: '10.5px', 
+                        fontWeight: 800, 
+                        width: 'fit-content', 
+                        marginBottom: '8px',
+                        whiteSpace: 'nowrap'
+                      }}>
+                        <ShoppingBag size={12} />
+                        {isTakeaway ? 'GROSIR / PARTAI' : 'ECERAN'}
+                      </div>
+                      <div className="tier-card-title" style={{ fontSize: '13px', fontWeight: 700, color: '#1e293b' }}>
+                        {isTakeaway ? 'Satuan Grosir / Partai' : 'Satuan Ecer / Loose'}
+                      </div>
+                      <div className="tier-card-sub" style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                        Isi: <strong>1 {retailUnit}</strong>
+                      </div>
+                    </div>
+
+                    <div className="tier-card-pricing">
+                      <div className="tier-card-price-label" style={{ fontSize: '10.5px', color: isTakeaway ? '#b91c1c' : '#475569', fontWeight: 700 }}>
+                        {isTakeaway ? 'Harga Grosir Aktif:' : 'Harga Jual / Ecer:'}
+                      </div>
+                      <div className="tier-card-price" style={{ fontSize: '16px', fontWeight: 900, color: isTakeaway ? '#b91c1c' : '#0f172a', whiteSpace: 'nowrap' }}>
+                        {formatIDR(isTakeaway && wholesaleP > 0 ? wholesaleP : retailP)}
+                      </div>
+                      <div className="tier-card-meta" style={{ fontSize: '10px', color: '#64748b', marginTop: '1px' }}>
+                        {isTakeaway ? 'Otomatis mode grosir aktif' : 'Satuan eceran standar'}
+                      </div>
+                    </div>
                   </div>
 
-                  <div style={{ margin: '14px 0 12px 0' }}>
-                    <div style={{ fontSize: '10.5px', color: isTakeaway ? '#b91c1c' : '#475569', fontWeight: 700 }}>
-                      {isTakeaway ? 'Harga Grosir Aktif:' : 'Harga Jual / Ecer:'}
-                    </div>
-                    <div style={{ fontSize: '16px', fontWeight: 900, color: isTakeaway ? '#b91c1c' : '#0f172a' }}>
-                      {formatIDR(isTakeaway && wholesaleP > 0 ? wholesaleP : retailP)}
-                    </div>
-                    <div style={{ fontSize: '10px', color: '#64748b', marginTop: '1px' }}>
-                      {isTakeaway ? 'Otomatis mode grosir aktif' : 'Satuan eceran standar'}
-                    </div>
-                  </div>
-
-                  <div style={{ marginTop: 'auto', paddingTop: '8px', borderTop: isTakeaway ? '1px dashed #fca5a5' : '1px dashed #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '11px', fontWeight: 700, color: retailStock > 0 ? '#16a34a' : '#dc2626' }}>
+                  <div className="tier-card-footer" style={{ borderTop: isTakeaway ? '1px dashed #fca5a5' : '1px dashed #e2e8f0' }}>
+                    <span className="tier-card-stock" style={{ fontSize: '11px', fontWeight: 700, color: retailStock > 0 ? '#16a34a' : '#dc2626' }}>
                       Tersedia: {retailStock} {retailUnit}
                     </span>
-                  </div>
 
-                  <button
-                    type="button"
-                    style={{
-                      marginTop: '10px',
-                      background: isTakeaway ? '#dc2626' : '#475569',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '8px',
-                      padding: '8px 10px',
-                      fontWeight: 800,
-                      fontSize: '12px',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '4px'
-                    }}
-                  >
-                    <Check size={14} /> {isTakeaway ? 'Beli Satuan Grosir' : 'Beli Eceran'}
-                  </button>
+                    <button
+                      type="button"
+                      className="tier-card-btn"
+                      style={{
+                        background: isTakeaway ? '#dc2626' : '#475569',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '8px',
+                        padding: '8px 10px',
+                        fontWeight: 800,
+                        fontSize: '12px',
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '4px',
+                        whiteSpace: 'nowrap'
+                      }}
+                    >
+                      <Check size={14} /> {isTakeaway ? 'Beli Satuan Grosir' : 'Beli Eceran'}
+                    </button>
+                  </div>
                 </div>
 
               </div>
 
               {/* Barcode Info Footer */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11.5px', color: '#64748b', background: '#f8fafc', padding: '10px 14px', borderRadius: '10px', border: '1px solid #e2e8f0', flexWrap: 'wrap', gap: '8px' }}>
+              <div className="tier-modal-tips" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11.5px', color: '#64748b', background: '#f8fafc', padding: '10px 14px', borderRadius: '10px', border: '1px solid #e2e8f0', flexWrap: 'wrap', gap: '8px' }}>
                 <div>
                   💡 <em>Tips: Scan langsung barcode kemasan Dus atau Eceran untuk input cepat tanpa dialog ini.</em>
                 </div>
@@ -3900,10 +4025,12 @@ function App() {
       {/* MODAL PICKER CETAK LABEL BARCODE (POINT 8) */}
       {labelPickerOpen && (
         <div
+          className="modal-overlay"
           style={{
             position: 'fixed',
             inset: 0,
-            backgroundColor: 'rgba(0,0,0,0.5)',
+            backgroundColor: 'rgba(15, 23, 42, 0.55)',
+            backdropFilter: 'blur(4px)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -3914,6 +4041,7 @@ function App() {
           onClick={() => setLabelPickerOpen(false)}
         >
           <div
+            className="modal-content label-picker-modal"
             onClick={(e) => e.stopPropagation()}
             style={{
               backgroundColor: 'white',
@@ -3927,45 +4055,47 @@ function App() {
               boxShadow: '0 20px 50px rgba(0,0,0,0.3)',
             }}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-              <div>
-                <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#111827', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <Tag size={20} color="var(--primary, #dc2626)" /> Cetak Label & Barcode Produk
+            <div className="label-picker-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '14px', gap: '12px' }}>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#111827', display: 'flex', alignItems: 'center', gap: '8px', lineHeight: 1.25 }}>
+                  <Tag size={19} color="var(--primary, #dc2626)" style={{ flexShrink: 0 }} />
+                  <span>Cetak Label &amp; Barcode Produk</span>
                 </h3>
-                <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '2px' }}>
+                <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '3px', lineHeight: 1.35 }}>
                   Pilih produk satuan atau cetak masal keseluruhan katalog
                 </div>
               </div>
               <button
                 type="button"
+                aria-label="Tutup"
                 onClick={() => {
                   setLabelPickerOpen(false);
                   setSelectedLabelProductIds([]);
                 }}
-                style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#f3f4f6', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#f3f4f6', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
               >
                 <X size={18} color="#6b7280" />
               </button>
             </div>
 
             {/* Filter Kategori & Pencarian */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '8px', marginBottom: '10px' }}>
+            <div className="label-picker-filters" style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '8px', marginBottom: '10px' }}>
               <div style={{ position: 'relative' }}>
-                <Search size={16} style={{ position: 'absolute', left: '12px', top: '11px', color: '#9ca3af' }} />
+                <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#9ca3af', pointerEvents: 'none' }} />
                 <input
                   type="text"
                   autoFocus
                   placeholder="Cari produk / barcode / SKU..."
                   value={labelPickerSearch}
                   onChange={(e) => setLabelPickerSearch(e.target.value)}
-                  style={{ width: '100%', padding: '9px 12px 9px 34px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '13px', outline: 'none' }}
+                  style={{ width: '100%', boxSizing: 'border-box', padding: '9px 12px 9px 36px', borderRadius: '10px', border: '1px solid #d1d5db', fontSize: '13px', outline: 'none' }}
                 />
               </div>
 
               <select
                 value={labelPickerCategory}
                 onChange={(e) => setLabelPickerCategory(e.target.value)}
-                style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '13px', background: 'white' }}
+                style={{ width: '100%', boxSizing: 'border-box', padding: '9px 12px', borderRadius: '10px', border: '1px solid #d1d5db', fontSize: '13px', background: 'white' }}
               >
                 <option value="ALL">Semua Kategori ({PRODUCTS.length})</option>
                 {categories.map((c) => (
@@ -3991,20 +4121,21 @@ function App() {
               return (
                 <>
                   <div
+                    className="label-picker-bulk"
                     style={{
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
                       background: '#f8fafc',
                       padding: '10px 12px',
-                      borderRadius: '10px',
+                      borderRadius: '12px',
                       border: '1px solid #e2e8f0',
                       marginBottom: '12px',
                       gap: '8px',
                       flexWrap: 'wrap'
                     }}
                   >
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12.5px', fontWeight: 700, color: '#334155', cursor: 'pointer' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '7px', fontSize: '12.5px', fontWeight: 700, color: '#334155', cursor: 'pointer' }}>
                       <input
                         type="checkbox"
                         checked={allFilteredSelected}
@@ -4020,7 +4151,7 @@ function App() {
                       <span>Pilih Semua ({filteredProds.length})</span>
                     </label>
 
-                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <div className="label-picker-bulk-actions" style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
                       {selectedCount > 0 ? (
                         <button
                           type="button"
@@ -4097,6 +4228,7 @@ function App() {
                           fontSize: '12px',
                           display: 'flex',
                           alignItems: 'center',
+                          justifyContent: 'center',
                           gap: '6px',
                           cursor: 'pointer',
                           boxShadow: '0 2px 8px rgba(220,38,38,0.25)',
@@ -4107,7 +4239,7 @@ function App() {
                     </div>
                   </div>
 
-                  <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px', paddingRight: '4px' }}>
+                  <div className="label-picker-list" style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px', paddingRight: '2px' }}>
                     {filteredProds.length === 0 ? (
                       <div style={{ textAlign: 'center', padding: '30px 10px', color: '#94a3b8', fontSize: '13px' }}>
                         Tidak ada produk yang cocok dengan pencarian / filter kategori.
@@ -4118,6 +4250,7 @@ function App() {
                         return (
                           <div
                             key={p.id}
+                            className="label-picker-item"
                             onClick={() => {
                               setSelectedLabelProductIds(prev =>
                                 isSelected ? prev.filter(id => id !== p.id) : [...prev, p.id]
@@ -4128,14 +4261,15 @@ function App() {
                               alignItems: 'center',
                               justifyContent: 'space-between',
                               padding: '10px 12px',
-                              borderRadius: '10px',
+                              borderRadius: '12px',
                               border: `1.5px solid ${isSelected ? '#3b82f6' : '#e5e7eb'}`,
                               background: isSelected ? '#f0f7ff' : '#fcfcfd',
                               cursor: 'pointer',
                               transition: 'all 0.15s',
+                              gap: '10px',
                             }}
                           >
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0, paddingRight: '8px' }}>
+                            <div className="label-picker-item-left" style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
                               <input
                                 type="checkbox"
                                 checked={isSelected}
@@ -4145,23 +4279,24 @@ function App() {
                                     isSelected ? prev.filter(id => id !== p.id) : [...prev, p.id]
                                   );
                                 }}
-                                style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                                style={{ width: '17px', height: '17px', cursor: 'pointer', flexShrink: 0 }}
                               />
                               <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                <div className="label-picker-item-name" style={{ fontSize: '13.5px', fontWeight: 700, color: '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                   {p.name}
                                 </div>
-                                <div style={{ fontSize: '11.5px', color: '#6b7280', marginTop: '2px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                                  <span>Barcode: <code style={{ fontFamily: 'monospace' }}>{p.barcode || p.sku || p.id}</code></span>
-                                  <span>•</span>
-                                  <span style={{ fontWeight: 700, color: '#059669' }}>Rp {p.price.toLocaleString('id-ID')}</span>
-                                  <span>•</span>
-                                  <span style={{ color: '#64748b' }}>Stok: {p.availableStock} {p.unit}</span>
+                                <div className="label-picker-item-meta" style={{ fontSize: '11.5px', color: '#6b7280', marginTop: '3px', display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+                                  <span style={{ whiteSpace: 'nowrap' }}>Barcode: <code style={{ fontFamily: 'monospace' }}>{p.barcode || p.sku || p.id}</code></span>
+                                  <span className="lp-dot">•</span>
+                                  <span style={{ fontWeight: 700, color: '#059669', whiteSpace: 'nowrap' }}>Rp {p.price.toLocaleString('id-ID')}</span>
+                                  <span className="lp-dot">•</span>
+                                  <span style={{ color: '#64748b', whiteSpace: 'nowrap' }}>Stok: {p.availableStock} {p.unit}</span>
                                 </div>
                               </div>
                             </div>
                             <button
                               type="button"
+                              className="label-picker-item-btn"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setLabelPickerOpen(false);
@@ -4193,9 +4328,10 @@ function App() {
                                 fontSize: '12px',
                                 cursor: 'pointer',
                                 whiteSpace: 'nowrap',
-                                display: 'flex',
+                                display: 'inline-flex',
                                 alignItems: 'center',
-                                gap: '4px',
+                                gap: '5px',
+                                flexShrink: 0,
                               }}
                             >
                               <Tag size={13} /> Cetak Stiker
@@ -4224,32 +4360,112 @@ function App() {
         />
       )}
 
-      {/* FLOATING TOAST NOTIFICATION KASIR (POINT 2, 7) */}
-      {toastNotice && (
-        <div 
-          style={{
-            position: 'fixed',
-            top: '20px',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            zIndex: 99999,
-            backgroundColor: toastNotice.type === 'success' ? '#065f46' : '#991b1b',
-            color: '#ffffff',
-            padding: '10px 22px',
-            borderRadius: '999px',
-            boxShadow: '0 10px 25px rgba(0,0,0,0.25)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            fontWeight: 700,
-            fontSize: '13.5px',
-            pointerEvents: 'none',
-            animation: 'fadeIn 0.2s ease-out'
-          }}
-        >
-          {toastNotice.type === 'success' ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
-          <span>{toastNotice.message}</span>
-        </div>
+      {/* FLOATING DYNAMIC ISLAND NOTIFICATION KASIR (iOS & Desktop) */}
+      {toastNotice && typeof document !== 'undefined' && createPortal(
+        (() => {
+          const accent =
+            toastNotice.type === 'success'
+              ? '#22c55e'
+              : toastNotice.type === 'error'
+              ? '#ef4444'
+              : '#3b82f6';
+          const microLabel =
+            toastNotice.type === 'success'
+              ? 'MASUK KERANJANG'
+              : toastNotice.type === 'error'
+              ? 'PERHATIAN'
+              : 'INFO KASIR';
+
+          return (
+            <>
+              <div
+                key={toastNotice.id}
+                role="status"
+                aria-live="polite"
+                data-has-cart={cart.length > 0 ? 'true' : 'false'}
+                data-delivery-checkout={orderType === 'DRIVETHRU' && deliveryStep === 'checkout' ? 'true' : 'false'}
+                onClick={() => setToastNotice(null)}
+                className="pos-dynamic-island"
+                style={{
+                  position: 'fixed',
+                  top: '14px',
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  transformOrigin: 'top center',
+                  zIndex: 999999,
+                  backgroundColor: '#000000',
+                  border: '1px solid rgba(255, 255, 255, 0.14)',
+                  borderRadius: '9999px',
+                  padding: '6px 14px 6px 6px',
+                  boxShadow: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  width: 'max-content',
+                  maxWidth: 'min(430px, calc(100vw - 24px))',
+                  cursor: 'pointer',
+                  pointerEvents: 'auto',
+                  animation: 'posDynamicIslandIn 0.38s cubic-bezier(0.22, 1.28, 0.36, 1) forwards',
+                  WebkitTapHighlightColor: 'transparent',
+                }}
+              >
+                <div
+                  style={{
+                    width: '28px',
+                    height: '28px',
+                    borderRadius: '50%',
+                    backgroundColor: accent,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                  }}
+                >
+                  {toastNotice.type === 'success' ? (
+                    <CheckCircle2 size={15} color="#ffffff" strokeWidth={2.5} />
+                  ) : (
+                    <AlertCircle size={15} color="#ffffff" strokeWidth={2.5} />
+                  )}
+                </div>
+                <div style={{ minWidth: 0, flex: 1, fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif' }}>
+                  <div style={{ fontSize: '9.5px', fontWeight: 800, letterSpacing: '0.55px', color: accent, lineHeight: 1.15, textTransform: 'uppercase' }}>
+                    {microLabel}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: '12.5px',
+                      fontWeight: 600,
+                      color: '#f8fafc',
+                      lineHeight: 1.3,
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                    }}
+                  >
+                    {toastNotice.message}
+                  </div>
+                </div>
+              </div>
+              <style>{`
+                @keyframes posDynamicIslandIn {
+                  0% {
+                    opacity: 0;
+                    transform: translateX(-50%) scaleX(0.32) scaleY(0.6);
+                  }
+                  68% {
+                    opacity: 1;
+                    transform: translateX(-50%) scaleX(1.03) scaleY(1.02);
+                  }
+                  100% {
+                    opacity: 1;
+                    transform: translateX(-50%) scaleX(1) scaleY(1);
+                  }
+                }
+              `}</style>
+            </>
+          );
+        })(),
+        document.body
       )}
 
     </div>

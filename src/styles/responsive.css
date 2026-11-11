@@ -67,14 +67,21 @@
     margin: 0;
     padding: 0;
     background-color: var(--bg-main, #faf9fd);
-    /* Tidak memakai position: fixed agar PWA iOS bisa tembus layar bawah */
+    /* Tidak memakai position: fixed agar PWA iOS bisa tembus layar bawah; pastikan scroll vertikal tidak terkunci oleh body{overflow:hidden} desktop */
     overflow-x: hidden;
+    overflow-y: auto;
   }
   #root {
     width: 100%;
     min-height: 100vh;
     display: flex;
     flex-direction: column;
+  }
+  .app-container {
+    width: 100%;
+    height: 100dvh !important;
+    max-height: 100dvh;
+    overflow: hidden !important;
   }
 
   .desktop-only,
@@ -477,10 +484,16 @@ body {
   /* ---------- Grid produk full-screen ---------- */
   .main-content {
     position: relative;
+    flex: 1 1 0%;
     min-height: 0;
+    overflow: hidden;
   }
   .left-panel {
+    flex: 1 1 0%;
     min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
   }
   .categories-header-row {
     padding-right: max(10px, var(--sar));
@@ -500,7 +513,12 @@ body {
     gap: 0.6rem;
     padding: 10px max(10px, var(--sar)) calc(100px + var(--sab)) max(10px, var(--sal));
     -webkit-overflow-scrolling: touch;
+    flex: 1 1 0%;
     min-height: 0;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    touch-action: pan-y;
+    overscroll-behavior-y: contain;
   }
   .product-grid.mode-compact {
     grid-template-columns: 1fr;
@@ -588,6 +606,10 @@ body {
   }
   .cart-list {
     -webkit-overflow-scrolling: touch;
+    min-height: 0;
+    overflow-y: auto;
+    touch-action: pan-y;
+    overscroll-behavior-y: contain;
   }
   .qty-btn {
     width: 32px;
@@ -2291,4 +2313,1281 @@ body {
     cursor: pointer;
   }
 }
+
+/* =====================================================================
+   MODAL PILIH LEVEL KEMASAN & HARGA (DESKTOP DEFAULT + MOBILE/IOS)
+   ===================================================================== */
+.tier-modal-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--tier-cols, 3), minmax(0, 1fr));
+  gap: 14px;
+  margin: 8px 0 16px 0;
+}
+
+.tier-card-main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.tier-card-pricing {
+  margin: 14px 0 12px 0;
+}
+
+.tier-card-footer {
+  margin-top: auto;
+  padding-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tier-card-btn {
+  width: 100%;
+}
+
+@media (max-width: 640px) {
+  .tier-modal {
+    padding: 4px 16px calc(18px + var(--sab, 16px)) 16px !important;
+  }
+
+  .tier-modal-header {
+    margin-bottom: 10px !important;
+  }
+
+  .tier-modal-header h3 {
+    font-size: 17px !important;
+  }
+
+  .tier-modal-grid {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+    margin: 6px 0 12px 0 !important;
+  }
+
+  .tier-card {
+    padding: 13px 14px !important;
+    border-radius: 16px !important;
+    gap: 10px;
+  }
+
+  .tier-card-main {
+    flex-direction: row !important;
+    align-items: flex-start !important;
+    justify-content: space-between !important;
+    gap: 12px !important;
+  }
+
+  .tier-card-info {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .tier-card-badge {
+    margin-bottom: 5px !important;
+    font-size: 10px !important;
+  }
+
+  .tier-card-title {
+    font-size: 14px !important;
+    line-height: 1.25;
+  }
+
+  .tier-card-pricing {
+    margin: 0 !important;
+    text-align: right;
+    flex-shrink: 0;
+    max-width: 60%;
+  }
+
+  .tier-card-price {
+    font-size: 17px !important;
+    line-height: 1.2;
+  }
+
+  .tier-card-meta {
+    font-size: 10.5px !important;
+    line-height: 1.3;
+  }
+
+  .tier-card-footer {
+    margin-top: 0 !important;
+    padding-top: 9px !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 10px !important;
+  }
+
+  .tier-card-btn {
+    width: auto !important;
+    padding: 8px 14px !important;
+    min-height: 36px;
+    border-radius: 10px !important;
+    flex-shrink: 0;
+  }
+
+  .tier-modal-tips {
+    padding: 9px 12px !important;
+    font-size: 11px !important;
+    border-radius: 12px !important;
+  }
+
+  /* ===================================================================
+     KERANJANG KASIR MOBILE & IOS: 2-BARIS PROPORSI TANPA OVERFLOW
+     =================================================================== */
+  .right-panel .cart-list {
+    padding: 10px 14px !important;
+    background: #f8fafc;
+  }
+
+  .right-panel .cart-item {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    grid-template-rows: auto auto !important;
+    align-items: start !important;
+    gap: 10px 10px !important;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    padding: 12px 13px !important;
+    margin-bottom: 8px;
+    width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
+  }
+
+  .right-panel .cart-item .item-details {
+    grid-column: 1 !important;
+    grid-row: 1 !important;
+    min-width: 0 !important;
+  }
+
+  .right-panel .cart-item .item-title {
+    font-size: 14px !important;
+    line-height: 1.35 !important;
+    word-break: break-word;
+  }
+
+  .right-panel .cart-item .item-price {
+    grid-column: 2 !important;
+    grid-row: 1 !important;
+    min-width: 0 !important;
+    white-space: nowrap !important;
+    font-size: 14.5px !important;
+    font-weight: 800 !important;
+    color: #0f172a;
+    padding-top: 1px !important;
+  }
+
+  .right-panel .cart-item .item-controls {
+    grid-column: 1 / -1 !important;
+    grid-row: 2 !important;
+    width: 100% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    padding-top: 9px;
+    border-top: 1px dashed #e2e8f0;
+    gap: 8px !important;
+  }
+
+  .right-panel .cart-item .qty-wrapper {
+    background: #f1f5f9 !important;
+    border-radius: 10px !important;
+    padding: 2px !important;
+  }
+
+  .right-panel .cart-item .remove-btn {
+    width: 34px !important;
+    height: 34px !important;
+    border-radius: 10px !important;
+    background: #fef2f2 !important;
+    color: #ef4444 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex-shrink: 0 !important;
+  }
+
+  /* ===================================================================
+     MODAL CETAK LABEL & BARCODE PRODUK (MOBILE & IOS BOTTOM SHEET)
+     =================================================================== */
+  .label-picker-modal,
+  .barcode-label-modal {
+    padding: 4px 16px calc(18px + var(--sab, 16px)) 16px !important;
+    max-height: calc(100dvh - max(var(--sat, 0px), 44px)) !important;
+  }
+
+  .label-picker-filters {
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+  }
+
+  .label-picker-bulk {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 10px !important;
+  }
+
+  .label-picker-bulk-actions {
+    width: 100%;
+    display: flex !important;
+  }
+
+  .label-picker-bulk-actions button {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+
+  .label-picker-item {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    padding: 12px 13px !important;
+    border-radius: 14px !important;
+    gap: 10px !important;
+  }
+
+  .label-picker-item-left {
+    align-items: flex-start !important;
+  }
+
+  .label-picker-item-name {
+    white-space: normal !important;
+    overflow: visible !important;
+    text-overflow: unset !important;
+    line-height: 1.3 !important;
+    font-size: 14px !important;
+  }
+
+  .label-picker-item-btn {
+    width: 100% !important;
+    justify-content: center !important;
+    padding: 9px 12px !important;
+    border-radius: 10px !important;
+    font-size: 12.5px !important;
+  }
+}
+
+/* =====================================================================
+   DYNAMIC ISLAND TOAST MOBILE/IOS: POSISI AMAN DI ATAS CART BAR
+   (Bebas dari blur/gradasi status bar atas & tidak menghalangi header)
+   ===================================================================== */
+@media (max-width: 768px) {
+  .pos-dynamic-island {
+    top: auto !important;
+    bottom: calc(20px + env(safe-area-inset-bottom, 0px)) !important;
+    transform-origin: bottom center !important;
+    animation: posDynamicIslandBottomIn 0.36s cubic-bezier(0.22, 1.28, 0.36, 1) forwards !important;
+  }
+
+  .pos-dynamic-island[data-has-cart="true"] {
+    bottom: calc(92px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  .pos-dynamic-island[data-delivery-checkout="true"] {
+    bottom: calc(130px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+}
+
+@keyframes posDynamicIslandBottomIn {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(12px) scaleX(0.45) scaleY(0.75);
+  }
+  68% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(-2px) scaleX(1.02) scaleY(1.02);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scaleX(1) scaleY(1);
+  }
+}
+
+/* =====================================================================
+   DELIVERY MODE VIEW (GoMart-style Catalog + Konfirmasi Belanjaan)
+   ===================================================================== */
+.deliv-shell {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100dvh;
+  background: #ffffff;
+  color: #0f172a;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+}
+
+.deliv-sticky-top {
+  background: #ffffff;
+  flex-shrink: 0;
+  padding-top: max(env(safe-area-inset-top, 0px), 6px);
+  z-index: 20;
+}
+
+.deliv-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: #ffffff;
+  flex-shrink: 0;
+}
+
+.deliv-checkout-shell .deliv-header {
+  padding-top: max(calc(env(safe-area-inset-top, 0px) + 8px), 12px);
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.deliv-back-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 9999px;
+  border: none;
+  background: transparent;
+  color: #0f172a;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  padding: 0;
+  transition: background-color 0.15s ease;
+}
+
+.deliv-back-btn:active {
+  background: #f1f5f9;
+}
+
+.deliv-store-thumb {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid #eceef2;
+  background: #f8fafc;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.deliv-store-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.deliv-header-titles {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.deliv-catalog-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.deliv-catalog-subtitle {
+  margin: 1px 0 0 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.deliv-mode-switch-pill {
+  padding: 6px 12px;
+  border-radius: 9999px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.deliv-search-wrap {
+  padding: 4px 16px 10px 16px;
+}
+
+.deliv-search-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 9999px;
+  padding: 8px 12px 8px 14px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.deliv-search-pill:focus-within {
+  background: #ffffff;
+  border-color: #00880d;
+  box-shadow: 0 0 0 3px rgba(0, 136, 13, 0.08);
+}
+
+.deliv-search-icon {
+  color: #64748b;
+  flex-shrink: 0;
+}
+
+.deliv-search-pill input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 14px;
+  color: #0f172a;
+}
+
+.deliv-search-pill input::placeholder {
+  color: #94a3b8;
+}
+
+.deliv-search-clear,
+.deliv-search-cam {
+  width: 28px;
+  height: 28px;
+  border-radius: 9999px;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.deliv-search-cam {
+  background: #e8f8ec;
+  color: #00880d;
+}
+
+.deliv-cats-scroll {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px 12px 16px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.deliv-cats-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.deliv-cat-pill {
+  flex-shrink: 0;
+  padding: 6px 14px;
+  border-radius: 9999px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #475569;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.deliv-cat-pill.active {
+  background: #e8f8ec;
+  border-color: #00880d;
+  color: #006c0a;
+}
+
+.deliv-catalog-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  overscroll-behavior-y: contain;
+  padding: 14px 16px 24px 16px;
+  background: #ffffff;
+}
+
+.deliv-catalog-body.has-cart-bar {
+  padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+}
+
+.deliv-product-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 16px 12px;
+  max-width: 1120px;
+  margin: 0 auto;
+}
+
+.deliv-card {
+  display: flex;
+  flex-direction: column;
+  cursor: pointer;
+  user-select: none;
+}
+
+.deliv-card.out-of-stock {
+  opacity: 0.52;
+  cursor: not-allowed;
+}
+
+.deliv-card-img-box {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  background: #ffffff;
+  border: 1px solid #eceef2;
+  border-radius: 14px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.deliv-card-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.deliv-badge-populer {
+  position: absolute;
+  top: 7px;
+  left: 7px;
+  background: #e0f7fa;
+  color: #00838f;
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 6px;
+  line-height: 1.3;
+  z-index: 2;
+}
+
+.deliv-badge-oos {
+  position: absolute;
+  top: 7px;
+  left: 7px;
+  background: #fee2e2;
+  color: #b91c1c;
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 6px;
+  z-index: 2;
+}
+
+.deliv-card-add-btn {
+  position: absolute;
+  right: 7px;
+  bottom: 7px;
+  width: 34px;
+  height: 34px;
+  border-radius: 9999px;
+  border: none;
+  background: #00880d;
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 3px 10px rgba(0, 136, 13, 0.32);
+  z-index: 3;
+  padding: 0;
+  transition: transform 0.12s ease, background-color 0.15s ease;
+}
+
+.deliv-card-add-btn:active {
+  transform: scale(0.92);
+  background: #006c0a;
+}
+
+.deliv-card-stepper {
+  position: absolute;
+  left: 7px;
+  right: 7px;
+  bottom: 7px;
+  height: 30px;
+  border-radius: 9999px;
+  background: #ffffff;
+  border: 1.5px solid #00880d;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 4px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.12);
+  z-index: 3;
+}
+
+.deliv-card-step-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: 9999px;
+  border: none;
+  background: transparent;
+  color: #00880d;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+
+.deliv-card-step-qty {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.deliv-card-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.deliv-unit-badge {
+  display: inline-block;
+  background: #f1f3f5;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 7px;
+  border-radius: 6px;
+  line-height: 1.3;
+}
+
+.deliv-card-name {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: #0f172a;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: 34px;
+}
+
+.deliv-card-price {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.deliv-empty-search,
+.deliv-empty-cart {
+  text-align: center;
+  padding: 48px 20px;
+  color: #64748b;
+  font-size: 14px;
+}
+
+.deliv-empty-search p,
+.deliv-empty-cart p {
+  margin: 0 0 12px 0;
+}
+
+/* Floating Green Bottom Summary Bar (Catalog) */
+.deliv-floating-cart-wrap {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  padding: 0 16px;
+  z-index: 40;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.deliv-floating-cart-bar {
+  pointer-events: auto;
+  width: 100%;
+  max-width: 680px;
+  background: #00880d;
+  color: #ffffff;
+  border: none;
+  border-radius: 9999px;
+  padding: 11px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  box-shadow: 0 10px 24px rgba(0, 136, 13, 0.34);
+  transition: transform 0.14s ease, background-color 0.15s ease;
+}
+
+.deliv-floating-cart-bar:active {
+  transform: scale(0.985);
+  background: #00740b;
+}
+
+.deliv-fcb-left {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  text-align: left;
+}
+
+.deliv-fcb-left strong {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.deliv-fcb-left span {
+  font-size: 11px;
+  opacity: 0.92;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.deliv-fcb-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.deliv-fcb-right strong {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.deliv-fcb-arrow {
+  width: 24px;
+  height: 24px;
+  border-radius: 9999px;
+  background: #ffffff;
+  color: #00880d;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* =====================================================================
+   DELIVERY CHECKOUT CONFIRMATION ("Konfirmasi belanjaan")
+   ===================================================================== */
+.deliv-checkout-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.deliv-checkout-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  overscroll-behavior-y: contain;
+  background: #ffffff;
+}
+
+.deliv-eta-banner {
+  background: #e6f7ea;
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.deliv-eta-icon {
+  color: #00880d;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.deliv-eta-text {
+  margin: 0;
+  font-size: 13px;
+  color: #1e293b;
+}
+
+.deliv-section {
+  padding: 16px;
+  max-width: 680px;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.deliv-location-label {
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 500;
+  margin-bottom: 6px;
+}
+
+.deliv-location-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.deliv-location-info {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.deliv-location-address {
+  font-size: 16px;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.3;
+  word-break: break-word;
+}
+
+.deliv-location-customer {
+  margin-top: 3px;
+  font-size: 12px;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.deliv-outline-green-pill {
+  padding: 7px 14px;
+  border-radius: 9999px;
+  border: 1.5px solid #00880d;
+  background: #ffffff;
+  color: #00880d;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.deliv-outline-green-pill:active {
+  background: #e8f8ec;
+}
+
+.deliv-warning-pill {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  border-radius: 9999px;
+  border: 1px solid #d97706;
+  background: #fff9eb;
+  color: #78350f;
+  font-size: 12.5px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  margin-bottom: 12px;
+}
+
+.deliv-warning-icon {
+  color: #b45309;
+  flex-shrink: 0;
+}
+
+.deliv-saved-detail-box,
+.deliv-saved-note-box {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 8px 12px;
+  font-size: 12.5px;
+  color: #334155;
+  margin-bottom: 10px;
+  cursor: pointer;
+}
+
+.deliv-saved-detail-label {
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.deliv-pill-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.deliv-action-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 9999px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.deliv-action-chip.active {
+  border-color: #00880d;
+  background: #e8f8ec;
+  color: #006c0a;
+}
+
+.deliv-inline-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.deliv-inline-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 9px 12px;
+  border-radius: 12px;
+  border: 1px solid #cbd5e1;
+  font-size: 13px;
+  color: #0f172a;
+  outline: none;
+}
+
+.deliv-inline-input:focus {
+  border-color: #00880d;
+}
+
+.deliv-inline-save {
+  padding: 9px 14px;
+  border-radius: 12px;
+  border: none;
+  background: #00880d;
+  color: #ffffff;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.deliv-section-divider {
+  height: 8px;
+  background: #f4f5f7;
+  width: 100%;
+}
+
+.deliv-items-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.deliv-items-header h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.deliv-add-more-link {
+  background: none;
+  border: none;
+  color: #00880d;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 4px 0;
+}
+
+.deliv-checkout-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.deliv-checkout-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.deliv-checkout-item:last-child {
+  border-bottom: none;
+}
+
+.deliv-checkout-thumb {
+  width: 64px;
+  height: 64px;
+  border-radius: 10px;
+  border: 1px solid #eceef2;
+  background: #ffffff;
+  padding: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.deliv-checkout-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.deliv-checkout-item-info {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.deliv-checkout-item-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #0f172a;
+  line-height: 1.3;
+}
+
+.deliv-checkout-item-price {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: #334155;
+}
+
+.deliv-circle-stepper {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.deliv-circle-step-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 9999px;
+  border: 1.5px solid #00880d;
+  background: #ffffff;
+  color: #00880d;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+
+.deliv-circle-step-btn:active {
+  background: #e8f8ec;
+}
+
+.deliv-circle-step-qty {
+  min-width: 16px;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+/* Sticky Bottom Payment Footer */
+.deliv-checkout-footer {
+  flex-shrink: 0;
+  background: #ffffff;
+  border-top: 1px solid #eef0f3;
+  box-shadow: 0 -4px 16px rgba(15, 23, 42, 0.05);
+  padding: 10px 16px calc(12px + env(safe-area-inset-bottom, 0px)) 16px;
+}
+
+.deliv-pay-strip,
+.deliv-cta-btn {
+  max-width: 680px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.deliv-pay-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.deliv-pay-chips {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 auto;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.deliv-pay-chips::-webkit-scrollbar {
+  display: none;
+}
+
+.deliv-pay-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  flex-shrink: 0;
+  text-align: left;
+}
+
+.deliv-pay-chip.active {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.deliv-pay-chip-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.deliv-pay-chip-meta {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+
+.deliv-pay-chip-label {
+  font-size: 11px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.deliv-pay-chip-val {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.deliv-pay-more-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 9999px;
+  border: none;
+  background: transparent;
+  color: #475569;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.deliv-cta-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #00880d;
+  color: #ffffff;
+  border: none;
+  border-radius: 9999px;
+  padding: 13px 18px;
+  font-size: 14.5px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(0, 136, 13, 0.25);
+}
+
+.deliv-cta-btn.disabled {
+  background: #94a3b8;
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+.deliv-cta-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.deliv-cta-arrow {
+  width: 24px;
+  height: 24px;
+  border-radius: 9999px;
+  background: #ffffff;
+  color: #00880d;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Mobile / iOS 3-column exact proportions */
+@media (max-width: 640px) {
+  .deliv-product-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px 9px;
+  }
+
+  .deliv-card-img-box {
+    border-radius: 13px;
+    padding: 0;
+  }
+
+  .deliv-card-add-btn {
+    width: 30px;
+    height: 30px;
+    right: 5px;
+    bottom: 5px;
+  }
+
+  .deliv-card-stepper {
+    left: 5px;
+    right: 5px;
+    bottom: 5px;
+    height: 28px;
+  }
+
+  .deliv-card-name {
+    font-size: 12.5px;
+    min-height: 32px;
+  }
+
+  .deliv-card-price {
+    font-size: 13px;
+  }
+}
+
 
