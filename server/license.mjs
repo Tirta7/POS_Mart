@@ -2,7 +2,7 @@ import { execSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import QRCode from 'qrcode';
-import { checkLicense, activateLicense, verifyLicenseKey, saveOfflineKey, isNetworkError } from './vocml-client.js';
+import { checkLicense, activateLicense, verifyLicenseKey, saveOfflineKey, isNetworkError, fetchBilling } from './vocml-client.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const IS_VITE_BUILD = process.argv.some(arg => arg.includes('vite')) && process.argv.includes('build');
@@ -300,8 +300,9 @@ export async function verifikasiAplikasi() {
       return licenseState;
     }
 
-    // Cek setiap 5 detik (aktif) atau 4 detik (terkunci) agar perubahan dari VOCML maupun QRIS langsung real-time
-    const nextInterval = licenseState?.allowed ? 5000 : 4000;
+    // Polling cepat (3 detik) khusus saat modal QRIS / layar terkunci terbuka (fallback jika SSE terhalang).
+    // Jika lisensi aktif / normal, kembalikan ke interval normal (1 jam = 3600000 ms) agar hemat jaringan.
+    const nextInterval = licenseState?.allowed ? 3600000 : 3000;
     checkTimer = setTimeout(() => { verifikasiAplikasi(); }, nextInterval);
     if (checkTimer?.unref) checkTimer.unref();
 
@@ -351,10 +352,154 @@ export async function fetchMessagesFromVocml() {
   }
 }
 
-// Mulai verifikasi dan fetching pesan saat server start (kecuali saat vite build)
+let vocmlStreamAbortController = null;
+let vocmlStreamReconnectTimer = null;
+
+async function handleVocmlStreamEvent(event, rawData) {
+  let parsed = null;
+  try {
+    if (rawData) parsed = JSON.parse(rawData);
+  } catch {}
+
+  const normalizedEvent = (
+    event && event !== 'message'
+      ? event
+      : (parsed?.event || parsed?.type || parsed?.action || '')
+  ).toLowerCase();
+
+  console.log(`[VOCML Stream] Event diterima: ${normalizedEvent || event}`, parsed || rawData);
+
+  if (normalizedEvent === 'renew' || normalizedEvent === 'unlock') {
+    console.log(`[VOCML Stream] Mendeteksi event ${normalizedEvent.toUpperCase()}! Langsung memanggil verifikasiAplikasi...`);
+    const nextLicense = await verifikasiAplikasi();
+    const unlockMsg = 'Pembayaran berhasil! Lisensi Kasir POS telah aktif kembali';
+    const notifyPayload = JSON.stringify({
+      event: normalizedEvent,
+      message: unlockMsg,
+      license: nextLicense,
+    });
+    for (const client of sseClients) {
+      try {
+        client.write(`event: unlock\ndata: ${notifyPayload}\n\n`);
+        client.write(`event: renew\ndata: ${notifyPayload}\n\n`);
+      } catch {}
+    }
+  } else if (normalizedEvent === 'lock') {
+    console.log('[VOCML Stream] Mendeteksi event LOCK dari admin! Langsung memanggil verifikasiAplikasi...');
+    await verifikasiAplikasi();
+    for (const client of sseClients) {
+      try {
+        client.write(`event: lock\ndata: ${JSON.stringify({ event: 'lock', reason: 'Aplikasi dikunci oleh admin' })}\n\n`);
+      } catch {}
+    }
+  }
+}
+
+/** Hubungkan ke Stream Real-Time SSE VOCML Server (/api/v1/stream) dengan auto-reconnect 5 detik */
+export function connectVocmlStream() {
+  if (IS_VITE_BUILD) return;
+  if (vocmlStreamReconnectTimer) {
+    clearTimeout(vocmlStreamReconnectTimer);
+    vocmlStreamReconnectTimer = null;
+  }
+  if (vocmlStreamAbortController) {
+    vocmlStreamAbortController.abort();
+    vocmlStreamAbortController = null;
+  }
+
+  const machineId = getMachineId();
+  const streamUrl = new URL(`${VOCML_SERVER_URL.replace(/\/$/, '')}/api/v1/stream`);
+  streamUrl.searchParams.set('machine_id', machineId);
+  streamUrl.searchParams.set('product', VOCML_PRODUCT);
+
+  const headers = {
+    Accept: 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    Pragma: 'no-cache',
+    ...(VOCML_API_KEY ? { 'X-VOCML-Key': VOCML_API_KEY } : {}),
+  };
+
+  const controller = new AbortController();
+  vocmlStreamAbortController = controller;
+
+  const scheduleReconnect = () => {
+    if (controller.signal.aborted) return;
+    if (vocmlStreamReconnectTimer) clearTimeout(vocmlStreamReconnectTimer);
+    vocmlStreamReconnectTimer = setTimeout(() => {
+      connectVocmlStream();
+    }, 5000);
+    if (vocmlStreamReconnectTimer?.unref) vocmlStreamReconnectTimer.unref();
+  };
+
+  (async () => {
+    try {
+      console.log(`[VOCML Stream] Menghubungkan ke ${streamUrl.origin}/api/v1/stream?machine_id=${machineId}&product=${VOCML_PRODUCT}...`);
+      const res = await fetch(streamUrl.toString(), {
+        headers,
+        signal: controller.signal,
+      });
+
+      if (!res.ok) {
+        console.warn(`[VOCML Stream] Respons non-OK dari server VOCML: HTTP ${res.status}. Auto-reconnect dalam 5 detik.`);
+        scheduleReconnect();
+        return;
+      }
+
+      console.log('[VOCML Stream] Berhasil terhubung ke SSE VOCML Server (/api/v1/stream)');
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let buffer = '';
+      let currentEvent = 'message';
+      let currentData = '';
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split(/\r?\n/);
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith(':')) {
+            // Heartbeat comment dari server
+            continue;
+          }
+          if (line === '') {
+            // Akhir blok event SSE
+            if (currentEvent || currentData) {
+              await handleVocmlStreamEvent(currentEvent, currentData);
+            }
+            currentEvent = 'message';
+            currentData = '';
+            continue;
+          }
+          if (line.startsWith('event:')) {
+            currentEvent = line.slice(6).trim();
+          } else if (line.startsWith('data:')) {
+            const val = line.slice(5).trim();
+            currentData = currentData ? `${currentData}\n${val}` : val;
+          }
+        }
+      }
+
+      console.warn('[VOCML Stream] Koneksi SSE stream ditutup oleh server. Auto-reconnect dalam 5 detik...');
+      scheduleReconnect();
+    } catch (err) {
+      if (!controller.signal.aborted) {
+        console.warn(`[VOCML Stream] Gagal / terputus: ${err?.message || err}. Auto-reconnect dalam 5 detik...`);
+        scheduleReconnect();
+      }
+    }
+  })();
+}
+
+// Mulai verifikasi, fetching pesan, dan koneksi SSE stream saat server start (kecuali saat vite build)
 if (!IS_VITE_BUILD) {
   verifikasiAplikasi();
   fetchMessagesFromVocml();
+  connectVocmlStream();
 }
 
 function crc16Ccitt(str) {
@@ -499,11 +644,27 @@ export function licenseMiddleware() {
       return;
     }
 
-    // 2. Endpoint info tagihan QRIS
-    if (pathname === '/api/license/billing') {
+    // 2. Endpoint info tagihan QRIS (mendukung /api/license/billing dan /api/v1/billing)
+    if (pathname === '/api/license/billing' || pathname === '/api/v1/billing') {
+      try {
+        const freshBilling = await fetchBilling({
+          serverUrl: VOCML_SERVER_URL,
+          product: VOCML_PRODUCT,
+          machineId: getMachineId(),
+          apiKey: VOCML_API_KEY,
+          timeoutMs: 5000,
+        });
+        if (freshBilling) {
+          const billingObj = freshBilling.billing || freshBilling;
+          licenseState.billing = billingObj;
+        }
+      } catch {
+        // Abaikan jika offline / gagal terhubung, tetap gunakan snapshot billing lokal
+      }
       res.statusCode = 200;
       res.setHeader('Content-Type', 'application/json');
-      res.setHeader('Cache-Control', 'no-store');
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
       res.end(JSON.stringify({
         status: licenseState.status,
         billing: licenseState.billing || null,
@@ -512,7 +673,7 @@ export function licenseMiddleware() {
     }
 
     // 3. Endpoint proxy gambar QRIS PNG (Cache-Control: no-store)
-    if (pathname === '/api/license/billing/qris.png') {
+    if (pathname === '/api/license/billing/qris.png' || pathname === '/api/v1/billing/qris.png') {
       const size = parseInt(parsedUrl.searchParams.get('size') || '512', 10);
       const amountParam = parsedUrl.searchParams.get('amount');
       const requestedAmount = amountParam ? Number(amountParam) : null;
@@ -543,8 +704,8 @@ export function licenseMiddleware() {
       return;
     }
 
-    // 5. Endpoint SSE Real-time stream (/api/license/stream)
-    if (pathname === '/api/license/stream') {
+    // 5. Endpoint SSE Real-time stream (/api/license/stream dan /api/v1/stream)
+    if (pathname === '/api/license/stream' || pathname === '/api/v1/stream') {
       res.statusCode = 200;
       res.setHeader('Content-Type', 'text/event-stream');
       res.setHeader('Cache-Control', 'no-cache, no-transform');
@@ -621,12 +782,13 @@ export function licenseMiddleware() {
       return;
     }
 
-    // 7. Endpoint cek ulang lisensi manual via POST /api/license/check
-    if (pathname === '/api/license/check' && req.method === 'POST') {
+    // 7. Endpoint cek ulang lisensi manual via POST atau GET (/api/license/check dan /api/v1/check)
+    if ((pathname === '/api/license/check' || pathname === '/api/v1/check') && (req.method === 'POST' || req.method === 'GET')) {
       const updated = await verifikasiAplikasi();
       res.statusCode = 200;
       res.setHeader('Content-Type', 'application/json');
-      res.setHeader('Cache-Control', 'no-store');
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
       res.end(JSON.stringify(updated));
       return;
     }
@@ -638,7 +800,7 @@ export function licenseMiddleware() {
 
     // 9. Jika lisensi TIDAK diizinkan:
     // Jika request ke data API (/api/saas/*, /api/push/*), blokir dengan HTTP 403
-    if (pathname.startsWith('/api/') && !pathname.startsWith('/api/license')) {
+    if (pathname.startsWith('/api/') && !pathname.startsWith('/api/license') && !pathname.startsWith('/api/v1/')) {
       res.statusCode = 403;
       res.setHeader('Content-Type', 'application/json');
       res.end(JSON.stringify({

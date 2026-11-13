@@ -16,6 +16,7 @@ import {
   CalendarCheck2,
   Receipt,
   Download,
+  X,
 } from 'lucide-react';
 import { subscribeLicenseStream } from '../utils/licenseStream';
 import { useSettingsStore } from '../store/useSettingsStore';
@@ -204,6 +205,7 @@ export const LicenseLockScreen: React.FC = () => {
   const appName = useSettingsStore((s) => s.appName);
   const [unlockSuccess, setUnlockSuccess] = useState<UnlockSuccessInfo | null>(null);
   const [downloadingInvoice, setDownloadingInvoice] = useState(false);
+  const [autoOpenCountdown, setAutoOpenCountdown] = useState<number>(5);
 
   const prevLockedRef = useRef<boolean | null>(null);
   const lastStateJsonRef = useRef<string>('');
@@ -415,7 +417,9 @@ export const LicenseLockScreen: React.FC = () => {
         });
       }
 
-      window.dispatchEvent(new CustomEvent('voc:license-unlocked', { detail: data }));
+      window.dispatchEvent(new CustomEvent('voc:license-unlocked', {
+        detail: { ...data, message: 'Pembayaran berhasil! Lisensi Kasir POS telah aktif kembali' },
+      }));
     }
 
     prevLockedRef.current = newLocked;
@@ -425,6 +429,10 @@ export const LicenseLockScreen: React.FC = () => {
     try {
       const res = await fetch('/api/license/check', {
         method: 'POST',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          Pragma: 'no-cache',
+        },
         cache: 'no-store',
       });
       if (!res.ok) return null;
@@ -435,6 +443,45 @@ export const LicenseLockScreen: React.FC = () => {
       return null;
     }
   }, [applyState]);
+
+  // Ambil tagihan QRIS terbaru dengan Cache-Control: no-cache setiap kali modal / layar terkunci dibuka
+  useEffect(() => {
+    if (!isLocked) return;
+    fetch('/api/license/billing', {
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        Pragma: 'no-cache',
+      },
+      cache: 'no-store',
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data?.billing) {
+          setLicense((prev) => (prev ? { ...prev, billing: data.billing } : prev));
+        }
+      })
+      .catch(() => {});
+  }, [isLocked]);
+
+  // Hitung mundur otomatis untuk membuka aplikasi setelah pembayaran sukses
+  useEffect(() => {
+    if (!unlockSuccess) {
+      setAutoOpenCountdown(5);
+      return;
+    }
+    setAutoOpenCountdown(5);
+    const timer = setInterval(() => {
+      setAutoOpenCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          setUnlockSuccess(null);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [unlockSuccess]);
 
   useEffect(() => {
     // 1. Fetch initial status
@@ -448,14 +495,20 @@ export const LicenseLockScreen: React.FC = () => {
       applyState(data);
     });
 
-    // 3. Cadangan polling cepat setiap 4 detik saat terkunci (jika proxy menahan SSE)
+    // 3. Cadangan polling cepat setiap 3 detik khusus saat modal QRIS / layar terkunci terbuka (fallback jika SSE terhalang)
     const pollInterval = setInterval(() => {
       if (!isLockedRef.current) return;
-      fetch('/api/license/status', { cache: 'no-store' })
+      fetch('/api/license/status', {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          Pragma: 'no-cache',
+        },
+        cache: 'no-store',
+      })
         .then((r) => r.json())
         .then(applyState)
         .catch(() => {});
-    }, 4000);
+    }, 3000);
 
     // 4. Cek langsung ke server VOCML saat tab kembali aktif / fokus / online (baik saat terkunci maupun aktif)
     const handleWakeCheck = () => {
@@ -503,9 +556,7 @@ export const LicenseLockScreen: React.FC = () => {
 
     if (!data.allowed) {
       setCheckMsg({
-        text: uniqueCode
-          ? `Pembayaran belum terdeteksi. Pastikan nominal transfer tepat hingga 3 digit kode unik (+${uniqueCode}), lalu coba lagi dalam beberapa detik.`
-          : 'Pembayaran belum terdeteksi oleh server. Jika baru saja membayar, tunggu ±10 detik atau klik cek ulang.',
+        text: 'Pembayaran sedang diproses, silakan tunggu beberapa detik',
         isError: true,
       });
     }
@@ -601,6 +652,7 @@ export const LicenseLockScreen: React.FC = () => {
         <div
           className="voc-success-shell"
           style={{
+            position: 'relative',
             width: '100%',
             maxWidth: '510px',
             flexShrink: 0,
@@ -615,6 +667,31 @@ export const LicenseLockScreen: React.FC = () => {
             animation: 'lockFadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1)',
           }}
         >
+          <button
+            type="button"
+            onClick={() => setUnlockSuccess(null)}
+            aria-label="Tutup"
+            title="Tutup dan Buka Kasir"
+            style={{
+              position: 'absolute',
+              top: '12px',
+              right: '12px',
+              background: 'rgba(255, 255, 255, 0.08)',
+              border: '1px solid rgba(255, 255, 255, 0.12)',
+              borderRadius: '50%',
+              width: '28px',
+              height: '28px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#94a3b8',
+              cursor: 'pointer',
+              zIndex: 2,
+            }}
+          >
+            <X size={15} />
+          </button>
+
           {/* Hero Sukses Header */}
           <div
             style={{
@@ -668,6 +745,26 @@ export const LicenseLockScreen: React.FC = () => {
             <p style={{ margin: '4px 0 0', fontSize: '12px', color: '#94a3b8', lineHeight: 1.4 }}>
               Lisensi aplikasi telah aktif secara real-time. Seluruh modul kasir &amp; back-office siap digunakan.
             </p>
+
+            <div
+              style={{
+                marginTop: '10px',
+                padding: '8px 12px',
+                background: 'rgba(16, 185, 129, 0.16)',
+                border: '1px solid rgba(16, 185, 129, 0.35)',
+                borderRadius: '10px',
+                color: '#6ee7b7',
+                fontSize: '11.5px',
+                fontWeight: 700,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+              }}
+            >
+              <CheckCircle size={14} />
+              <span>Pembayaran berhasil! Lisensi Kasir POS telah aktif kembali</span>
+            </div>
           </div>
 
           {/* Detail Informasi Pembayaran / Aktivasi */}
@@ -940,7 +1037,7 @@ export const LicenseLockScreen: React.FC = () => {
                   transition: 'transform 0.15s ease',
                 }}
               >
-                <span>Buka Aplikasi Sekarang</span>
+                <span>Buka Aplikasi Sekarang{autoOpenCountdown > 0 ? ` (${autoOpenCountdown}s)` : ''}</span>
                 <ArrowRight size={16} strokeWidth={2.5} />
               </button>
             </div>

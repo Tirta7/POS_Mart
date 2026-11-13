@@ -337,3 +337,27 @@ export async function activateLicense({
     billing: isAllowed ? null : billing,
   };
 }
+
+/** Ambil tagihan QRIS terbaru dengan Cache-Control no-cache (GET /api/v1/billing). */
+export async function fetchBilling({
+  serverUrl,
+  product,
+  machineId,
+  apiKey = '',
+  timeoutMs = 6000,
+}) {
+  const base = serverUrl.replace(/\/$/, '');
+  const headers = {
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    Pragma: 'no-cache',
+    ...(apiKey ? { 'X-VOCML-Key': apiKey } : {}),
+  };
+  const qs = new URLSearchParams({ machine_id: String(machineId).trim().toUpperCase(), product });
+  const res = await fetch(`${base}/api/v1/billing?${qs}`, {
+    headers,
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return await res.json();
+}
+

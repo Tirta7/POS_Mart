@@ -63,6 +63,33 @@ function openEventSource(shouldStayOpen: () => boolean) {
     } catch {}
   });
 
+  es.addEventListener('renew', (event: MessageEvent) => {
+    if (!event.data) return;
+    try {
+      const parsed = JSON.parse(event.data);
+      if (parsed.license) notifyLicense(parsed.license);
+      channel?.postMessage({ type: 'renew', data: parsed });
+    } catch {}
+  });
+
+  es.addEventListener('unlock', (event: MessageEvent) => {
+    if (!event.data) return;
+    try {
+      const parsed = JSON.parse(event.data);
+      if (parsed.license) notifyLicense(parsed.license);
+      channel?.postMessage({ type: 'unlock', data: parsed });
+    } catch {}
+  });
+
+  es.addEventListener('lock', (event: MessageEvent) => {
+    if (!event.data) return;
+    try {
+      const parsed = JSON.parse(event.data);
+      if (parsed.license) notifyLicense(parsed.license);
+      channel?.postMessage({ type: 'lock', data: parsed });
+    } catch {}
+  });
+
   es.addEventListener('messages', (event: MessageEvent) => {
     if (!event.data) return;
     try {
@@ -104,6 +131,9 @@ function startStream() {
       const msg = ev.data;
       if (!msg || typeof msg !== 'object') return;
       if (msg.type === 'license') notifyLicense(msg.data);
+      else if ((msg.type === 'renew' || msg.type === 'unlock' || msg.type === 'lock') && msg.data?.license) {
+        notifyLicense(msg.data.license);
+      }
       else if (msg.type === 'messages') notifyMessages(msg.data);
       else if (msg.type === 'hello' && isLeader) {
         if (lastLicense) channel?.postMessage({ type: 'license', data: lastLicense });
