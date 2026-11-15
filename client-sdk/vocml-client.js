@@ -77,7 +77,33 @@ function writeCache(file, data) {
   } catch { /* abaikan */ }
 }
 
-const ALLOWED = new Set(['active', 'expiring']);
+const ALLOWED = new Set(['active', 'expiring', 'trial']);
+
+// Toleransi offline untuk key yang diaktivasi manual saat server VOCML tidak terjangkau
+const OFFLINE_KEY_MAX_DAYS = 7;
+
+/** Simpan key aktivasi darurat (offline) untuk dipakai selama server VOCML mati. */
+export function saveOfflineKey(file, licenseKey) {
+  writeCache(file, { license_key: String(licenseKey).trim(), activatedAt: Date.now() });
+}
+
+/** True jika error berasal dari jaringan / server tidak merespons dengan benar (bukan penolakan lisensi). */
+export function isNetworkError(err) {
+  const msg = `${err?.message || ''} ${err?.cause?.code || ''}`;
+  return err?.name === 'TimeoutError' || err?.name === 'AbortError' || err instanceof TypeError
+    || err instanceof SyntaxError || /fetch failed|ECONN|ENOTFOUND|EAI_AGAIN|network/i.test(msg);
+}
+
+function tryOfflineKey({ offlineFile, normalizedMid, product, publicKeyPem }) {
+  const saved = offlineFile && readCache(offlineFile);
+  if (!saved?.license_key) return null;
+  const age = Date.now() - (saved.activatedAt || 0);
+  if (age < 0 || age > OFFLINE_KEY_MAX_DAYS * 86400000) return null;
+  const key = verifyLicenseKey(saved.license_key, normalizedMid, product, publicKeyPem);
+  if (!key.valid || key.expired) return null;
+  const daysLeft = Math.ceil((new Date(key.expiresAt).getTime() - Date.now()) / 86400000);
+  return { expiresAt: key.expiresAt, daysLeft, licenseKey: saved.license_key };
+}
 
 /** Pengecekan lisensi utama (checkLicense). */
 export async function checkLicense({
@@ -86,6 +112,7 @@ export async function checkLicense({
   machineId,
   publicKeyPem,
   cacheFile,
+  offlineFile = '',
   apiKey = '',
   storeName = '',
   appVersion = '',
@@ -116,16 +143,23 @@ export async function checkLicense({
     // BAGIAN A & B: Key dari server SELALU menimpa key lokal (koreksi masa aktif)
     // Simpan billing terakhir bersama snapshot status lisensi. Jika /check sukses dan billing = null, hapus tagihan lokal.
     const billing = body.billing || null;
+    const trialInfo = body.trial || payload.trial || null;
+    const uniqueCode = body.unique_code ?? payload.unique_code ?? null;
+    const remainingDays = body.remaining_days ?? payload.days_left ?? body.days_left ?? null;
+
     writeCache(cacheFile, {
       token: body.token,
       checkedAt: Date.now(),
       billing: billing,
+      trial: trialInfo,
+      unique_code: uniqueCode,
       license_key: payload.license_key || body.license_key || null,
       status: payload.status,
       expires_at: payload.expires_at,
       locked: payload.locked ?? (payload.status === 'locked'),
       lock_reason: payload.lock_reason || '',
       days_left: payload.days_left ?? null,
+      remaining_days: remainingDays,
       grace_days: payload.grace_days ?? body.grace_days ?? 5,
     });
 
@@ -138,6 +172,9 @@ export async function checkLicense({
         lockReason: payload.lock_reason || '',
         expiresAt: payload.expires_at,
         daysLeft: payload.days_left ?? 0,
+        remainingDays: 0,
+        trial: trialInfo,
+        uniqueCode,
         billing: billing,
         licenseKey: payload.license_key,
       });
@@ -147,6 +184,8 @@ export async function checkLicense({
       return result(false, 'pending', {
         reason: 'Menunggu aktivasi lisensi',
         billing: billing,
+        trial: trialInfo,
+        uniqueCode,
       });
     }
 
@@ -155,6 +194,9 @@ export async function checkLicense({
         reason: 'Masa lisensi telah berakhir',
         expiresAt: payload.expires_at,
         daysLeft: payload.days_left ?? 0,
+        remainingDays: 0,
+        trial: trialInfo,
+        uniqueCode,
         billing: billing,
         licenseKey: payload.license_key,
       });
@@ -164,16 +206,24 @@ export async function checkLicense({
     return result(isAllowed, payload.status, {
       expiresAt: payload.expires_at,
       daysLeft: payload.days_left ?? null,
+      remainingDays,
+      uniqueCode,
+      trial: trialInfo,
       licenseKey: payload.license_key,
       lockReason: '',
-      // Jangan tampilkan QRIS saat status aktif / segera berakhir
-      billing: null,
+      lastPayment: body.last_payment || body.payment || payload.last_payment || null,
+      // Jangan tampilkan QRIS saat status aktif / segera berakhir / trial
+      billing: isAllowed ? null : billing,
     });
   } catch (err) {
     // Offline: pakai snapshot terakhir + grace_days
     const cache = readCache(cacheFile);
     const payload = cache && verifyToken(cache.token, publicKeyPem);
     if (!payload || payload.machine_id !== normalizedMid) {
+      const fb = tryOfflineKey({ offlineFile, normalizedMid, product, publicKeyPem });
+      if (fb) {
+        return result(true, 'active', { ...fb, offline: true, lockReason: '', billing: null });
+      }
       return result(false, 'offline', {
         reason: 'Tidak dapat terhubung ke server lisensi',
         offline: true,
@@ -203,19 +253,35 @@ export async function checkLicense({
       });
     }
 
-    const graceDays = payload.grace_days ?? cache.grace_days ?? 5;
+    // FAIL-OPEN: server tidak terjangkau BUKAN alasan mengunci aplikasi.
+    // Selama snapshot terakhir (bertanda tangan server) berstatus aktif dan masa berlaku lisensi belum lewat,
+    // aplikasi tetap jalan. Hanya status locked/expired dari server (ditangani di atas) atau
+    // habisnya masa berlaku lisensi yang menyebabkan kunci.
+    const envGrace = Number(process.env.LICENSE_OFFLINE_GRACE_DAYS);
+    const serverGrace = payload.grace_days ?? cache.grace_days ?? 5;
+    const graceDays = Math.max(Number.isFinite(envGrace) && envGrace > 0 ? envGrace : 30, serverGrace);
     const graceMs = graceDays * 86400000;
-    const withinGrace = Date.now() - (cache.checkedAt || 0) <= graceMs && (cache.checkedAt || 0) <= Date.now();
+    const checkedAt = cache.checkedAt || 0;
+    const SKEW_MS = 86400000; // toleransi jam sistem mundur 1 hari
+    const withinGrace = Date.now() - checkedAt <= graceMs && checkedAt <= Date.now() + SKEW_MS;
     const key = payload.license_key ? verifyLicenseKey(payload.license_key, normalizedMid, product, publicKeyPem) : { valid: false };
+    const notExpired = payload.expires_at ? payload.expires_at >= todayStr() : false;
+    const licenseOk = payload.license_key ? (key.valid && !key.expired) : notExpired;
 
-    if (ALLOWED.has(payload.status) && withinGrace && key.valid && !key.expired) {
+    if (ALLOWED.has(payload.status) && withinGrace && licenseOk) {
       return result(true, payload.status, {
         expiresAt: payload.expires_at || key.expiresAt,
         daysLeft: payload.days_left,
         licenseKey: payload.license_key,
         offline: true,
+        offlineGraceEndsAt: new Date(checkedAt + graceMs).toISOString(),
         billing: null,
       });
+    }
+
+    const fb2 = tryOfflineKey({ offlineFile, normalizedMid, product, publicKeyPem });
+    if (fb2) {
+      return result(true, 'active', { ...fb2, offline: true, lockReason: '', billing: null });
     }
 
     return result(false, 'offline', {
@@ -289,3 +355,155 @@ export async function activateLicense({
     billing: isAllowed ? null : billing,
   };
 }
+
+/** Ambil tagihan QRIS terbaru dengan Cache-Control no-cache (GET /api/v1/billing). */
+export async function fetchBilling({
+  serverUrl,
+  product,
+  machineId,
+  apiKey = '',
+  timeoutMs = 6000,
+}) {
+  const base = serverUrl.replace(/\/$/, '');
+  const headers = {
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    Pragma: 'no-cache',
+    ...(apiKey ? { 'X-VOCML-Key': apiKey } : {}),
+  };
+  const qs = new URLSearchParams({ machine_id: String(machineId).trim().toUpperCase(), product });
+  const res = await fetch(`${base}/api/v1/billing?${qs}`, {
+    headers,
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return await res.json();
+}
+
+/** Pendaftaran & startup identitas otomatis (POST /api/v1/register). */
+export async function registerIdentity({
+  serverUrl,
+  product,
+  machineId,
+  storeName = 'POS Mart Swalayan',
+  appVersion = '1.0.0',
+  apiKey = '',
+  timeoutMs = 6000
+}) {
+  const base = serverUrl.replace(/\/$/, '');
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(apiKey ? { 'X-VOCML-Key': apiKey } : {})
+  };
+  const normalizedMid = String(machineId).trim().toUpperCase();
+
+  const res = await fetch(`${base}/api/v1/register`, {
+    method: 'POST',
+    headers,
+    signal: AbortSignal.timeout(timeoutMs),
+    body: JSON.stringify({
+      machine_id: normalizedMid,
+      product,
+      store_name: storeName,
+      app_version: appVersion,
+    }),
+  });
+
+  return await res.json().catch(() => ({}));
+}
+
+/** Konsumsi kuota trial pengguna baru per aksi (POST /api/v1/trial/consume). */
+export async function consumeTrial({
+  serverUrl,
+  product,
+  machineId,
+  apiKey = '',
+  timeoutMs = 6000
+}) {
+  const base = serverUrl.replace(/\/$/, '');
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(apiKey ? { 'X-VOCML-Key': apiKey } : {})
+  };
+  const normalizedMid = String(machineId).trim().toUpperCase();
+
+  const res = await fetch(`${base}/api/v1/trial/consume`, {
+    method: 'POST',
+    headers,
+    signal: AbortSignal.timeout(timeoutMs),
+    body: JSON.stringify({
+      machine_id: normalizedMid,
+      product,
+    }),
+  });
+
+  const data = await res.json().catch(() => ({}));
+
+  if (res.status === 403) {
+    return {
+      allowed: false,
+      quotaExceeded: true,
+      message: data.message || 'Masa gratis trial Anda telah habis',
+      trial: data.trial || null,
+      status: 'expired',
+    };
+  }
+
+  if (!res.ok) {
+    throw new Error(data.message || data.error || `Gagal konsumsi kuota trial (HTTP ${res.status})`);
+  }
+
+  return {
+    allowed: true,
+    success: true,
+    message: data.message || 'Kuota trial berhasil digunakan',
+    trial: data.trial || null,
+    status: data.status || 'trial',
+  };
+}
+
+/** Klaim kode voucher promo (POST /api/v1/voucher/claim). */
+export async function claimVoucher({
+  serverUrl,
+  product,
+  machineId,
+  code,
+  apiKey = '',
+  timeoutMs = 8000
+}) {
+  const base = serverUrl.replace(/\/$/, '');
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(apiKey ? { 'X-VOCML-Key': apiKey } : {})
+  };
+  const normalizedMid = String(machineId).trim().toUpperCase();
+
+  const res = await fetch(`${base}/api/v1/voucher/claim`, {
+    method: 'POST',
+    headers,
+    signal: AbortSignal.timeout(timeoutMs),
+    body: JSON.stringify({
+      machine_id: normalizedMid,
+      product,
+      code: String(code).trim().toUpperCase(),
+    }),
+  });
+
+  const data = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    throw new Error(data.message || data.error || `Klaim voucher gagal (HTTP ${res.status})`);
+  }
+
+  return {
+    success: true,
+    message: data.message || 'Voucher berhasil diklaim!',
+    voucherType: data.voucher_type || data.type || null,
+    discountAmount: data.discount_amount || 0,
+    expiresAt: data.expires_at || null,
+    trial: data.trial || null,
+    billing: data.billing || null,
+    status: data.status || null,
+  };
+}
+
+

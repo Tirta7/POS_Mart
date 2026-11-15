@@ -17,6 +17,7 @@ import {
   Receipt,
   Download,
   X,
+  Ticket,
 } from 'lucide-react';
 import { subscribeLicenseStream } from '../utils/licenseStream';
 import { useSettingsStore } from '../store/useSettingsStore';
@@ -72,14 +73,25 @@ export interface UnlockReceiptPayload {
   adminContact?: string;
 }
 
+export interface TrialInfo {
+  enabled?: boolean;
+  quota?: number;
+  used?: number;
+  remaining?: number;
+  is_trial?: boolean;
+}
+
 export interface LicenseState {
   allowed: boolean;
-  status: 'active' | 'expiring' | 'expired' | 'locked' | 'pending' | 'offline';
+  status: 'active' | 'expiring' | 'expired' | 'locked' | 'pending' | 'offline' | 'trial';
   reason?: string;
   lockReason?: string;
   machineId?: string;
   expiresAt?: string | null;
   daysLeft?: number | null;
+  remainingDays?: number | null;
+  uniqueCode?: number | null;
+  trial?: TrialInfo | null;
   licenseKey?: string | null;
   billing?: LicenseBilling | null;
   unlockReceipt?: UnlockReceiptPayload | null;
@@ -200,6 +212,9 @@ export const LicenseLockScreen: React.FC = () => {
   const [manualKey, setManualKey] = useState('');
   const [activating, setActivating] = useState(false);
   const [activateMsg, setActivateMsg] = useState<{ text: string; isError: boolean } | null>(null);
+  const [voucherCode, setVoucherCode] = useState('');
+  const [claimingVoucher, setClaimingVoucher] = useState(false);
+  const [voucherMsg, setVoucherMsg] = useState<{ text: string; isError: boolean } | null>(null);
   const [checkingNow, setCheckingNow] = useState(false);
   const [checkMsg, setCheckMsg] = useState<{ text: string; isError: boolean } | null>(null);
   const appName = useSettingsStore((s) => s.appName);
@@ -495,7 +510,7 @@ export const LicenseLockScreen: React.FC = () => {
       applyState(data);
     });
 
-    // 3. Cadangan polling cepat setiap 3 detik khusus saat modal QRIS / layar terkunci terbuka (fallback jika SSE terhalang)
+    // 3. Cadangan polling cepat 2 detik khusus saat modal QRIS / layar terkunci terbuka (fallback jika SSE terhalang)
     const pollInterval = setInterval(() => {
       if (!isLockedRef.current) return;
       fetch('/api/license/status', {
@@ -508,7 +523,7 @@ export const LicenseLockScreen: React.FC = () => {
         .then((r) => r.json())
         .then(applyState)
         .catch(() => {});
-    }, 3000);
+    }, 2000);
 
     // 4. Cek langsung ke server VOCML saat tab kembali aktif / fokus / online (baik saat terkunci maupun aktif)
     const handleWakeCheck = () => {
@@ -591,6 +606,52 @@ export const LicenseLockScreen: React.FC = () => {
       setActivateMsg({ text: 'Gagal terhubung ke server lisensi', isError: true });
     } finally {
       setActivating(false);
+    }
+  };
+
+  const handleClaimVoucher = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!voucherCode.trim() || claimingVoucher) return;
+
+    setClaimingVoucher(true);
+    setVoucherMsg(null);
+
+    try {
+      const res = await fetch('/api/license/voucher/claim', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: voucherCode.trim() }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        pendingUnlockMethodRef.current = 'manual';
+        setVoucherMsg({ text: data.message || 'Voucher berhasil digunakan!', isError: false });
+        setVoucherCode('');
+        if (data.license) {
+          applyState(data.license);
+        }
+        // Perbarui paket/QRIS jika voucher memberikan diskon nominal
+        fetch('/api/license/billing', {
+          headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate', Pragma: 'no-cache' },
+          cache: 'no-store',
+        })
+          .then((r) => r.json())
+          .then((d) => {
+            if (d?.billing) {
+              setLicense((prev) => (prev ? { ...prev, billing: d.billing } : prev));
+            }
+          })
+          .catch(() => {});
+      } else {
+        setVoucherMsg({
+          text: data.error || data.message || 'Kode voucher tidak valid atau sudah kedaluwarsa.',
+          isError: true,
+        });
+      }
+    } catch {
+      setVoucherMsg({ text: 'Gagal terhubung ke server lisensi untuk klaim voucher', isError: true });
+    } finally {
+      setClaimingVoucher(false);
     }
   };
 
@@ -1551,6 +1612,72 @@ export const LicenseLockScreen: React.FC = () => {
                 {checkMsg.text}
               </div>
             )}
+
+            {/* Form Klaim Kode Voucher Promo */}
+            <form onSubmit={handleClaimVoucher} style={{ marginBottom: '12px' }}>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <div style={{ position: 'relative', flex: 1 }}>
+                  <Ticket
+                    size={14}
+                    color="#f59e0b"
+                    style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}
+                  />
+                  <input
+                    type="text"
+                    placeholder="Masukkan Kode Voucher (cth: COBAGRATIS / DISKON20K)"
+                    value={voucherCode}
+                    onChange={(e) => setVoucherCode(e.target.value.toUpperCase())}
+                    style={{
+                      width: '100%',
+                      boxSizing: 'border-box',
+                      background: 'rgba(2, 6, 23, 0.55)',
+                      border: '1px solid rgba(245, 158, 11, 0.28)',
+                      borderRadius: '10px',
+                      padding: '10px 12px 10px 34px',
+                      color: '#fef3c7',
+                      fontSize: '12.5px',
+                      fontWeight: 600,
+                      letterSpacing: '0.04em',
+                      outline: 'none',
+                    }}
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={claimingVoucher || !voucherCode.trim()}
+                  style={{
+                    background: claimingVoucher || !voucherCode.trim() ? 'rgba(51, 65, 85, 0.7)' : 'linear-gradient(135deg, #d97706, #b45309)',
+                    color: '#fff',
+                    border: '1px solid rgba(245, 158, 11, 0.45)',
+                    borderRadius: '10px',
+                    padding: '10px 14px',
+                    fontSize: '12.5px',
+                    fontWeight: 700,
+                    cursor: claimingVoucher || !voucherCode.trim() ? 'not-allowed' : 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    flexShrink: 0,
+                    boxShadow: claimingVoucher || !voucherCode.trim() ? 'none' : '0 4px 14px rgba(217, 119, 6, 0.25)',
+                  }}
+                >
+                  {claimingVoucher ? 'Mengecek...' : 'Gunakan Voucher'}
+                </button>
+              </div>
+
+              {voucherMsg && (
+                <div
+                  style={{
+                    marginTop: '8px',
+                    fontSize: '12px',
+                    color: voucherMsg.isError ? '#f87171' : '#fcd34d',
+                    fontWeight: 600,
+                  }}
+                >
+                  {voucherMsg.text}
+                </div>
+              )}
+            </form>
 
             {/* Form Aktivasi License Key Manual */}
             <form onSubmit={handleActivateManual} style={{ marginBottom: '16px' }}>

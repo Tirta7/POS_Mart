@@ -77,7 +77,7 @@ function writeCache(file, data) {
   } catch { /* abaikan */ }
 }
 
-const ALLOWED = new Set(['active', 'expiring']);
+const ALLOWED = new Set(['active', 'expiring', 'trial']);
 
 // Toleransi offline untuk key yang diaktivasi manual saat server VOCML tidak terjangkau
 const OFFLINE_KEY_MAX_DAYS = 7;
@@ -143,16 +143,23 @@ export async function checkLicense({
     // BAGIAN A & B: Key dari server SELALU menimpa key lokal (koreksi masa aktif)
     // Simpan billing terakhir bersama snapshot status lisensi. Jika /check sukses dan billing = null, hapus tagihan lokal.
     const billing = body.billing || null;
+    const trialInfo = body.trial || payload.trial || null;
+    const uniqueCode = body.unique_code ?? payload.unique_code ?? null;
+    const remainingDays = body.remaining_days ?? payload.days_left ?? body.days_left ?? null;
+
     writeCache(cacheFile, {
       token: body.token,
       checkedAt: Date.now(),
       billing: billing,
+      trial: trialInfo,
+      unique_code: uniqueCode,
       license_key: payload.license_key || body.license_key || null,
       status: payload.status,
       expires_at: payload.expires_at,
       locked: payload.locked ?? (payload.status === 'locked'),
       lock_reason: payload.lock_reason || '',
       days_left: payload.days_left ?? null,
+      remaining_days: remainingDays,
       grace_days: payload.grace_days ?? body.grace_days ?? 5,
     });
 
@@ -165,6 +172,9 @@ export async function checkLicense({
         lockReason: payload.lock_reason || '',
         expiresAt: payload.expires_at,
         daysLeft: payload.days_left ?? 0,
+        remainingDays: 0,
+        trial: trialInfo,
+        uniqueCode,
         billing: billing,
         licenseKey: payload.license_key,
       });
@@ -174,6 +184,8 @@ export async function checkLicense({
       return result(false, 'pending', {
         reason: 'Menunggu aktivasi lisensi',
         billing: billing,
+        trial: trialInfo,
+        uniqueCode,
       });
     }
 
@@ -182,6 +194,9 @@ export async function checkLicense({
         reason: 'Masa lisensi telah berakhir',
         expiresAt: payload.expires_at,
         daysLeft: payload.days_left ?? 0,
+        remainingDays: 0,
+        trial: trialInfo,
+        uniqueCode,
         billing: billing,
         licenseKey: payload.license_key,
       });
@@ -191,11 +206,14 @@ export async function checkLicense({
     return result(isAllowed, payload.status, {
       expiresAt: payload.expires_at,
       daysLeft: payload.days_left ?? null,
+      remainingDays,
+      uniqueCode,
+      trial: trialInfo,
       licenseKey: payload.license_key,
       lockReason: '',
       lastPayment: body.last_payment || body.payment || payload.last_payment || null,
-      // Jangan tampilkan QRIS saat status aktif / segera berakhir
-      billing: null,
+      // Jangan tampilkan QRIS saat status aktif / segera berakhir / trial
+      billing: isAllowed ? null : billing,
     });
   } catch (err) {
     // Offline: pakai snapshot terakhir + grace_days
@@ -360,4 +378,132 @@ export async function fetchBilling({
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return await res.json();
 }
+
+/** Pendaftaran & startup identitas otomatis (POST /api/v1/register). */
+export async function registerIdentity({
+  serverUrl,
+  product,
+  machineId,
+  storeName = 'POS Mart Swalayan',
+  appVersion = '1.0.0',
+  apiKey = '',
+  timeoutMs = 6000
+}) {
+  const base = serverUrl.replace(/\/$/, '');
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(apiKey ? { 'X-VOCML-Key': apiKey } : {})
+  };
+  const normalizedMid = String(machineId).trim().toUpperCase();
+
+  const res = await fetch(`${base}/api/v1/register`, {
+    method: 'POST',
+    headers,
+    signal: AbortSignal.timeout(timeoutMs),
+    body: JSON.stringify({
+      machine_id: normalizedMid,
+      product,
+      store_name: storeName,
+      app_version: appVersion,
+    }),
+  });
+
+  return await res.json().catch(() => ({}));
+}
+
+/** Konsumsi kuota trial pengguna baru per aksi (POST /api/v1/trial/consume). */
+export async function consumeTrial({
+  serverUrl,
+  product,
+  machineId,
+  apiKey = '',
+  timeoutMs = 6000
+}) {
+  const base = serverUrl.replace(/\/$/, '');
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(apiKey ? { 'X-VOCML-Key': apiKey } : {})
+  };
+  const normalizedMid = String(machineId).trim().toUpperCase();
+
+  const res = await fetch(`${base}/api/v1/trial/consume`, {
+    method: 'POST',
+    headers,
+    signal: AbortSignal.timeout(timeoutMs),
+    body: JSON.stringify({
+      machine_id: normalizedMid,
+      product,
+    }),
+  });
+
+  const data = await res.json().catch(() => ({}));
+
+  if (res.status === 403) {
+    return {
+      allowed: false,
+      quotaExceeded: true,
+      message: data.message || 'Masa gratis trial Anda telah habis',
+      trial: data.trial || null,
+      status: 'expired',
+    };
+  }
+
+  if (!res.ok) {
+    throw new Error(data.message || data.error || `Gagal konsumsi kuota trial (HTTP ${res.status})`);
+  }
+
+  return {
+    allowed: true,
+    success: true,
+    message: data.message || 'Kuota trial berhasil digunakan',
+    trial: data.trial || null,
+    status: data.status || 'trial',
+  };
+}
+
+/** Klaim kode voucher promo (POST /api/v1/voucher/claim). */
+export async function claimVoucher({
+  serverUrl,
+  product,
+  machineId,
+  code,
+  apiKey = '',
+  timeoutMs = 8000
+}) {
+  const base = serverUrl.replace(/\/$/, '');
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(apiKey ? { 'X-VOCML-Key': apiKey } : {})
+  };
+  const normalizedMid = String(machineId).trim().toUpperCase();
+
+  const res = await fetch(`${base}/api/v1/voucher/claim`, {
+    method: 'POST',
+    headers,
+    signal: AbortSignal.timeout(timeoutMs),
+    body: JSON.stringify({
+      machine_id: normalizedMid,
+      product,
+      code: String(code).trim().toUpperCase(),
+    }),
+  });
+
+  const data = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    throw new Error(data.message || data.error || `Klaim voucher gagal (HTTP ${res.status})`);
+  }
+
+  return {
+    success: true,
+    message: data.message || 'Voucher berhasil diklaim!',
+    voucherType: data.voucher_type || data.type || null,
+    discountAmount: data.discount_amount || 0,
+    expiresAt: data.expires_at || null,
+    trial: data.trial || null,
+    billing: data.billing || null,
+    status: data.status || null,
+  };
+}
+
 

@@ -396,6 +396,29 @@ function App() {
     }
   }, [toastNotice, setToastNotice]);
 
+  const [trialBadge, setTrialBadge] = useState<{ isTrial: boolean; remaining: number } | null>(null);
+
+  useEffect(() => {
+    const handleLicenseChange = (e: any) => {
+      const data = e.detail;
+      if (data?.status === 'trial' && data?.trial?.is_trial) {
+        setTrialBadge({ isTrial: true, remaining: data.trial.remaining ?? 0 });
+      } else {
+        setTrialBadge(null);
+      }
+    };
+    fetch('/api/license/status')
+      .then((r) => r.json())
+      .then((data) => {
+        if (data?.status === 'trial' && data?.trial?.is_trial) {
+          setTrialBadge({ isTrial: true, remaining: data.trial.remaining ?? 0 });
+        }
+      })
+      .catch(() => {});
+    window.addEventListener('voc:license-changed', handleLicenseChange);
+    return () => window.removeEventListener('voc:license-changed', handleLicenseChange);
+  }, []);
+
   const CATEGORIES = [
     { id: 'all', name: cart.length > 0 ? 'PESANAN' : 'SEMUA (ALL)', icon: <LayoutGrid size={16} /> },
     ...categories.map(cat => ({
@@ -1480,6 +1503,22 @@ function App() {
 
         <div className="status-pills">
           <div className="pill"><span className="pill-dot"></span> SERVER ONLINE</div>
+          {trialBadge?.isTrial && (
+            <div
+              className="pill"
+              style={{
+                background: '#fef3c7',
+                color: '#b45309',
+                borderColor: '#fcd34d',
+                fontWeight: 800,
+                letterSpacing: '0.02em',
+                padding: '2px 8px',
+              }}
+              title="Sisa kuota transaksi trial gratis"
+            >
+              ⭐ TRIAL: SISA {trialBadge.remaining} TRANSAKSI
+            </div>
+          )}
           <div className="pill" style={{borderLeft: '1px solid #d1d5db', borderRadius: 0}}><ShiftLabel /></div>
           <div className="pill" style={{borderLeft: '1px solid #d1d5db', borderRadius: 0, fontVariantNumeric: 'tabular-nums'}}><LiveClock /></div>
         </div>

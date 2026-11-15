@@ -2,7 +2,17 @@ import { execSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import QRCode from 'qrcode';
-import { checkLicense, activateLicense, verifyLicenseKey, saveOfflineKey, isNetworkError, fetchBilling } from './vocml-client.js';
+import {
+  checkLicense,
+  activateLicense,
+  verifyLicenseKey,
+  saveOfflineKey,
+  isNetworkError,
+  fetchBilling,
+  registerIdentity,
+  consumeTrial,
+  claimVoucher,
+} from './vocml-client.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const IS_VITE_BUILD = process.argv.some(arg => arg.includes('vite')) && process.argv.includes('build');
@@ -26,6 +36,9 @@ export let licenseState = {
   machineId: '',
   expiresAt: null,
   daysLeft: null,
+  remainingDays: null,
+  uniqueCode: null,
+  trial: null,
   licenseKey: null,
   lockReason: '',
   billing: null,
@@ -300,9 +313,9 @@ export async function verifikasiAplikasi() {
       return licenseState;
     }
 
-    // Polling cepat (3 detik) khusus saat modal QRIS / layar terkunci terbuka (fallback jika SSE terhalang).
+    // Polling cepat 2 detik khusus saat modal QRIS / layar terkunci terbuka (fallback jika SSE terhalang).
     // Jika lisensi aktif / normal, kembalikan ke interval normal (1 jam = 3600000 ms) agar hemat jaringan.
-    const nextInterval = licenseState?.allowed ? 3600000 : 3000;
+    const nextInterval = licenseState?.allowed ? 3600000 : 2000;
     checkTimer = setTimeout(() => { verifikasiAplikasi(); }, nextInterval);
     if (checkTimer?.unref) checkTimer.unref();
 
@@ -495,8 +508,16 @@ export function connectVocmlStream() {
   })();
 }
 
-// Mulai verifikasi, fetching pesan, dan koneksi SSE stream saat server start (kecuali saat vite build)
+// Mulai pendaftaran identitas, verifikasi lisensi, fetching pesan, dan koneksi SSE stream saat server start
 if (!IS_VITE_BUILD) {
+  registerIdentity({
+    serverUrl: VOCML_SERVER_URL,
+    product: VOCML_PRODUCT,
+    machineId: getMachineId(),
+    storeName: process.env.STORE_NAME || 'POS Mart Swalayan',
+    appVersion: '1.0.0',
+    apiKey: VOCML_API_KEY,
+  }).catch(() => {});
   verifikasiAplikasi();
   fetchMessagesFromVocml();
   connectVocmlStream();
@@ -793,12 +814,138 @@ export function licenseMiddleware() {
       return;
     }
 
-    // 8. Proteksi akses: jika lisensi diizinkan, teruskan ke middleware berikutnya
+    // 8. Endpoint klaim kode voucher promo (/api/license/voucher/claim dan /api/v1/voucher/claim)
+    if ((pathname === '/api/license/voucher/claim' || pathname === '/api/v1/voucher/claim') && req.method === 'POST') {
+      const body = await readJsonBody(req);
+      const code = String(body.code || '').trim();
+      if (!code) {
+        res.statusCode = 400;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ success: false, error: 'Kode voucher harus diisi' }));
+        return;
+      }
+      try {
+        const claimRes = await claimVoucher({
+          serverUrl: VOCML_SERVER_URL,
+          product: VOCML_PRODUCT,
+          machineId: getMachineId(),
+          code,
+          apiKey: VOCML_API_KEY,
+        });
+
+        await verifikasiAplikasi();
+        try {
+          const freshBilling = await fetchBilling({
+            serverUrl: VOCML_SERVER_URL,
+            product: VOCML_PRODUCT,
+            machineId: getMachineId(),
+            apiKey: VOCML_API_KEY,
+          });
+          if (freshBilling) licenseState.billing = freshBilling.billing || freshBilling;
+        } catch {}
+
+        broadcastLicense(licenseState);
+        res.statusCode = 200;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({
+          success: true,
+          message: claimRes.message,
+          voucherType: claimRes.voucherType,
+          discountAmount: claimRes.discountAmount,
+          license: licenseState,
+        }));
+      } catch (err) {
+        res.statusCode = 400;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ success: false, error: err?.message || 'Klaim voucher gagal' }));
+      }
+      return;
+    }
+
+    // 9. Endpoint konsumsi kuota trial (/api/license/trial/consume dan /api/v1/trial/consume)
+    if ((pathname === '/api/license/trial/consume' || pathname === '/api/v1/trial/consume') && req.method === 'POST') {
+      try {
+        const result = await consumeTrial({
+          serverUrl: VOCML_SERVER_URL,
+          product: VOCML_PRODUCT,
+          machineId: getMachineId(),
+          apiKey: VOCML_API_KEY,
+        });
+
+        if (!result.allowed) {
+          licenseState.allowed = false;
+          licenseState.status = 'expired';
+          licenseState.reason = result.message || 'Masa gratis trial Anda telah habis';
+          if (result.trial) licenseState.trial = result.trial;
+          broadcastLicense(licenseState);
+          res.statusCode = 403;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({
+            allowed: false,
+            error: 'trial_expired',
+            message: licenseState.reason,
+            trial: licenseState.trial,
+          }));
+          return;
+        }
+
+        if (result.trial) {
+          licenseState.trial = result.trial;
+          broadcastLicense(licenseState);
+        }
+        res.statusCode = 200;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ allowed: true, message: result.message, trial: licenseState.trial }));
+      } catch (err) {
+        res.statusCode = 500;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ error: err?.message || 'Gagal konsumsi kuota trial' }));
+      }
+      return;
+    }
+
+    // 10. Proteksi kuota trial per transaksi kasir: jika status trial dan kasir menyimpan transaksi baru (/api/saas/transactions)
+    if (pathname === '/api/saas/transactions' && req.method === 'POST' && licenseState.status === 'trial') {
+      try {
+        const result = await consumeTrial({
+          serverUrl: VOCML_SERVER_URL,
+          product: VOCML_PRODUCT,
+          machineId: getMachineId(),
+          apiKey: VOCML_API_KEY,
+        });
+
+        if (!result.allowed) {
+          licenseState.allowed = false;
+          licenseState.status = 'expired';
+          licenseState.reason = result.message || 'Masa gratis trial Anda telah habis';
+          if (result.trial) licenseState.trial = result.trial;
+          broadcastLicense(licenseState);
+          res.statusCode = 403;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({
+            error: 'trial_expired',
+            message: 'Masa gratis trial Anda telah habis. Silakan lakukan perpanjangan lisensi.',
+            trial: licenseState.trial,
+            billing: licenseState.billing || null,
+          }));
+          return;
+        }
+
+        if (result.trial) {
+          licenseState.trial = result.trial;
+          broadcastLicense(licenseState);
+        }
+      } catch (err) {
+        console.warn('[Trial] Gagal memverifikasi kuota trial ke server VOCML:', err?.message || err);
+      }
+    }
+
+    // 11. Proteksi akses: jika lisensi diizinkan, teruskan ke middleware berikutnya
     if (licenseState.allowed) {
       return next();
     }
 
-    // 9. Jika lisensi TIDAK diizinkan:
+    // 12. Jika lisensi TIDAK diizinkan:
     // Jika request ke data API (/api/saas/*, /api/push/*), blokir dengan HTTP 403
     if (pathname.startsWith('/api/') && !pathname.startsWith('/api/license') && !pathname.startsWith('/api/v1/')) {
       res.statusCode = 403;
