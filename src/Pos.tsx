@@ -157,6 +157,9 @@ function App() {
   const { heldOrders, holdOrder, removeHeldOrder } = useHoldStore();
   const [paymentMethod, setPaymentMethod] = useState('TUNAI');
   const [tenderedStr, setTenderedStr] = useState('');
+  const [shippingCostStr, setShippingCostStr] = useState('');
+  const [overallDiscountStr, setOverallDiscountStr] = useState('');
+  const [orderNote, setOrderNote] = useState('');
   const [holdListOpen, setHoldListOpen] = useState(false);
   const [orderCounter, setOrderCounter] = useState(52);
   const [cfdModalOpen, setCfdModalOpen] = useState(false);
@@ -643,8 +646,11 @@ function App() {
   }, [orderType, storeProducts]);
 
   const subtotal = cart.reduce((sum, item) => sum + (Math.round(item.price * item.qty)), 0);
-  const tax = taxEnabled ? Math.round(subtotal * (taxRate / 100)) : 0;
-  const totalBeforeRounding = subtotal + tax;
+  const overallDiscount = Math.max(0, parseInt(overallDiscountStr.replace(/\D/g, '') || '0', 10));
+  const shippingCost = Math.max(0, parseInt(shippingCostStr.replace(/\D/g, '') || '0', 10));
+  const discountedSubtotal = Math.max(0, subtotal - overallDiscount);
+  const tax = taxEnabled ? Math.round(discountedSubtotal * (taxRate / 100)) : 0;
+  const totalBeforeRounding = subtotal > 0 ? (discountedSubtotal + tax + shippingCost) : 0;
   const total = roundingUnit > 0 ? Math.ceil(totalBeforeRounding / roundingUnit) * roundingUnit : totalBeforeRounding;
   const rounding = total - totalBeforeRounding;
   const tendered = parseInt(tenderedStr || '0', 10);
@@ -687,6 +693,8 @@ function App() {
       itemCount: cfdItems.length,
       totalQty,
       subtotal,
+      discount: overallDiscount,
+      shippingCost,
       tax,
       taxRate,
       taxEnabled,
@@ -708,7 +716,7 @@ function App() {
     };
 
     sendCfdUpdate(payload);
-  }, [cart, appName, appLogo, currentUser, orderCounter, orderType, selectedCustomer, subtotal, tax, taxRate, taxEnabled, rounding, total, paymentPopupOpen, paymentMethod, tendered, change, tempoType, tempoDpStr, tempoDueDate]);
+  }, [cart, appName, appLogo, currentUser, orderCounter, orderType, selectedCustomer, subtotal, overallDiscount, shippingCost, tax, taxRate, taxEnabled, rounding, total, paymentPopupOpen, paymentMethod, tendered, change, tempoType, tempoDpStr, tempoDueDate]);
 
   // Synchronize CFD on every state change
   useEffect(() => {
@@ -2433,6 +2441,18 @@ function App() {
               <span>Subtotal Pesanan</span>
               <span>{formatIDR(subtotal)}</span>
             </div>
+            {overallDiscount > 0 && (
+              <div className="totals-row" style={{ color: '#dc2626', fontWeight: 600 }}>
+                <span>Diskon Keseluruhan</span>
+                <span>- {formatIDR(overallDiscount)}</span>
+              </div>
+            )}
+            {shippingCost > 0 && (
+              <div className="totals-row" style={{ color: '#0284c7', fontWeight: 600 }}>
+                <span>Biaya Ongkir</span>
+                <span>+ {formatIDR(shippingCost)}</span>
+              </div>
+            )}
             {taxEnabled && (
               <div className="totals-row">
                 <span>PPN ({taxRate}%) ⓘ</span>
@@ -2607,9 +2627,106 @@ function App() {
               <button onClick={() => setPaymentPopupOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={26} color="#666" /></button>
             </div>
 
-            <div style={{ backgroundColor: '#f9fafb', padding: '16px', borderRadius: '12px', marginBottom: '20px', textAlign: 'center' }}>
-              <div style={{ fontSize: '13px', color: '#666', marginBottom: '2px' }}>TOTAL TAGIHAN</div>
-              <div style={{ fontSize: '30px', fontWeight: 'bold', color: 'var(--primary)' }}>{formatIDR(total)}</div>
+            <div style={{ backgroundColor: '#f9fafb', padding: '16px', borderRadius: '12px', marginBottom: '14px', textAlign: 'center', border: '1px solid #f1f5f9' }}>
+              <div style={{ fontSize: '13px', color: '#64748b', fontWeight: 600, marginBottom: '2px' }}>TOTAL TAGIHAN</div>
+              <div style={{ fontSize: '32px', fontWeight: 900, color: 'var(--primary)' }}>{formatIDR(total)}</div>
+              {(overallDiscount > 0 || shippingCost > 0) && (
+                <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', marginTop: '6px', fontSize: '12px', color: '#64748b' }}>
+                  <span>Subtotal: <strong>{formatIDR(subtotal)}</strong></span>
+                  {overallDiscount > 0 && <span style={{ color: '#dc2626', fontWeight: 700 }}>Diskon: -{formatIDR(overallDiscount)}</span>}
+                  {shippingCost > 0 && <span style={{ color: '#0284c7', fontWeight: 700 }}>Ongkir: +{formatIDR(shippingCost)}</span>}
+                </div>
+              )}
+            </div>
+
+            {/* BIAYA TAMBAHAN ONGKIR, DISKON TRANSAKSI & CATATAN INVOICE (OPSIONAL) */}
+            <div style={{
+              background: '#f8fafc',
+              border: '1px solid #e2e8f0',
+              borderRadius: '12px',
+              padding: '12px 14px',
+              marginBottom: '16px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '10px'
+            }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontWeight: 700, color: '#334155', marginBottom: '3px' }}>
+                    <span>🚚 Biaya Ongkir</span>
+                    <span style={{ fontSize: '10px', color: '#94a3b8', fontWeight: 500 }}>(Opsional)</span>
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', fontSize: '12px', fontWeight: 700, color: '#94a3b8' }}>Rp</span>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={shippingCostStr ? Number(shippingCostStr.replace(/\D/g, '')).toLocaleString('id-ID') : ''}
+                      onChange={e => setShippingCostStr(e.target.value.replace(/\D/g, ''))}
+                      placeholder="0"
+                      style={{
+                        width: '100%',
+                        padding: '7px 8px 7px 32px',
+                        borderRadius: '8px',
+                        border: shippingCost > 0 ? '1.5px solid #0284c7' : '1px solid #cbd5e1',
+                        fontSize: '13px',
+                        fontWeight: 700,
+                        color: '#0f172a',
+                        backgroundColor: '#ffffff'
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontWeight: 700, color: '#334155', marginBottom: '3px' }}>
+                    <span>🏷️ Diskon Keseluruhan</span>
+                    <span style={{ fontSize: '10px', color: '#94a3b8', fontWeight: 500 }}>(Opsional)</span>
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', fontSize: '12px', fontWeight: 700, color: '#94a3b8' }}>Rp</span>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={overallDiscountStr ? Number(overallDiscountStr.replace(/\D/g, '')).toLocaleString('id-ID') : ''}
+                      onChange={e => setOverallDiscountStr(e.target.value.replace(/\D/g, ''))}
+                      placeholder="0"
+                      style={{
+                        width: '100%',
+                        padding: '7px 8px 7px 32px',
+                        borderRadius: '8px',
+                        border: overallDiscount > 0 ? '1.5px solid #dc2626' : '1px solid #cbd5e1',
+                        fontSize: '13px',
+                        fontWeight: 700,
+                        color: '#0f172a',
+                        backgroundColor: '#ffffff'
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', fontWeight: 700, color: '#334155', marginBottom: '3px' }}>
+                  <span>📝 Catatan Invoice</span>
+                  <span style={{ fontSize: '10px', color: '#94a3b8', fontWeight: 500 }}>(Opsional, ikut tercetak di struk / invoice)</span>
+                </label>
+                <input
+                  type="text"
+                  value={orderNote}
+                  onChange={e => setOrderNote(e.target.value)}
+                  placeholder="Contoh: Titip satpam, packing kardus tebal, kirim sore..."
+                  style={{
+                    width: '100%',
+                    padding: '7px 10px',
+                    borderRadius: '8px',
+                    border: orderNote.trim() ? '1.5px solid #6366f1' : '1px solid #cbd5e1',
+                    fontSize: '12px',
+                    color: '#0f172a',
+                    backgroundColor: '#ffffff'
+                  }}
+                />
+              </div>
             </div>
 
             {/* JIKA PEMBAYARAN TEMPO / CICILAN GROSIR */}
@@ -2866,6 +2983,8 @@ function App() {
                   date: new Date().toISOString(),
                   total: total,
                   subtotal: subtotal,
+                  discount: overallDiscount > 0 ? overallDiscount : undefined,
+                  shippingCost: shippingCost > 0 ? shippingCost : undefined,
                   tax: tax,
                   rounding: rounding,
                   paymentMethod: paymentMethod,
@@ -2874,15 +2993,15 @@ function App() {
                   remainingAmount: effRemaining,
                   dueDate: isTempo ? tempoDueDate : undefined,
                   notes: (() => {
-                    const deliveryMeta = orderType === 'DRIVETHRU'
-                      ? [
-                          selectedCustomer?.address ? `Alamat: ${selectedCustomer.address}` : '',
-                          deliveryAddressDetail.trim() ? `Detail: ${deliveryAddressDetail.trim()}` : '',
-                          deliveryNote.trim() ? `Catatan: ${deliveryNote.trim()}` : '',
-                        ].filter(Boolean).join(' | ')
-                      : '';
-                    if (isTempo) return deliveryMeta ? `${tempoNotes} (${deliveryMeta})` : tempoNotes;
-                    return deliveryMeta || undefined;
+                    const parts: string[] = [];
+                    if (orderNote.trim()) parts.push(orderNote.trim());
+                    if (orderType === 'DRIVETHRU') {
+                      if (selectedCustomer?.address) parts.push(`Alamat: ${selectedCustomer.address}`);
+                      if (deliveryAddressDetail.trim()) parts.push(`Detail: ${deliveryAddressDetail.trim()}`);
+                      if (deliveryNote.trim()) parts.push(`Catatan Delivery: ${deliveryNote.trim()}`);
+                    }
+                    if (isTempo && tempoNotes.trim()) parts.push(`Tempo: ${tempoNotes.trim()}`);
+                    return parts.length > 0 ? parts.join(' | ') : undefined;
                   })(),
                   tendered: isTempo ? dpNum : tendered,
                   change: isTempo ? 0 : change,
@@ -2940,6 +3059,9 @@ function App() {
                 setCartSheetOpen(false);
                 setCart([]);
                 setTenderedStr('');
+                setShippingCostStr('');
+                setOverallDiscountStr('');
+                setOrderNote('');
                 setSelectedCustomer(null);
                 setDeliveryStep('catalog');
                 setDeliveryAddressDetail('');

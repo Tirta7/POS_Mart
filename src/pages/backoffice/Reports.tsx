@@ -2779,6 +2779,19 @@ const Reports: React.FC = () => {
                   </div>
                 ) : null}
 
+                {selectedSaleDetail.shippingCost ? (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#0284c7' }}>
+                    <span>Biaya Ongkir / Pengiriman</span>
+                    <span style={{ fontWeight: 700 }}>+{formatIDR(selectedSaleDetail.shippingCost)}</span>
+                  </div>
+                ) : null}
+
+                {selectedSaleDetail.notes ? (
+                  <div style={{ background: '#f8fafc', padding: '8px 12px', borderRadius: '8px', border: '1px dashed #cbd5e1', fontSize: '12px', color: '#334155' }}>
+                    <strong>Catatan:</strong> {selectedSaleDetail.notes}
+                  </div>
+                ) : null}
+
                 <div style={{
                   borderTop: '1px solid #e2e8f0', paddingTop: '10px', marginTop: '4px',
                   display: 'flex', justifyContent: 'space-between', alignItems: 'center'

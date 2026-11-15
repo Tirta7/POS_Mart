@@ -629,6 +629,11 @@ export const buildDistributorInvoiceHtml = (sale: SalesTransaction, opts: Distri
             <div>No. Rekening: <strong class="font-mono" style="font-size: 12px; color: #2563eb;">${esc(bankAccount)}</strong></div>
             <div>Atas Nama: <strong>${esc(bankHolder)}</strong></div>
           </div>
+          ${sale.notes ? `
+          <div class="note-box" style="background: #fffbeb; border: 1px dashed #f59e0b; border-radius: 6px; padding: 8px 12px; margin-top: 8px; font-size: 10.5px;">
+            <div style="font-weight: 800; text-transform: uppercase; font-size: 9.5px; color: #b45309; margin-bottom: 2px;">Catatan Khusus Invoice:</div>
+            <div style="color: #78350f; font-weight: 600;">${esc(sale.notes)}</div>
+          </div>` : ''}
         </div>
 
         <div class="summary-right">
@@ -641,6 +646,16 @@ export const buildDistributorInvoiceHtml = (sale: SalesTransaction, opts: Distri
               <td class="calc-label">Subtotal:</td>
               <td class="calc-value">${rp(sale.subtotal)}</td>
             </tr>
+            ${sale.discount && sale.discount > 0 ? `
+            <tr>
+              <td class="calc-label" style="color: #dc2626; font-weight: 700;">Diskon Transaksi:</td>
+              <td class="calc-value" style="color: #dc2626; font-weight: 700;">-${rp(sale.discount)}</td>
+            </tr>` : ''}
+            ${sale.shippingCost && sale.shippingCost > 0 ? `
+            <tr>
+              <td class="calc-label" style="color: #0284c7; font-weight: 700;">Biaya Ongkir:</td>
+              <td class="calc-value" style="color: #0284c7; font-weight: 700;">+${rp(sale.shippingCost)}</td>
+            </tr>` : ''}
             ${sale.tax > 0 ? `
             <tr>
               <td class="calc-label">PPN (${st.taxRate}%):</td>

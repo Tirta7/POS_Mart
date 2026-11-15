@@ -137,6 +137,8 @@ export interface SalesTransaction {
   date: string;
   total: number;
   subtotal: number;
+  discount?: number;
+  shippingCost?: number;
   tax: number;
   rounding: number;
   paymentMethod: string;

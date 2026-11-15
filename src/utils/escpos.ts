@@ -388,6 +388,14 @@ export const buildReceiptEscPos = async (
   builder.divider('-');
   builder.twoColumns('Subtotal', fmtNum(sale.subtotal));
 
+  if (sale.discount && sale.discount > 0) {
+    builder.twoColumns('Diskon Transaksi', `-${fmtNum(sale.discount)}`);
+  }
+
+  if (sale.shippingCost && sale.shippingCost > 0) {
+    builder.twoColumns('Biaya Ongkir', `+${fmtNum(sale.shippingCost)}`);
+  }
+
   if (sale.tax && sale.tax > 0) {
     builder.twoColumns(`PPN (${receiptOpts.taxRate || settings.taxRate || 11}%)`, fmtNum(sale.tax));
   }
@@ -410,6 +418,11 @@ export const buildReceiptEscPos = async (
     builder.bold(true);
     builder.twoColumns('Kembalian', fmtNum(sale.change || 0));
     builder.bold(false);
+  }
+
+  if (sale.notes) {
+    builder.divider('-');
+    builder.text(`Catatan: ${sale.notes}`);
   }
 
   builder.divider('-');
