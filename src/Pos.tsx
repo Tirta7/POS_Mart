@@ -2908,23 +2908,6 @@ function App() {
                 };
                 await addSale(sale);
 
-                // Jika akun dalam mode trial, konsumsi 1 kuota trial secara real-time
-                if (licenseInfo?.status === 'trial') {
-                  fetch('/api/license/trial/consume', { method: 'POST' })
-                    .then((r) => r.json())
-                    .then((res) => {
-                      if (res?.trial) {
-                        setLicenseInfo((prev) => ({
-                          ...(prev || { allowed: true, status: 'trial' }),
-                          allowed: Boolean(res.allowed),
-                          status: res.allowed ? 'trial' : 'expired',
-                          trial: res.trial,
-                        }));
-                      }
-                    })
-                    .catch(() => {});
-                }
-
                 // Web Push "Uang Masuk" ke semua device yang mengaktifkan notifikasi
                 sendSaleNotification(sale, selectedCustomer?.name, currentUser?.name);
 
