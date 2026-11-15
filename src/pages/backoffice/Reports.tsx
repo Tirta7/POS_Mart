@@ -11,7 +11,7 @@ import {
   TrendingUp, AlertTriangle, DollarSign, Search, 
   CreditCard, CheckCircle2, Printer, Copy, Download, 
   FileSpreadsheet, RefreshCw, X, MessageSquare,
-  Package, Check, Tag, Eye, Info,
+  Package, Check, Tag, Eye, Info, Truck, FileText,
   RotateCcw, Edit3, Trash2, Calendar, Clock
 } from 'lucide-react';
 import EditInvoiceModal from '../../components/EditInvoiceModal';
@@ -88,6 +88,17 @@ const Reports: React.FC = () => {
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
   const formatIDR = (n: number) => 'Rp ' + (Number(n) || 0).toLocaleString('id-ID');
+
+  const cleanNotes = (rawNotes?: string | null): string => {
+    if (!rawNotes) return '';
+    return rawNotes
+      .replace(/\[(?:DISCOUNT|DISKON):\d+\]/gi, '')
+      .replace(/\[(?:SHIPPING|ONGKIR):\d+\]/gi, '')
+      .split('|')
+      .map(s => s.trim())
+      .filter(Boolean)
+      .join(' • ');
+  };
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -2329,12 +2340,19 @@ const Reports: React.FC = () => {
                     <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 800, color: '#0f172a' }}>
                       Detail Transaksi
                     </h3>
-                    <span style={{
-                      fontFamily: 'monospace', fontSize: '12px', fontWeight: 800,
-                      background: '#e2e8f0', color: '#1e293b', padding: '2px 8px', borderRadius: '6px'
-                    }}>
-                      {selectedSaleDetail.id}
-                    </span>
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: '#e2e8f0', padding: '2px 8px', borderRadius: '6px' }}>
+                      <span style={{ fontFamily: 'monospace', fontSize: '12px', fontWeight: 800, color: '#1e293b' }}>
+                        {selectedSaleDetail.id}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard(selectedSaleDetail.id)}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '1px', display: 'flex', alignItems: 'center', color: '#64748b' }}
+                        title="Salin No. Invoice"
+                      >
+                        {copiedId === selectedSaleDetail.id ? <Check size={12} color="#16a34a" /> : <Copy size={12} />}
+                      </button>
+                    </div>
                     {selectedSaleDetail.status === 'VOID' ? (
                       <span style={{
                         background: '#fee2e2', color: '#dc2626', fontSize: '11px', fontWeight: 800,
@@ -2746,65 +2764,134 @@ const Reports: React.FC = () => {
                 </div>
               )}
 
-              {/* Financial Calculation Summary */}
-              <div style={{
-                background: '#f8fafc', borderRadius: '14px', padding: '16px',
-                border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '8px'
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#64748b' }}>
-                  <span>Subtotal Belanja</span>
-                  <span style={{ fontWeight: 700, color: '#0f172a' }}>{formatIDR(selectedSaleDetail.subtotal || selectedSaleDetail.total)}</span>
-                </div>
+              {/* Hitung Rincian Finansial & Catatan */}
+              {(() => {
+                const effSubtotal = Number(selectedSaleDetail.subtotal || selectedSaleDetail.total) || 0;
+                const effTotal = Number(selectedSaleDetail.total || selectedSaleDetail.subtotal) || 0;
+                let effDiscount = selectedSaleDetail.discount != null ? Number(selectedSaleDetail.discount) : 0;
+                let effShipping = selectedSaleDetail.shippingCost != null ? Number(selectedSaleDetail.shippingCost) : 0;
 
-                {selectedSaleDetail.hasSpecialPrice && selectedSaleDetail.totalSpecialSavings > 0 && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#b45309', fontWeight: 700 }}>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <Tag size={13} /> Total Penghematan Special Price
-                    </span>
-                    <span>-{formatIDR(selectedSaleDetail.totalSpecialSavings)}</span>
-                  </div>
-                )}
+                // Ekstrak dari notes jika tersimpan dalam tag
+                if (!effDiscount && selectedSaleDetail.notes) {
+                  const dMatch = String(selectedSaleDetail.notes).match(/\[(?:DISCOUNT|DISKON):(\d+)\]/i);
+                  if (dMatch) effDiscount = Number(dMatch[1]);
+                }
+                if (!effShipping && selectedSaleDetail.notes) {
+                  const sMatch = String(selectedSaleDetail.notes).match(/\[(?:SHIPPING|ONGKIR):(\d+)\]/i);
+                  if (sMatch) effShipping = Number(sMatch[1]);
+                }
 
-                {selectedSaleDetail.tax ? (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#64748b' }}>
-                    <span>Pajak (PB1 / PPN)</span>
-                    <span style={{ fontWeight: 700, color: '#0f172a' }}>+{formatIDR(selectedSaleDetail.tax)}</span>
-                  </div>
-                ) : null}
+                // Fallback cerdas jika subtotal > total dan diskon masih 0
+                if (!effDiscount && effSubtotal > effTotal) {
+                  effDiscount = Math.max(0, effSubtotal - effTotal - (selectedSaleDetail.tax || 0) + effShipping);
+                }
 
-                {selectedSaleDetail.discount ? (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#dc2626' }}>
-                    <span>Diskon Tambahan Nota</span>
-                    <span style={{ fontWeight: 700 }}>-{formatIDR(selectedSaleDetail.discount)}</span>
-                  </div>
-                ) : null}
+                const cleanedNote = cleanNotes(selectedSaleDetail.notes);
 
-                {selectedSaleDetail.shippingCost ? (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#0284c7' }}>
-                    <span>Biaya Ongkir / Pengiriman</span>
-                    <span style={{ fontWeight: 700 }}>+{formatIDR(selectedSaleDetail.shippingCost)}</span>
-                  </div>
-                ) : null}
+                return (
+                  <>
+                    {/* Kotak Catatan Transaksi Khusus (Jika ada) */}
+                    {cleanedNote && (
+                      <div style={{
+                        background: '#fffbeb', border: '1.5px dashed #f59e0b', borderRadius: '14px',
+                        padding: '12px 16px', display: 'flex', alignItems: 'flex-start', gap: '12px'
+                      }}>
+                        <div style={{
+                          width: '32px', height: '32px', borderRadius: '10px', background: '#fef3c7',
+                          color: '#d97706', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
+                        }}>
+                          <FileText size={18} />
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: '11px', fontWeight: 800, color: '#b45309', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                            Catatan Khusus Transaksi / Invoice:
+                          </div>
+                          <div style={{ fontSize: '13px', fontWeight: 600, color: '#78350f', marginTop: '2px', lineHeight: 1.4 }}>
+                            "{cleanedNote}"
+                          </div>
+                        </div>
+                      </div>
+                    )}
 
-                {selectedSaleDetail.notes ? (
-                  <div style={{ background: '#f8fafc', padding: '8px 12px', borderRadius: '8px', border: '1px dashed #cbd5e1', fontSize: '12px', color: '#334155' }}>
-                    <strong>Catatan:</strong> {selectedSaleDetail.notes}
-                  </div>
-                ) : null}
+                    {/* Financial Calculation Summary */}
+                    <div style={{
+                      background: '#f8fafc', borderRadius: '14px', padding: '18px 20px',
+                      border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '9px'
+                    }}>
+                      <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '2px' }}>
+                        Rincian Perhitungan Finansial
+                      </div>
 
-                <div style={{
-                  borderTop: '1px solid #e2e8f0', paddingTop: '10px', marginTop: '4px',
-                  display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-                }}>
-                  <div>
-                    <div style={{ fontSize: '12px', fontWeight: 700, color: '#64748b' }}>Total Akhir Transaksi</div>
-                    <div style={{ fontSize: '11px', color: '#94a3b8' }}>Metode: {selectedSaleDetail.paymentMethod || 'TUNAI'}</div>
-                  </div>
-                  <div style={{ fontSize: '20px', fontWeight: 900, color: '#0f172a' }}>
-                    {formatIDR(selectedSaleDetail.total || selectedSaleDetail.subtotal)}
-                  </div>
-                </div>
-              </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#475569' }}>
+                        <span>Subtotal Belanja (Item Produk)</span>
+                        <span style={{ fontWeight: 700, color: '#0f172a' }}>{formatIDR(effSubtotal)}</span>
+                      </div>
+
+                      {selectedSaleDetail.hasSpecialPrice && selectedSaleDetail.totalSpecialSavings > 0 && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#b45309', fontWeight: 700 }}>
+                          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <Tag size={13} /> Hemat Harga Khusus / Grosir
+                          </span>
+                          <span>-{formatIDR(selectedSaleDetail.totalSpecialSavings)}</span>
+                        </div>
+                      )}
+
+                      {effDiscount > 0 && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#dc2626', fontWeight: 700 }}>
+                          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <Tag size={13} /> Diskon Keseluruhan Transaksi
+                          </span>
+                          <span style={{ fontSize: '13.5px' }}>-{formatIDR(effDiscount)}</span>
+                        </div>
+                      )}
+
+                      {effShipping > 0 && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#0284c7', fontWeight: 700 }}>
+                          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <Truck size={13} /> Biaya Ongkir / Pengiriman
+                          </span>
+                          <span style={{ fontSize: '13.5px' }}>+{formatIDR(effShipping)}</span>
+                        </div>
+                      )}
+
+                      {selectedSaleDetail.tax ? (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#475569' }}>
+                          <span>Pajak (PB1 / PPN)</span>
+                          <span style={{ fontWeight: 700, color: '#0f172a' }}>+{formatIDR(selectedSaleDetail.tax)}</span>
+                        </div>
+                      ) : null}
+
+                      {selectedSaleDetail.rounding ? (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#64748b' }}>
+                          <span>Pembulatan</span>
+                          <span style={{ fontWeight: 700 }}>+{formatIDR(selectedSaleDetail.rounding)}</span>
+                        </div>
+                      ) : null}
+
+                      <div style={{
+                        borderTop: '2px solid #e2e8f0', paddingTop: '12px', marginTop: '4px',
+                        display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                      }}>
+                        <div>
+                          <div style={{ fontSize: '12.5px', fontWeight: 800, color: '#0f172a' }}>TOTAL AKHIR TRANSAKSI</div>
+                          <div style={{ fontSize: '11px', color: '#64748b' }}>Metode: <strong>{selectedSaleDetail.paymentMethod || 'TUNAI'}</strong></div>
+                        </div>
+                        <div style={{ fontSize: '24px', fontWeight: 900, color: '#0f172a' }}>
+                          {formatIDR(effTotal)}
+                        </div>
+                      </div>
+
+                      {/* Rincian Tambahan Pembayaran Tunai */}
+                      {selectedSaleDetail.paymentMethod === 'TUNAI' && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px dashed #e2e8f0', paddingTop: '8px', fontSize: '12px', color: '#64748b' }}>
+                          <span>Uang Tunai Diterima: <strong>{formatIDR(selectedSaleDetail.tendered || effTotal)}</strong></span>
+                          <span>Kembalian: <strong style={{ color: '#16a34a' }}>{formatIDR(selectedSaleDetail.change || 0)}</strong></span>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                );
+              })()}
             </div>
 
             {/* Modal Footer Actions */}

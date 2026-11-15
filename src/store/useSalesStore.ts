@@ -34,24 +34,45 @@ export const useSalesStore = create<SalesState>()(
               const employees = useAuthStore.getState().employees;
               const mapped = data.map((t: any) => {
                 const localEmp = employees.find((e: any) => e.id === t.cashier_id);
+                const itemsSubtotal = (t.items || []).reduce((acc: number, item: any) => acc + (item.subtotal || 0), 0);
+                
+                let parsedDiscount: number | undefined = t.discount != null ? Number(t.discount) : undefined;
+                let parsedShipping: number | undefined = t.shipping_cost != null ? Number(t.shipping_cost) : undefined;
+
+                // Ekstrak metadata diskon & ongkir jika tersimpan dalam notes [DISCOUNT:xxx] [SHIPPING:xxx]
+                if (t.notes) {
+                  const dMatch = String(t.notes).match(/\[(?:DISCOUNT|DISKON):(\d+)\]/i);
+                  if (dMatch) parsedDiscount = Number(dMatch[1]);
+                  const sMatch = String(t.notes).match(/\[(?:SHIPPING|ONGKIR):(\d+)\]/i);
+                  if (sMatch) parsedShipping = Number(sMatch[1]);
+                }
+
+                // Fallback cerdas: jika belum ada diskon dan itemsSubtotal > total_amount
+                const totalNum = Number(t.total_amount) || 0;
+                if (parsedDiscount === undefined && itemsSubtotal > totalNum) {
+                  parsedDiscount = itemsSubtotal - totalNum;
+                }
+
                 return {
                   id: t.receipt_number,
                   date: t.created_at,
-                  total: t.total_amount,
-                  subtotal: (t.items || []).reduce((acc: number, item: any) => acc + (item.subtotal || 0), 0),
-                  tax: 0, 
-                  rounding: 0,
+                  total: totalNum,
+                  subtotal: itemsSubtotal || totalNum,
+                  discount: parsedDiscount,
+                  shippingCost: parsedShipping,
+                  tax: t.tax != null ? Number(t.tax) : 0, 
+                  rounding: t.rounding != null ? Number(t.rounding) : 0,
                   paymentMethod: t.payment_method,
-                  tendered: t.total_amount, 
-                  change: 0,
+                  tendered: t.tendered != null ? Number(t.tendered) : totalNum, 
+                  change: t.change != null ? Number(t.change) : 0,
                   customerId: t.customer_id,
                   customerName: t.customer_name || 'Umum (Guest)',
                   employeeId: t.cashier_id,
                   employeeName: localEmp?.name || t.cashier_name || t.cashier_id,
                   status: t.status || 'COMPLETED',
                   paymentStatus: t.payment_status || 'PAID',
-                  paidAmount: t.paid_amount != null ? Number(t.paid_amount) : Number(t.total_amount),
-                  remainingAmount: t.remaining_amount != null ? Number(t.remaining_amount) : Math.max(0, Number(t.total_amount) - (t.paid_amount || 0)),
+                  paidAmount: t.paid_amount != null ? Number(t.paid_amount) : totalNum,
+                  remainingAmount: t.remaining_amount != null ? Number(t.remaining_amount) : Math.max(0, totalNum - (t.paid_amount || 0)),
                   dueDate: t.due_date || undefined,
                   notes: t.notes || undefined,
                   payments: t.payments || [],

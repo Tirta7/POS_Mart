@@ -2995,6 +2995,8 @@ function App() {
                   notes: (() => {
                     const parts: string[] = [];
                     if (orderNote.trim()) parts.push(orderNote.trim());
+                    if (overallDiscount > 0) parts.push(`[DISCOUNT:${overallDiscount}]`);
+                    if (shippingCost > 0) parts.push(`[SHIPPING:${shippingCost}]`);
                     if (orderType === 'DRIVETHRU') {
                       if (selectedCustomer?.address) parts.push(`Alamat: ${selectedCustomer.address}`);
                       if (deliveryAddressDetail.trim()) parts.push(`Detail: ${deliveryAddressDetail.trim()}`);
