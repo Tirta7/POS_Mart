@@ -373,22 +373,25 @@ export const LicenseLockScreen: React.FC = () => {
     };
   }, [isLocked, billing, packages, license?.expiresAt, activeDurationLabel, activeAmount, activeAmountText, uniqueCode, license?.daysLeft]);
 
-  // Satu Gambar QRIS Tunggal: pakai qris_image_url dari paket / billing bila tersedia
+  // Satu Gambar QRIS Tunggal: pakai qris_image_url dari paket / billing bila tersedia + anti-cache
   const qrisImageSrc = useMemo(() => {
+    let src = '';
     if (selectedPkg?.qris_image_url) {
-      return selectedPkg.qris_image_url;
+      src = selectedPkg.qris_image_url;
+    } else if (billing?.qris_image_url && (!selectedPkg || selectedPkg.id === billing.package?.id)) {
+      src = billing.qris_image_url;
+    } else if (billing && activeAmount) {
+      const params = new URLSearchParams({
+        amount: String(Math.round(activeAmount)),
+        size: '512',
+      });
+      if (selectedPkg?.id) params.set('package_id', selectedPkg.id);
+      src = `/api/license/billing/qris.png?${params.toString()}`;
     }
-    if (billing?.qris_image_url && (!selectedPkg || selectedPkg.id === billing.package?.id)) {
-      return billing.qris_image_url;
-    }
-    if (!billing || !activeAmount) return '';
-    const params = new URLSearchParams({
-      amount: String(Math.round(activeAmount)),
-      size: '512',
-    });
-    if (selectedPkg?.id) params.set('package_id', selectedPkg.id);
-    return `/api/license/billing/qris.png?${params.toString()}`;
-  }, [billing, activeAmount, selectedPkg]);
+    if (!src) return '';
+    const sep = src.includes('?') ? '&' : '?';
+    return `${src}${sep}_uc=${uniqueCode || 0}`;
+  }, [billing, activeAmount, selectedPkg, uniqueCode]);
 
   // Reset QR state bila paket/nominal atau data tagihan berubah
   useEffect(() => {
