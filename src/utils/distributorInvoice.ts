@@ -629,57 +629,90 @@ export const buildDistributorInvoiceHtml = (sale: SalesTransaction, opts: Distri
             <div>No. Rekening: <strong class="font-mono" style="font-size: 12px; color: #2563eb;">${esc(bankAccount)}</strong></div>
             <div>Atas Nama: <strong>${esc(bankHolder)}</strong></div>
           </div>
-          ${sale.notes ? `
-          <div class="note-box" style="background: #fffbeb; border: 1px dashed #f59e0b; border-radius: 6px; padding: 8px 12px; margin-top: 8px; font-size: 10.5px;">
-            <div style="font-weight: 800; text-transform: uppercase; font-size: 9.5px; color: #b45309; margin-bottom: 2px;">Catatan Khusus Invoice:</div>
-            <div style="color: #78350f; font-weight: 600;">${esc(sale.notes)}</div>
-          </div>` : ''}
+          ${(() => {
+            const cleanNote = (sale.notes || '')
+              .replace(/\[(?:DISCOUNT|DISKON):\d+\]/gi, '')
+              .replace(/\[(?:SHIPPING|ONGKIR):\d+\]/gi, '')
+              .split('|')
+              .map(s => s.trim())
+              .filter(Boolean)
+              .join(' • ');
+            return cleanNote ? `
+            <div class="note-box" style="background: #fffbeb; border: 1px dashed #f59e0b; border-radius: 6px; padding: 8px 12px; margin-top: 8px; font-size: 10.5px;">
+              <div style="font-weight: 800; text-transform: uppercase; font-size: 9.5px; color: #b45309; margin-bottom: 2px;">Catatan Khusus Invoice:</div>
+              <div style="color: #78350f; font-weight: 600;">${esc(cleanNote)}</div>
+            </div>` : '';
+          })()}
         </div>
 
         <div class="summary-right">
-          <table class="calc-table">
-            <tr>
-              <td class="calc-label">Total Qty Barang:</td>
-              <td class="calc-value">${num(totalQty)} item (${sale.items.length} jenis)</td>
-            </tr>
-            <tr>
-              <td class="calc-label">Subtotal:</td>
-              <td class="calc-value">${rp(sale.subtotal)}</td>
-            </tr>
-            ${sale.discount && sale.discount > 0 ? `
-            <tr>
-              <td class="calc-label" style="color: #dc2626; font-weight: 700;">Diskon Transaksi:</td>
-              <td class="calc-value" style="color: #dc2626; font-weight: 700;">-${rp(sale.discount)}</td>
-            </tr>` : ''}
-            ${sale.shippingCost && sale.shippingCost > 0 ? `
-            <tr>
-              <td class="calc-label" style="color: #0284c7; font-weight: 700;">Biaya Ongkir:</td>
-              <td class="calc-value" style="color: #0284c7; font-weight: 700;">+${rp(sale.shippingCost)}</td>
-            </tr>` : ''}
-            ${sale.tax > 0 ? `
-            <tr>
-              <td class="calc-label">PPN (${st.taxRate}%):</td>
-              <td class="calc-value">${rp(sale.tax)}</td>
-            </tr>` : ''}
-            ${sale.rounding ? `
-            <tr>
-              <td class="calc-label">Pembulatan:</td>
-              <td class="calc-value">${rp(sale.rounding)}</td>
-            </tr>` : ''}
-            <tr class="grand-total-row">
-              <td class="grand-total-label">TOTAL TAGIHAN:</td>
-              <td class="grand-total-value">${rp(sale.total)}</td>
-            </tr>
-            ${sale.paymentMethod === 'TUNAI' ? `
-            <tr>
-              <td class="calc-label">Tunai Diterima:</td>
-              <td class="calc-value">${rp(sale.tendered)}</td>
-            </tr>
-            <tr>
-              <td class="calc-label">Kembalian:</td>
-              <td class="calc-value">${rp(sale.change)}</td>
-            </tr>` : ''}
-          </table>
+          ${(() => {
+            const effSubtotal = sale.subtotal || sale.total;
+            let effDiscount = sale.discount != null ? sale.discount : 0;
+            let effShipping = sale.shippingCost != null ? sale.shippingCost : 0;
+
+            if (!effDiscount && sale.notes) {
+              const dMatch = String(sale.notes).match(/\[(?:DISCOUNT|DISKON):(\d+)\]/i);
+              if (dMatch) effDiscount = Number(dMatch[1]);
+            }
+            if (!effShipping && sale.notes) {
+              const sMatch = String(sale.notes).match(/\[(?:SHIPPING|ONGKIR):(\d+)\]/i);
+              if (sMatch) effShipping = Number(sMatch[1]);
+            }
+
+            if (!effDiscount && effSubtotal > sale.total) {
+              effDiscount = Math.max(0, effSubtotal - sale.total - (sale.tax || 0) + effShipping);
+            }
+            if (!effShipping && sale.total > effSubtotal) {
+              effShipping = Math.max(0, sale.total - effSubtotal - (sale.tax || 0) + effDiscount);
+            }
+
+            return `
+            <table class="calc-table">
+              <tr>
+                <td class="calc-label">Total Qty Barang:</td>
+                <td class="calc-value">${num(totalQty)} item (${sale.items.length} jenis)</td>
+              </tr>
+              <tr>
+                <td class="calc-label">Subtotal:</td>
+                <td class="calc-value">${rp(effSubtotal)}</td>
+              </tr>
+              ${effDiscount > 0 ? `
+              <tr>
+                <td class="calc-label" style="color: #dc2626; font-weight: 700;">Diskon Transaksi:</td>
+                <td class="calc-value" style="color: #dc2626; font-weight: 700;">-${rp(effDiscount)}</td>
+              </tr>` : ''}
+              ${effShipping > 0 ? `
+              <tr>
+                <td class="calc-label" style="color: #0284c7; font-weight: 700;">Biaya Ongkir:</td>
+                <td class="calc-value" style="color: #0284c7; font-weight: 700;">+${rp(effShipping)}</td>
+              </tr>` : ''}
+              ${sale.tax > 0 ? `
+              <tr>
+                <td class="calc-label">PPN (${st.taxRate}%):</td>
+                <td class="calc-value">${rp(sale.tax)}</td>
+              </tr>` : ''}
+              ${sale.rounding ? `
+              <tr>
+                <td class="calc-label">Pembulatan:</td>
+                <td class="calc-value">${rp(sale.rounding)}</td>
+              </tr>` : ''}
+              <tr class="grand-total-row">
+                <td class="grand-total-label">TOTAL TAGIHAN:</td>
+                <td class="grand-total-value">${rp(sale.total)}</td>
+              </tr>
+              ${sale.paymentMethod === 'TUNAI' ? `
+              <tr>
+                <td class="calc-label">Tunai Diterima:</td>
+                <td class="calc-value">${rp(sale.tendered || sale.total)}</td>
+              </tr>
+              <tr>
+                <td class="calc-label">Kembalian:</td>
+                <td class="calc-value">${rp(sale.change || 0)}</td>
+              </tr>` : ''}
+            </table>
+            `;
+          })()}
         </div>
       </div>
 

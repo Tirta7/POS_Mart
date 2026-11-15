@@ -109,6 +109,34 @@ export const buildReceiptContent = (sale: SalesTransaction, opts: ReceiptOptions
     })
     .join('');
 
+  const effSubtotal = sale.subtotal || sale.total;
+  let effDiscount = sale.discount != null ? sale.discount : 0;
+  let effShipping = sale.shippingCost != null ? sale.shippingCost : 0;
+
+  if (!effDiscount && sale.notes) {
+    const dMatch = String(sale.notes).match(/\[(?:DISCOUNT|DISKON):(\d+)\]/i);
+    if (dMatch) effDiscount = Number(dMatch[1]);
+  }
+  if (!effShipping && sale.notes) {
+    const sMatch = String(sale.notes).match(/\[(?:SHIPPING|ONGKIR):(\d+)\]/i);
+    if (sMatch) effShipping = Number(sMatch[1]);
+  }
+
+  if (!effDiscount && effSubtotal > sale.total) {
+    effDiscount = Math.max(0, effSubtotal - sale.total - (sale.tax || 0) + effShipping);
+  }
+  if (!effShipping && sale.total > effSubtotal) {
+    effShipping = Math.max(0, sale.total - effSubtotal - (sale.tax || 0) + effDiscount);
+  }
+
+  const cleanNoteText = (sale.notes || '')
+    .replace(/\[(?:DISCOUNT|DISKON):\d+\]/gi, '')
+    .replace(/\[(?:SHIPPING|ONGKIR):\d+\]/gi, '')
+    .split('|')
+    .map(s => s.trim())
+    .filter(Boolean)
+    .join(' • ');
+
   return `
   ${logoHtml}
   <div class="center">
@@ -137,9 +165,9 @@ export const buildReceiptContent = (sale: SalesTransaction, opts: ReceiptOptions
   <hr class="dash" />
 
   <div class="sum-row"><span>Total Item</span><span style="font-weight:700;">${sale.items.length} jenis / ${num(totalQty)} qty</span></div>
-  <div class="sum-row"><span>Subtotal</span><span>${rp(sale.subtotal)}</span></div>
-  ${sale.discount && sale.discount > 0 ? `<div class="sum-row" style="color:#dc2626;font-weight:700;"><span>Diskon Transaksi</span><span>-${rp(sale.discount)}</span></div>` : ''}
-  ${sale.shippingCost && sale.shippingCost > 0 ? `<div class="sum-row" style="color:#0284c7;font-weight:700;"><span>Biaya Ongkir</span><span>+${rp(sale.shippingCost)}</span></div>` : ''}
+  <div class="sum-row"><span>Subtotal</span><span>${rp(effSubtotal)}</span></div>
+  ${effDiscount > 0 ? `<div class="sum-row" style="color:#dc2626;font-weight:700;"><span>Diskon Transaksi</span><span>-${rp(effDiscount)}</span></div>` : ''}
+  ${effShipping > 0 ? `<div class="sum-row" style="color:#0284c7;font-weight:700;"><span>Biaya Ongkir</span><span>+${rp(effShipping)}</span></div>` : ''}
   ${sale.tax > 0 ? `<div class="sum-row"><span>PPN (${opts.taxEnabled && opts.taxRate ? `${opts.taxRate}%` : '11%'})</span><span>${rp(sale.tax)}</span></div>` : ''}
   ${sale.rounding ? `<div class="sum-row"><span>Pembulatan</span><span>${rp(sale.rounding)}</span></div>` : ''}
 
@@ -158,10 +186,10 @@ export const buildReceiptContent = (sale: SalesTransaction, opts: ReceiptOptions
   <div class="sum-row"><span>${isCash ? 'Tunai Diterima' : 'Dibayar'}</span><span>${rp(isCash ? (sale.tendered || sale.total) : sale.total)}</span></div>
   ${isCash ? `<div class="sum-row bold" style="font-size:11.5px;margin-top:1px;"><span>Kembalian</span><span style="font-weight:900;">${rp(sale.change || 0)}</span></div>` : ''}
   `}
-  ${sale.notes ? `
+  ${cleanNoteText ? `
   <div class="dash"></div>
   <div style="font-size:10px;text-align:left;padding:4px 6px;background:#f8fafc;border-radius:4px;border:1px dashed #cbd5e1;line-height:1.35;color:#334155;margin:4px 0;">
-    <strong style="color:#0f172a;">Catatan:</strong> ${esc(sale.notes)}
+    <strong style="color:#0f172a;">Catatan:</strong> ${esc(cleanNoteText)}
   </div>` : ''}
   ${sale.status === 'VOID' ? `<div style="text-align:center;padding:4px;margin-top:6px;border:1.5px solid #dc2626;color:#dc2626;font-weight:900;font-size:12px;letter-spacing:1.5px;">NOTA DIBATALKAN (VOID)</div>` : ''}
 
