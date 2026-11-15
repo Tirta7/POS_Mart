@@ -69,6 +69,7 @@ function openEventSource(shouldStayOpen: () => boolean) {
       const parsed = JSON.parse(event.data);
       if (parsed.license) notifyLicense(parsed.license);
       channel?.postMessage({ type: 'renew', data: parsed });
+      window.dispatchEvent(new CustomEvent('voc:license-unlocked', { detail: parsed }));
     } catch {}
   });
 
@@ -78,6 +79,7 @@ function openEventSource(shouldStayOpen: () => boolean) {
       const parsed = JSON.parse(event.data);
       if (parsed.license) notifyLicense(parsed.license);
       channel?.postMessage({ type: 'unlock', data: parsed });
+      window.dispatchEvent(new CustomEvent('voc:license-unlocked', { detail: parsed }));
     } catch {}
   });
 
@@ -85,8 +87,35 @@ function openEventSource(shouldStayOpen: () => boolean) {
     if (!event.data) return;
     try {
       const parsed = JSON.parse(event.data);
-      if (parsed.license) notifyLicense(parsed.license);
+      const lockedState = parsed.license || {
+        allowed: false,
+        status: 'locked',
+        reason: parsed.reason || 'Aplikasi dinonaktifkan sementara oleh admin lisensi',
+        lockReason: parsed.reason || 'Aplikasi dinonaktifkan sementara oleh admin lisensi',
+      };
+      notifyLicense(lockedState);
       channel?.postMessage({ type: 'lock', data: parsed });
+      window.dispatchEvent(new CustomEvent('voc:license-locked', { detail: parsed }));
+    } catch {}
+  });
+
+  es.addEventListener('update', (event: MessageEvent) => {
+    if (!event.data) return;
+    try {
+      const parsed = JSON.parse(event.data);
+      if (parsed) notifyLicense(parsed);
+      channel?.postMessage({ type: 'update', data: parsed });
+      window.dispatchEvent(new CustomEvent('voc:license-updated', { detail: parsed }));
+    } catch {}
+  });
+
+  es.addEventListener('billing', (event: MessageEvent) => {
+    if (!event.data) return;
+    try {
+      const parsed = JSON.parse(event.data);
+      if (parsed) notifyLicense(parsed);
+      channel?.postMessage({ type: 'billing', data: parsed });
+      window.dispatchEvent(new CustomEvent('voc:billing-updated', { detail: parsed }));
     } catch {}
   });
 

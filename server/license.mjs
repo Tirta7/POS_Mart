@@ -313,9 +313,9 @@ export async function verifikasiAplikasi() {
       return licenseState;
     }
 
-    // Polling cepat 2 detik khusus saat modal QRIS / layar terkunci terbuka (fallback jika SSE terhalang).
+    // Polling cepat 1.5 detik khusus saat modal QRIS / layar terkunci terbuka (fallback jika SSE terhalang).
     // Jika lisensi aktif / normal, kembalikan ke interval normal (1 jam = 3600000 ms) agar hemat jaringan.
-    const nextInterval = licenseState?.allowed ? 3600000 : 2000;
+    const nextInterval = licenseState?.allowed ? 3600000 : 1500;
     checkTimer = setTimeout(() => { verifikasiAplikasi(); }, nextInterval);
     if (checkTimer?.unref) checkTimer.unref();
 
@@ -383,14 +383,19 @@ async function handleVocmlStreamEvent(event, rawData) {
   console.log(`[VOCML Stream] Event diterima: ${normalizedEvent || event}`, parsed || rawData);
 
   if (normalizedEvent === 'renew' || normalizedEvent === 'unlock') {
-    console.log(`[VOCML Stream] Mendeteksi event ${normalizedEvent.toUpperCase()}! Langsung memanggil verifikasiAplikasi...`);
+    console.log(`[VOCML Stream] Mendeteksi event ${normalizedEvent.toUpperCase()}! Membuka lisensi seketika (< 2 detik)...`);
     const nextLicense = await verifikasiAplikasi();
-    const unlockMsg = 'Pembayaran berhasil! Lisensi Kasir POS telah aktif kembali';
+    const unlockMsg = 'PEMBAYARAN QRIS BERHASIL DITERIMA';
     const notifyPayload = JSON.stringify({
       event: normalizedEvent,
       message: unlockMsg,
       license: nextLicense,
+      package: parsed?.package || parsed?.package_label || (nextLicense.unlockReceipt?.packageLabel) || 'Langganan Aktif',
+      amount_text: parsed?.amount_text || (nextLicense.unlockReceipt?.amountText) || '',
+      expires_at: nextLicense.expiresAt || parsed?.expires_at || '',
+      remaining_days: nextLicense.remainingDays ?? nextLicense.daysLeft ?? parsed?.remaining_days ?? 30,
     });
+    broadcastLicense(licenseState);
     for (const client of sseClients) {
       try {
         client.write(`event: unlock\ndata: ${notifyPayload}\n\n`);
@@ -398,11 +403,36 @@ async function handleVocmlStreamEvent(event, rawData) {
       } catch {}
     }
   } else if (normalizedEvent === 'lock') {
-    console.log('[VOCML Stream] Mendeteksi event LOCK dari admin! Langsung memanggil verifikasiAplikasi...');
-    await verifikasiAplikasi();
+    // Skenario 1: Remote Lock < 2 Detik (Sekejap dalam hitungan milidetik langsung mengunci)
+    console.log('[VOCML Stream] Mendeteksi event LOCK dari admin! Mengunci layar operasional seketika...');
+    licenseState.allowed = false;
+    licenseState.status = 'locked';
+    licenseState.lockReason = parsed?.reason || parsed?.message || 'Aplikasi dinonaktifkan sementara oleh admin lisensi';
+    licenseState.reason = licenseState.lockReason;
+    broadcastLicense(licenseState);
     for (const client of sseClients) {
       try {
-        client.write(`event: lock\ndata: ${JSON.stringify({ event: 'lock', reason: 'Aplikasi dikunci oleh admin' })}\n\n`);
+        client.write(`event: lock\ndata: ${JSON.stringify({ event: 'lock', reason: licenseState.lockReason, license: licenseState })}\n\n`);
+      } catch {}
+    }
+    // Sinkronisasi data tagihan di background
+    verifikasiAplikasi().catch(() => {});
+  } else if (normalizedEvent === 'update' || normalizedEvent === 'billing') {
+    console.log(`[VOCML Stream] Mendeteksi event ${normalizedEvent.toUpperCase()}! Sinkronisasi status lisensi & daftar paket...`);
+    await verifikasiAplikasi();
+    try {
+      const freshBilling = await fetchBilling({
+        serverUrl: VOCML_SERVER_URL,
+        product: VOCML_PRODUCT,
+        machineId: getMachineId(),
+        apiKey: VOCML_API_KEY,
+      });
+      if (freshBilling) licenseState.billing = freshBilling.billing || freshBilling;
+    } catch {}
+    broadcastLicense(licenseState);
+    for (const client of sseClients) {
+      try {
+        client.write(`event: ${normalizedEvent}\ndata: ${JSON.stringify(licenseState)}\n\n`);
       } catch {}
     }
   }

@@ -1,9 +1,9 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useSettingsStore } from '../../store/useSettingsStore';
 import ShiftLabel from '../ShiftLabel';
 import { Link, useNavigate } from 'react-router-dom';
-import { LogOut, Menu, X, ShoppingCart } from 'lucide-react';
+import { LogOut, Menu, X, ShoppingCart, ShieldCheck, AlertTriangle } from 'lucide-react';
 
 interface TopHeaderProps {
   onMenuToggle?: () => void;
@@ -14,6 +14,49 @@ const TopHeader: React.FC<TopHeaderProps> = ({ onMenuToggle, menuOpen }) => {
   const { currentUser, logout } = useAuthStore();
   const { appName, appLogo } = useSettingsStore();
   const navigate = useNavigate();
+
+  const [licenseState, setLicenseState] = useState<{
+    allowed?: boolean;
+    status?: string;
+    expiresAt?: string | null;
+    remainingDays?: number | null;
+    trial?: { is_trial?: boolean; remaining?: number } | null;
+  } | null>(null);
+
+  useEffect(() => {
+    const applyLicense = (data: any) => {
+      if (!data) return;
+      const status = data.status || (data.allowed ? 'active' : 'locked');
+      const remDays = data.remainingDays ?? data.daysLeft ?? null;
+      setLicenseState({
+        allowed: Boolean(data.allowed),
+        status,
+        expiresAt: data.expiresAt || null,
+        remainingDays: remDays,
+        trial: data.trial || null,
+      });
+    };
+
+    fetch('/api/license/status')
+      .then((r) => r.json())
+      .then(applyLicense)
+      .catch(() => {});
+
+    const handleUpdate = (e: any) => applyLicense(e.detail?.license || e.detail);
+    const handleLock = () => setLicenseState((prev) => ({ ...(prev || {}), allowed: false, status: 'locked' }));
+
+    window.addEventListener('voc:license-changed', handleUpdate);
+    window.addEventListener('voc:license-locked', handleLock);
+    window.addEventListener('voc:license-unlocked', handleUpdate);
+    window.addEventListener('voc:license-updated', handleUpdate);
+
+    return () => {
+      window.removeEventListener('voc:license-changed', handleUpdate);
+      window.removeEventListener('voc:license-locked', handleLock);
+      window.removeEventListener('voc:license-unlocked', handleUpdate);
+      window.removeEventListener('voc:license-updated', handleUpdate);
+    };
+  }, []);
 
   const handleLogout = () => {
     logout();
@@ -48,6 +91,55 @@ const TopHeader: React.FC<TopHeaderProps> = ({ onMenuToggle, menuOpen }) => {
         <div className="bo-status-pill active">
           <span className="bo-status-dot"></span> ONLINE
         </div>
+        {licenseState?.status === 'trial' && licenseState?.trial?.is_trial && (
+          <div
+            className="bo-status-pill"
+            style={{
+              background: '#eff6ff',
+              color: '#1d4ed8',
+              borderColor: '#bfdbfe',
+              fontWeight: 800,
+            }}
+            title="Sisa kuota transaksi trial VOCML"
+          >
+            ⭐ Trial: Sisa {licenseState.trial.remaining ?? 0}x
+          </div>
+        )}
+        {licenseState?.allowed && licenseState?.status !== 'trial' && (
+          <div
+            className="bo-status-pill"
+            style={{
+              background: (licenseState.remainingDays ?? 30) <= 7 ? '#fef3c7' : '#ecfdf5',
+              color: (licenseState.remainingDays ?? 30) <= 7 ? '#b45309' : '#047857',
+              borderColor: (licenseState.remainingDays ?? 30) <= 7 ? '#fde68a' : '#a7f3d0',
+              fontWeight: 700,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+            }}
+            title={`Lisensi aktif${licenseState.expiresAt ? ` s/d ${licenseState.expiresAt}` : ''}`}
+          >
+            <ShieldCheck size={13} />
+            <span>{licenseState.remainingDays != null ? `${licenseState.remainingDays} Hari Lagi` : 'Lisensi Aktif'}</span>
+          </div>
+        )}
+        {licenseState && !licenseState.allowed && (
+          <div
+            className="bo-status-pill"
+            style={{
+              background: '#fef2f2',
+              color: '#b91c1c',
+              borderColor: '#fecaca',
+              fontWeight: 800,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+            }}
+          >
+            <AlertTriangle size={13} />
+            <span>Terkunci</span>
+          </div>
+        )}
         <div className="bo-status-pill border-l border-gray-300"><ShiftLabel /></div>
         <div className="bo-status-pill border-l border-gray-300">Admin Mode</div>
       </div>

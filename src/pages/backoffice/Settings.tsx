@@ -890,10 +890,32 @@ const Settings: React.FC = () => {
                                   <td style={{ padding: '12px 16px', fontWeight: 600, color: '#111827' }}>
                                     Sampai {new Date(licenseData.expiresAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
                                     {licenseData.daysLeft !== null && licenseData.daysLeft !== undefined && (
-                                      <span style={{ marginLeft: '8px', fontSize: '12px', color: licenseData.daysLeft <= 7 ? '#d97706' : '#059669', fontWeight: 600 }}>
-                                        ({licenseData.daysLeft} hari lagi)
+                                      <span style={{
+                                        marginLeft: '8px',
+                                        fontSize: '12px',
+                                        color: licenseData.daysLeft <= 0
+                                          ? (licenseData.status === 'trial' ? '#2563eb' : '#dc2626')
+                                          : (licenseData.daysLeft <= 7 ? '#d97706' : '#059669'),
+                                        fontWeight: 600
+                                      }}>
+                                        {licenseData.daysLeft > 0
+                                          ? `(${licenseData.daysLeft} hari lagi)`
+                                          : licenseData.daysLeft === 0
+                                          ? '(Hari terakhir)'
+                                          : licenseData.status === 'trial'
+                                          ? `(${Math.abs(licenseData.daysLeft)} hari lalu · Mode Trial Aktif)`
+                                          : `(${Math.abs(licenseData.daysLeft)} hari lalu)`
+                                        }
                                       </span>
                                     )}
+                                  </td>
+                                </tr>
+                              )}
+                              {licenseData.trial && (
+                                <tr style={{ borderBottom: '1px solid #e5e7eb' }}>
+                                  <td style={{ padding: '12px 16px', color: '#6b7280' }}>Kuota Gratis Trial</td>
+                                  <td style={{ padding: '12px 16px', fontWeight: 700, color: '#2563eb' }}>
+                                    {licenseData.trial.used ?? 0} / {licenseData.trial.quota ?? 10} terpakai (Sisa {licenseData.trial.remaining ?? 10}x transaksi)
                                   </td>
                                 </tr>
                               )}

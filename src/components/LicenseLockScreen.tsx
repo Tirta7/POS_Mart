@@ -22,6 +22,7 @@ import {
 import { subscribeLicenseStream } from '../utils/licenseStream';
 import { useSettingsStore } from '../store/useSettingsStore';
 import { downloadLicenseInvoicePdf } from '../utils/licenseInvoice';
+import { playCelebrationChime } from '../utils/audioChime';
 
 export interface LicensePackage {
   id: string;
@@ -358,6 +359,7 @@ export const LicenseLockScreen: React.FC = () => {
     }
 
     if (wasLocked === true && !newLocked) {
+      playCelebrationChime();
       setCheckMsg(null);
       setActivateMsg(null);
       const snap = unlockBillingSnapRef.current;
@@ -510,7 +512,7 @@ export const LicenseLockScreen: React.FC = () => {
       applyState(data);
     });
 
-    // 3. Cadangan polling cepat 2 detik khusus saat modal QRIS / layar terkunci terbuka (fallback jika SSE terhalang)
+    // 3. Cadangan fast-polling fail-safe 1.5 detik khusus saat modal QRIS / layar terkunci terbuka (fallback jika SSE terhalang)
     const pollInterval = setInterval(() => {
       if (!isLockedRef.current) return;
       fetch('/api/license/status', {
@@ -523,7 +525,7 @@ export const LicenseLockScreen: React.FC = () => {
         .then((r) => r.json())
         .then(applyState)
         .catch(() => {});
-    }, 2000);
+    }, 1500);
 
     // 4. Cek langsung ke server VOCML saat tab kembali aktif / fokus / online (baik saat terkunci maupun aktif)
     const handleWakeCheck = () => {
@@ -801,7 +803,7 @@ export const LicenseLockScreen: React.FC = () => {
             </div>
 
             <h2 style={{ margin: 0, fontSize: '18.5px', fontWeight: 800, color: '#ffffff', letterSpacing: '-0.02em' }}>
-              {isManualUnlock ? 'Aktivasi Lisensi Berhasil' : isAdminUnlock ? 'Lisensi Telah Diaktifkan' : 'Terima Kasih, Pembayaran Lunas!'}
+              {isManualUnlock ? 'Aktivasi Lisensi Berhasil' : isAdminUnlock ? 'Lisensi Telah Diaktifkan' : 'PEMBAYARAN QRIS BERHASIL DITERIMA'}
             </h2>
             <p style={{ margin: '4px 0 0', fontSize: '12px', color: '#94a3b8', lineHeight: 1.4 }}>
               Lisensi aplikasi telah aktif secara real-time. Seluruh modul kasir &amp; back-office siap digunakan.
@@ -824,7 +826,7 @@ export const LicenseLockScreen: React.FC = () => {
               }}
             >
               <CheckCircle size={14} />
-              <span>Pembayaran berhasil! Lisensi Kasir POS telah aktif kembali</span>
+              <span>PEMBAYARAN QRIS BERHASIL DITERIMA</span>
             </div>
           </div>
 
@@ -856,6 +858,24 @@ export const LicenseLockScreen: React.FC = () => {
                 marginBottom: '14px',
               }}
             >
+              {unlockSuccess.packageLabel && (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '12px',
+                    padding: '7px 0',
+                    borderBottom: '1px solid rgba(255, 255, 255, 0.07)',
+                  }}
+                >
+                  <span style={{ fontSize: '12px', color: '#94a3b8' }}>Paket Aktif</span>
+                  <span style={{ fontSize: '12px', fontWeight: 700, color: '#f8fafc' }}>
+                    {unlockSuccess.packageLabel}
+                  </span>
+                </div>
+              )}
+
               {unlockSuccess.amountText && (
                 <div
                   style={{
@@ -867,7 +887,7 @@ export const LicenseLockScreen: React.FC = () => {
                     borderBottom: '1px solid rgba(255, 255, 255, 0.07)',
                   }}
                 >
-                  <span style={{ fontSize: '12px', color: '#94a3b8' }}>Total Dibayar</span>
+                  <span style={{ fontSize: '12px', color: '#94a3b8' }}>Nominal</span>
                   <span style={{ fontSize: '16.5px', fontWeight: 900, color: '#34d399', letterSpacing: '-0.01em' }}>
                     {unlockSuccess.amountText}
                   </span>
@@ -884,72 +904,12 @@ export const LicenseLockScreen: React.FC = () => {
                   borderBottom: '1px solid rgba(255, 255, 255, 0.07)',
                 }}
               >
-                <span style={{ fontSize: '12px', color: '#94a3b8' }}>Status Lisensi</span>
-                <span
-                  style={{
-                    fontSize: '10.5px',
-                    fontWeight: 800,
-                    color: '#34d399',
-                    background: 'rgba(16, 185, 129, 0.14)',
-                    border: '1px solid rgba(16, 185, 129, 0.3)',
-                    borderRadius: '6px',
-                    padding: '2px 8px',
-                  }}
-                >
-                  AKTIF / LUNAS
-                </span>
-              </div>
-
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: '12px',
-                  padding: '7px 0',
-                  borderBottom: '1px solid rgba(255, 255, 255, 0.07)',
-                }}
-              >
-                <span style={{ fontSize: '12px', color: '#94a3b8' }}>Metode</span>
-                <span style={{ fontSize: '12px', fontWeight: 700, color: '#e2e8f0', textAlign: 'right' }}>
-                  {isManualUnlock ? 'License Key Manual' : isAdminUnlock ? 'Aktivasi Server VOCML' : `QRIS Otomatis · ${unlockSuccess.merchantName}`}
-                </span>
-              </div>
-
-              {unlockSuccess.packageLabel && (
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: '12px',
-                    padding: '7px 0',
-                    borderBottom: '1px solid rgba(255, 255, 255, 0.07)',
-                  }}
-                >
-                  <span style={{ fontSize: '12px', color: '#94a3b8' }}>Paket / Durasi</span>
-                  <span style={{ fontSize: '12px', fontWeight: 700, color: '#f8fafc' }}>
-                    {unlockSuccess.packageLabel}
-                  </span>
-                </div>
-              )}
-
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: '12px',
-                  padding: '7px 0',
-                  borderBottom: '1px solid rgba(255, 255, 255, 0.07)',
-                }}
-              >
                 <span style={{ fontSize: '12px', color: '#94a3b8', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
-                  <CalendarCheck2 size={13} /> Masa Aktif s/d
+                  <CalendarCheck2 size={13} /> Masa Aktif Baru Hingga
                 </span>
                 <span style={{ fontSize: '12px', fontWeight: 700, color: '#f8fafc', textAlign: 'right' }}>
                   {formatIndoDate(unlockSuccess.expiresAt)}
-                  {unlockSuccess.daysLeft != null ? ` (${unlockSuccess.daysLeft} hari)` : ''}
+                  {unlockSuccess.daysLeft != null ? ` • ${unlockSuccess.daysLeft} Hari` : ''}
                 </span>
               </div>
 
@@ -1098,7 +1058,7 @@ export const LicenseLockScreen: React.FC = () => {
                   transition: 'transform 0.15s ease',
                 }}
               >
-                <span>Buka Aplikasi Sekarang{autoOpenCountdown > 0 ? ` (${autoOpenCountdown}s)` : ''}</span>
+                <span>✅ Selesai &amp; Lanjutkan{autoOpenCountdown > 0 ? ` (${autoOpenCountdown}s)` : ''}</span>
                 <ArrowRight size={16} strokeWidth={2.5} />
               </button>
             </div>

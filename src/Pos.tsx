@@ -396,27 +396,55 @@ function App() {
     }
   }, [toastNotice, setToastNotice]);
 
-  const [trialBadge, setTrialBadge] = useState<{ isTrial: boolean; remaining: number } | null>(null);
+  const [licenseInfo, setLicenseInfo] = useState<{
+    allowed: boolean;
+    status: string;
+    expiresAt?: string | null;
+    remainingDays?: number | null;
+    trial?: { is_trial?: boolean; quota?: number; used?: number; remaining?: number } | null;
+  } | null>(null);
 
   useEffect(() => {
-    const handleLicenseChange = (e: any) => {
-      const data = e.detail;
-      if (data?.status === 'trial' && data?.trial?.is_trial) {
-        setTrialBadge({ isTrial: true, remaining: data.trial.remaining ?? 0 });
-      } else {
-        setTrialBadge(null);
-      }
+    const applyLicense = (data: any) => {
+      if (!data) return;
+      const status = data.status || (data.allowed ? 'active' : 'locked');
+      const remDays = data.remainingDays ?? data.daysLeft ?? null;
+      setLicenseInfo({
+        allowed: Boolean(data.allowed),
+        status,
+        expiresAt: data.expiresAt || null,
+        remainingDays: remDays,
+        trial: data.trial || null,
+      });
     };
+
     fetch('/api/license/status')
       .then((r) => r.json())
-      .then((data) => {
-        if (data?.status === 'trial' && data?.trial?.is_trial) {
-          setTrialBadge({ isTrial: true, remaining: data.trial.remaining ?? 0 });
-        }
-      })
+      .then(applyLicense)
       .catch(() => {});
+
+    const handleLicenseChange = (e: any) => applyLicense(e.detail);
+    const handleLicenseLocked = () => {
+      setLicenseInfo((prev) => ({
+        ...(prev || { status: 'locked' }),
+        allowed: false,
+        status: 'locked',
+      }));
+      setPaymentPopupOpen(false);
+    };
+    const handleLicenseUnlocked = (e: any) => applyLicense(e.detail?.license || e.detail);
+
     window.addEventListener('voc:license-changed', handleLicenseChange);
-    return () => window.removeEventListener('voc:license-changed', handleLicenseChange);
+    window.addEventListener('voc:license-locked', handleLicenseLocked);
+    window.addEventListener('voc:license-unlocked', handleLicenseUnlocked);
+    window.addEventListener('voc:license-updated', handleLicenseChange);
+
+    return () => {
+      window.removeEventListener('voc:license-changed', handleLicenseChange);
+      window.removeEventListener('voc:license-locked', handleLicenseLocked);
+      window.removeEventListener('voc:license-unlocked', handleLicenseUnlocked);
+      window.removeEventListener('voc:license-updated', handleLicenseChange);
+    };
   }, []);
 
   const CATEGORIES = [
@@ -1503,20 +1531,51 @@ function App() {
 
         <div className="status-pills">
           <div className="pill"><span className="pill-dot"></span> SERVER ONLINE</div>
-          {trialBadge?.isTrial && (
+          {licenseInfo?.status === 'trial' && licenseInfo?.trial?.is_trial && (
             <div
               className="pill"
               style={{
-                background: '#fef3c7',
-                color: '#b45309',
-                borderColor: '#fcd34d',
+                background: '#eff6ff',
+                color: '#1d4ed8',
+                borderColor: '#bfdbfe',
                 fontWeight: 800,
                 letterSpacing: '0.02em',
                 padding: '2px 8px',
               }}
               title="Sisa kuota transaksi trial gratis"
             >
-              ⭐ TRIAL: SISA {trialBadge.remaining} TRANSAKSI
+              ⭐ TRIAL: SISA {licenseInfo.trial.remaining ?? 0} TRANSAKSI
+            </div>
+          )}
+          {licenseInfo?.allowed && licenseInfo?.status !== 'trial' && (
+            <div
+              className="pill"
+              style={{
+                background: (licenseInfo.remainingDays ?? 30) <= 7 ? '#fef3c7' : '#ecfdf5',
+                color: (licenseInfo.remainingDays ?? 30) <= 7 ? '#b45309' : '#047857',
+                borderColor: (licenseInfo.remainingDays ?? 30) <= 7 ? '#fde68a' : '#a7f3d0',
+                fontWeight: 700,
+                letterSpacing: '0.01em',
+                padding: '2px 8px',
+              }}
+              title={`Lisensi aktif${licenseInfo.expiresAt ? ` s/d ${licenseInfo.expiresAt}` : ''}`}
+            >
+              🛡️ {licenseInfo.remainingDays != null ? `${licenseInfo.remainingDays} HARI LAGI` : (licenseInfo.expiresAt || 'AKTIF')}
+            </div>
+          )}
+          {licenseInfo && !licenseInfo.allowed && (
+            <div
+              className="pill"
+              style={{
+                background: '#fef2f2',
+                color: '#b91c1c',
+                borderColor: '#fecaca',
+                fontWeight: 800,
+                letterSpacing: '0.02em',
+                padding: '2px 8px',
+              }}
+            >
+              ⚠️ LISENSI TERKUNCI
             </div>
           )}
           <div className="pill" style={{borderLeft: '1px solid #d1d5db', borderRadius: 0}}><ShiftLabel /></div>
@@ -2475,9 +2534,14 @@ function App() {
             </div>
 
             <button 
-              className={`checkout-btn ${cart.length === 0 || total <= 0 ? 'disabled' : ''}`}
-              disabled={cart.length === 0 || total <= 0}
+              className={`checkout-btn ${(cart.length === 0 || total <= 0 || (licenseInfo && !licenseInfo.allowed)) ? 'disabled' : ''}`}
+              disabled={cart.length === 0 || total <= 0 || (licenseInfo ? !licenseInfo.allowed : false)}
               onClick={() => {
+                if (licenseInfo && !licenseInfo.allowed) {
+                  sound.playScanError();
+                  alert('Aplikasi terkunci. Silakan perpanjang lisensi untuk melanjutkan transaksi.');
+                  return;
+                }
                 if (cart.length === 0 || total <= 0) {
                   sound.playScanError();
                   setToastNotice({ type: 'info', message: 'Keranjang belanja kosong! Silakan pilih/scan produk terlebih dahulu.' });
@@ -2746,9 +2810,15 @@ function App() {
             )}
 
             <button 
-              className={`checkout-btn ${(cart.length === 0 || total <= 0 || (tendered < total && paymentMethod === 'TUNAI') || (paymentMethod === 'TEMPO' && tempoType === 'DP' && (parseFloat(tempoDpStr) || 0) <= 0)) ? 'disabled' : ''}`}
-              disabled={(cart.length === 0 || total <= 0) || (tendered < total && paymentMethod === 'TUNAI') || (paymentMethod === 'TEMPO' && tempoType === 'DP' && (parseFloat(tempoDpStr) || 0) <= 0)}
+              className={`checkout-btn ${(cart.length === 0 || total <= 0 || (licenseInfo && !licenseInfo.allowed) || (tendered < total && paymentMethod === 'TUNAI') || (paymentMethod === 'TEMPO' && tempoType === 'DP' && (parseFloat(tempoDpStr) || 0) <= 0)) ? 'disabled' : ''}`}
+              disabled={(cart.length === 0 || total <= 0) || (licenseInfo ? !licenseInfo.allowed : false) || (tendered < total && paymentMethod === 'TUNAI') || (paymentMethod === 'TEMPO' && tempoType === 'DP' && (parseFloat(tempoDpStr) || 0) <= 0)}
               onClick={async () => {
+                if (licenseInfo && !licenseInfo.allowed) {
+                  sound.playScanError();
+                  alert('Aplikasi terkunci. Silakan selesaikan perpanjangan lisensi terlebih dahulu.');
+                  setPaymentPopupOpen(false);
+                  return;
+                }
                 if (!cart || cart.length === 0 || total <= 0) {
                   sound.playScanError();
                   alert('Keranjang belanja kosong atau total tagihan Rp 0. Tidak dapat memproses transaksi.');
@@ -2837,6 +2907,23 @@ function App() {
                   }))
                 };
                 await addSale(sale);
+
+                // Jika akun dalam mode trial, konsumsi 1 kuota trial secara real-time
+                if (licenseInfo?.status === 'trial') {
+                  fetch('/api/license/trial/consume', { method: 'POST' })
+                    .then((r) => r.json())
+                    .then((res) => {
+                      if (res?.trial) {
+                        setLicenseInfo((prev) => ({
+                          ...(prev || { allowed: true, status: 'trial' }),
+                          allowed: Boolean(res.allowed),
+                          status: res.allowed ? 'trial' : 'expired',
+                          trial: res.trial,
+                        }));
+                      }
+                    })
+                    .catch(() => {});
+                }
 
                 // Web Push "Uang Masuk" ke semua device yang mengaktifkan notifikasi
                 sendSaleNotification(sale, selectedCustomer?.name, currentUser?.name);
