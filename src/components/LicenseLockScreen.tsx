@@ -18,6 +18,7 @@ import {
   Download,
   X,
   Ticket,
+  Info,
 } from 'lucide-react';
 import { subscribeLicenseStream } from '../utils/licenseStream';
 import { useSettingsStore } from '../store/useSettingsStore';
@@ -265,8 +266,40 @@ export const LicenseLockScreen: React.FC = () => {
     [billing?.packages]
   );
 
+  // 1. Skema Potong Hari Tunggakan (Continuous Arrears Billing)
+  const arrearsDays = useMemo(() => {
+    if (!license) return 0;
+    const remDays = typeof license.remainingDays === 'number'
+      ? license.remainingDays
+      : typeof license.daysLeft === 'number'
+      ? license.daysLeft
+      : null;
+    if (remDays !== null && remDays < 0) {
+      return Math.abs(remDays);
+    }
+    if ((license.status === 'expired' || !license.allowed) && license.expiresAt) {
+      const todayIdx = toWibDayIndex(new Date().toISOString());
+      const expIdx = toWibDayIndex(license.expiresAt);
+      if (todayIdx !== null && expIdx !== null && todayIdx > expIdx) {
+        return todayIdx - expIdx;
+      }
+    }
+    return 0;
+  }, [license]);
+
   const defaultPkg = useMemo(() => {
     if (packages.length === 0) return null;
+    // Jika menunggak, utamakan paket yang mencukupi tunggakan agar aplikasi langsung terbuka
+    if (arrearsDays > 0) {
+      const sufficient = packages.filter((p) => Number(p.days) > arrearsDays);
+      if (sufficient.length > 0) {
+        const pkg30 = sufficient.find(
+          (p) => Number(p.days) === 30 || /30\s*hari/i.test(p.label || p.name || '') || /30d/i.test(p.id)
+        );
+        if (pkg30) return pkg30;
+        return sufficient[0];
+      }
+    }
     const pkg30 = packages.find(
       (p) => Number(p.days) === 30 || /30\s*hari/i.test(p.label || p.name || '') || /30d/i.test(p.id)
     );
@@ -279,9 +312,9 @@ export const LicenseLockScreen: React.FC = () => {
       (p) => Number(p.final_amount ?? p.amount) === Number(billing?.amount)
     );
     return byAmount || packages[0];
-  }, [packages, billing?.package?.id, billing?.amount]);
+  }, [packages, billing?.package?.id, billing?.amount, arrearsDays]);
 
-  // Pilih paket default 30 Hari saat billing pertama kali tersedia, pertahankan pilihan user saat polling
+  // Pilih paket default saat billing pertama kali tersedia, pertahankan pilihan user saat polling
   useEffect(() => {
     if (!defaultPkg) {
       setSelectedPkgId(null);
@@ -297,6 +330,21 @@ export const LicenseLockScreen: React.FC = () => {
     () => packages.find((p) => p.id === selectedPkgId) || defaultPkg || null,
     [packages, selectedPkgId, defaultPkg]
   );
+
+  // Paket minimal yang mencukupi untuk melunasi tunggakan
+  const minSufficientPkg = useMemo(() => {
+    if (arrearsDays <= 0 || packages.length === 0) return null;
+    const sorted = [...packages].sort((a, b) => Number(a.days) - Number(b.days));
+    return sorted.find((p) => Number(p.days) > arrearsDays) || null;
+  }, [arrearsDays, packages]);
+
+  const minSuggestedDays = minSufficientPkg ? Number(minSufficientPkg.days) : (arrearsDays + 1);
+
+  // Proteksi Pilihan Paket: apakah paket yang dipilih durasinya <= hari tunggakan
+  const isPkgInsufficient = useMemo(() => {
+    if (arrearsDays <= 0 || !selectedPkg) return false;
+    return Number(selectedPkg.days) <= arrearsDays;
+  }, [arrearsDays, selectedPkg]);
 
   const activeAmount = selectedPkg
     ? Number(selectedPkg.final_amount ?? selectedPkg.amount)
@@ -325,7 +373,14 @@ export const LicenseLockScreen: React.FC = () => {
     };
   }, [isLocked, billing, packages, license?.expiresAt, activeDurationLabel, activeAmount, activeAmountText, uniqueCode, license?.daysLeft]);
 
+  // Satu Gambar QRIS Tunggal: pakai qris_image_url dari paket / billing bila tersedia
   const qrisImageSrc = useMemo(() => {
+    if (selectedPkg?.qris_image_url) {
+      return selectedPkg.qris_image_url;
+    }
+    if (billing?.qris_image_url && (!selectedPkg || selectedPkg.id === billing.package?.id)) {
+      return billing.qris_image_url;
+    }
     if (!billing || !activeAmount) return '';
     const params = new URLSearchParams({
       amount: String(Math.round(activeAmount)),
@@ -333,7 +388,7 @@ export const LicenseLockScreen: React.FC = () => {
     });
     if (selectedPkg?.id) params.set('package_id', selectedPkg.id);
     return `/api/license/billing/qris.png?${params.toString()}`;
-  }, [billing, activeAmount, selectedPkg?.id]);
+  }, [billing, activeAmount, selectedPkg]);
 
   // Reset QR state bila paket/nominal atau data tagihan berubah
   useEffect(() => {
@@ -389,10 +444,17 @@ export const LicenseLockScreen: React.FC = () => {
         const todayDay = toWibDayIndex(new Date().toISOString());
         const prevExpDay = toWibDayIndex(snap.prevExpiresAt);
         const newExpDay = toWibDayIndex(data.expiresAt);
-        const baseDay = (prevExpDay !== null && todayDay !== null && prevExpDay > todayDay) ? prevExpDay : todayDay;
-        const addedDays = (newExpDay !== null && baseDay !== null)
-          ? Math.max(0, newExpDay - baseDay)
-          : Math.max(0, Number(data.daysLeft) || 0);
+
+        // Skema Penagihan Berkelanjutan (Continuous Arrears Billing):
+        // Jika akun menunggak lalu diperpanjang, durasi paket = newExpDay - prevExpDay
+        let addedDays = 0;
+        if (newExpDay !== null && prevExpDay !== null && newExpDay > prevExpDay) {
+          addedDays = newExpDay - prevExpDay;
+        } else if (newExpDay !== null && todayDay !== null && newExpDay > todayDay) {
+          addedDays = newExpDay - todayDay;
+        } else {
+          addedDays = Math.max(0, Number(data.daysLeft) || 0);
+        }
 
         let matchedPkg: LicensePackage | null = null;
         if (localMethod !== 'manual' && addedDays > 0 && snap.packages.length > 0) {
@@ -558,6 +620,14 @@ export const LicenseLockScreen: React.FC = () => {
   };
 
   const handleCheckNow = async () => {
+    if (isPkgInsufficient) {
+      setCheckMsg({
+        text: `⚠️ Paket ${selectedPkg?.days} hari belum mencukupi untuk melunasi ${arrearsDays} hari tunggakan! Silakan pilih paket minimal ${minSuggestedDays} hari agar aplikasi dapat aktif kembali.`,
+        isError: true,
+      });
+      return;
+    }
+
     setCheckingNow(true);
     setCheckMsg(null);
     const data = await triggerImmediateCheck();
@@ -1357,6 +1427,23 @@ export const LicenseLockScreen: React.FC = () => {
               >
                 {activeAmountText}
               </div>
+              {arrearsDays > 0 && selectedPkg && (
+                <div style={{
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  marginTop: '5px',
+                  color: isPkgInsufficient ? '#fca5a5' : '#67e8f9',
+                  background: isPkgInsufficient ? 'rgba(239, 68, 68, 0.16)' : 'rgba(6, 182, 212, 0.14)',
+                  border: `1px solid ${isPkgInsufficient ? 'rgba(239, 68, 68, 0.35)' : 'rgba(6, 182, 212, 0.3)'}`,
+                  padding: '3px 8px',
+                  borderRadius: '6px',
+                  display: 'inline-block',
+                }}>
+                  {isPkgInsufficient
+                    ? `⚠️ Belum cukup melunasi tunggakan ${arrearsDays} hari`
+                    : `Dipotong ${arrearsDays} hari tunggakan (Sisa aktif: +${Number(selectedPkg.days) - arrearsDays} hari)`}
+                </div>
+              )}
               <div style={{ color: '#94a3b8', fontSize: '11.5px', marginTop: '4px', fontWeight: 600 }}>
                 QRIS · {billing.merchant_name}
               </div>
@@ -1407,6 +1494,60 @@ export const LicenseLockScreen: React.FC = () => {
           <section className="voc-right-col">
             {billing && packages.length > 0 && (
               <div style={{ marginBottom: '16px' }}>
+                {/* 1. Ringkasan Info Pelunasan Hari Tunggakan */}
+                {arrearsDays > 0 && (
+                  <div
+                    id="voc-arrears-info-box"
+                    style={{
+                      marginBottom: '12px',
+                      padding: '11px 14px',
+                      borderRadius: '12px',
+                      background: 'rgba(59, 130, 246, 0.12)',
+                      border: '1px solid rgba(59, 130, 246, 0.35)',
+                      color: '#bfdbfe',
+                      fontSize: '12px',
+                      lineHeight: '1.5',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, color: '#93c5fd', marginBottom: '3px' }}>
+                      <Info size={14} /> Info Pelunasan
+                    </div>
+                    <div>
+                      ℹ️ Info Pelunasan: Lisensi Anda telah kedaluwarsa <strong>{arrearsDays} hari lalu</strong>. Paket yang Anda pilih akan dipotong <strong>{arrearsDays} hari</strong> untuk menutup masa tunggakan hari yang telah lewat.
+                    </div>
+                    {selectedPkg && !isPkgInsufficient && (
+                      <div style={{ marginTop: '5px', fontSize: '11px', color: '#60a5fa', fontWeight: 600 }}>
+                        Estimasi sisa aktif ke depan: <strong>+{Number(selectedPkg.days) - arrearsDays} Hari</strong> ({selectedPkg.days} hari paket - {arrearsDays} hari tunggakan).
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* 2. Proteksi Pilihan Paket: Peringatan jika durasi paket belum cukup melunasi tunggakan */}
+                {isPkgInsufficient && (
+                  <div
+                    id="voc-arrears-warning-box"
+                    style={{
+                      marginBottom: '12px',
+                      padding: '11px 13px',
+                      borderRadius: '12px',
+                      background: 'rgba(239, 68, 68, 0.16)',
+                      border: '1px solid rgba(239, 68, 68, 0.45)',
+                      color: '#fca5a5',
+                      fontSize: '12.5px',
+                      lineHeight: '1.45',
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '8px',
+                    }}
+                  >
+                    <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: '2px', color: '#f87171' }} />
+                    <div>
+                      <strong style={{ color: '#ffffff' }}>⚠️ Paket {selectedPkg?.days} hari belum mencukupi untuk melunasi {arrearsDays} hari tunggakan!</strong> Silakan pilih paket minimal <strong>{minSuggestedDays} hari</strong> agar aplikasi dapat aktif kembali.
+                    </div>
+                  </div>
+                )}
+
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap', marginBottom: '12px' }}>
                   <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '11.5px', fontWeight: 700, color: '#cbd5e1', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
                     <Tag size={13} color="#818cf8" /> Pilih Paket Perpanjangan
@@ -1421,7 +1562,10 @@ export const LicenseLockScreen: React.FC = () => {
                 <div className="voc-pkg-grid">
                   {packages.map((pkg) => {
                     const isSelected = selectedPkg?.id === pkg.id;
-                    const badge = pkg.promo_badge || pkg.promoBadge || '';
+                    const isInsufficient = arrearsDays > 0 && Number(pkg.days) <= arrearsDays;
+                    const badge = isInsufficient
+                      ? 'Belum Cukup'
+                      : (pkg.promo_badge || pkg.promoBadge || '');
                     const originalPrice = Number(pkg.original_price ?? pkg.basePrice ?? 0);
                     const promoPrice = Number(pkg.promo_price ?? pkg.promoPrice ?? 0);
                     const showStrike = Boolean(pkg.is_promo && originalPrice > 0 && promoPrice > 0 && originalPrice > promoPrice);
@@ -1432,12 +1576,30 @@ export const LicenseLockScreen: React.FC = () => {
                         type="button"
                         onClick={() => {
                           setSelectedPkgId(pkg.id);
-                          setCheckMsg(null);
+                          if (isInsufficient) {
+                            setCheckMsg({
+                              text: `⚠️ Paket ${pkg.days} hari belum mencukupi untuk melunasi ${arrearsDays} hari tunggakan! Silakan pilih paket minimal ${minSuggestedDays} hari agar aplikasi dapat aktif kembali.`,
+                              isError: true,
+                            });
+                          } else {
+                            setCheckMsg(null);
+                          }
                         }}
                         className={`voc-pkg-card ${isSelected ? 'is-selected' : ''}`}
+                        style={isInsufficient ? {
+                          borderColor: isSelected ? '#ef4444' : 'rgba(239, 68, 68, 0.35)',
+                          background: isSelected ? 'rgba(239, 68, 68, 0.12)' : 'rgba(15, 23, 42, 0.65)',
+                        } : undefined}
                       >
                         {badge && (
-                          <span className="voc-pkg-badge" style={getBadgeStyle(badge)}>
+                          <span
+                            className="voc-pkg-badge"
+                            style={isInsufficient ? {
+                              background: '#ef4444',
+                              color: '#ffffff',
+                              boxShadow: '0 2px 8px rgba(239, 68, 68, 0.4)',
+                            } : getBadgeStyle(badge)}
+                          >
                             {badge}
                           </span>
                         )}
@@ -1450,8 +1612,8 @@ export const LicenseLockScreen: React.FC = () => {
                               width: '15px',
                               height: '15px',
                               borderRadius: '50%',
-                              border: `1.5px solid ${isSelected ? '#6366f1' : 'rgba(148, 163, 184, 0.4)'}`,
-                              background: isSelected ? 'rgba(99, 102, 241, 0.2)' : 'transparent',
+                              border: `1.5px solid ${isSelected ? (isInsufficient ? '#ef4444' : '#6366f1') : 'rgba(148, 163, 184, 0.4)'}`,
+                              background: isSelected ? (isInsufficient ? 'rgba(239, 68, 68, 0.2)' : 'rgba(99, 102, 241, 0.2)') : 'transparent',
                               display: 'inline-flex',
                               alignItems: 'center',
                               justifyContent: 'center',
@@ -1464,7 +1626,7 @@ export const LicenseLockScreen: React.FC = () => {
                                   width: '7px',
                                   height: '7px',
                                   borderRadius: '50%',
-                                  background: '#818cf8',
+                                  background: isInsufficient ? '#ef4444' : '#818cf8',
                                 }}
                               />
                             )}
@@ -1472,7 +1634,7 @@ export const LicenseLockScreen: React.FC = () => {
                         </div>
 
                         <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', flexWrap: 'wrap', marginTop: '6px' }}>
-                          <span style={{ fontSize: '16px', fontWeight: 800, color: isSelected ? '#a5b4fc' : '#ffffff', letterSpacing: '-0.02em' }}>
+                          <span style={{ fontSize: '16px', fontWeight: 800, color: isSelected ? (isInsufficient ? '#fca5a5' : '#a5b4fc') : '#ffffff', letterSpacing: '-0.02em' }}>
                             {pkg.amount_text}
                           </span>
                           {showStrike && (
@@ -1482,8 +1644,17 @@ export const LicenseLockScreen: React.FC = () => {
                           )}
                         </div>
 
-                        <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px' }}>
-                          +{pkg.days} Hari masa aktif
+                        <div style={{
+                          fontSize: '11px',
+                          color: isInsufficient ? '#fca5a5' : '#94a3b8',
+                          marginTop: '4px',
+                          fontWeight: isInsufficient ? 700 : 400,
+                        }}>
+                          {isInsufficient
+                            ? `⚠️ Belum cukup (Kurang ${arrearsDays - Number(pkg.days) + 1}h)`
+                            : arrearsDays > 0
+                            ? `+${Number(pkg.days) - arrearsDays} Hari aktif ke depan (-${arrearsDays}h)`
+                            : `+${pkg.days} Hari masa aktif`}
                         </div>
                       </button>
                     );

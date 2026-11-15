@@ -185,9 +185,14 @@ export function useVocmlLicense(options?: {
     }
   };
 
+  const arrearsDays = typeof license.remainingDays === 'number' && license.remainingDays < 0
+    ? Math.abs(license.remainingDays)
+    : 0;
+
   return {
     license,
     isLocked: license.isLocked,
+    arrearsDays,
     showCelebration,
     closeCelebration: () => setShowCelebration(false),
     celebrationData,

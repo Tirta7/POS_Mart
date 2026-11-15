@@ -158,10 +158,17 @@ function buildCanonicalUnlockReceipt(nextLicense, { manualActivation = false } =
   const todayDay = toWibDayIndex(now.toISOString());
   const prevExpDay = toWibDayIndex(prevSnap?.expiresAt);
   const newExpDay = toWibDayIndex(nextLicense.expiresAt);
-  const baseDay = (prevExpDay !== null && todayDay !== null && prevExpDay > todayDay) ? prevExpDay : todayDay;
-  const addedDays = (newExpDay !== null && baseDay !== null)
-    ? Math.max(0, newExpDay - baseDay)
-    : Math.max(0, Number(nextLicense.daysLeft) || 0);
+
+  // Skema Penagihan Berkelanjutan (Continuous Arrears Billing):
+  // Durasi paket yang dibeli adalah newExpDay - prevExpDay jika memperpanjang dari tanggal expired lama.
+  let addedDays = 0;
+  if (newExpDay !== null && prevExpDay !== null && newExpDay > prevExpDay) {
+    addedDays = newExpDay - prevExpDay;
+  } else if (newExpDay !== null && todayDay !== null && newExpDay > todayDay) {
+    addedDays = newExpDay - todayDay;
+  } else {
+    addedDays = Math.max(0, Number(nextLicense.daysLeft) || 0);
+  }
 
   let matchedPkg = null;
   if (!manualActivation && packages.length > 0) {
