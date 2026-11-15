@@ -205,6 +205,13 @@ const PAYMENT_METHODS: { name: string; color: string }[] = [
   { name: 'ShopeePay', color: '#ee4d2d' },
 ];
 
+export interface PartialPaymentInfo {
+  packageName: string;
+  amountText: string;
+  debtDays: number;
+  timestamp: number;
+}
+
 export const LicenseLockScreen: React.FC = () => {
   const [license, setLicense] = useState<LicenseState | null>(null);
   const [selectedPkgId, setSelectedPkgId] = useState<string | null>(null);
@@ -221,10 +228,12 @@ export const LicenseLockScreen: React.FC = () => {
   const [checkMsg, setCheckMsg] = useState<{ text: string; isError: boolean } | null>(null);
   const appName = useSettingsStore((s) => s.appName);
   const [unlockSuccess, setUnlockSuccess] = useState<UnlockSuccessInfo | null>(null);
+  const [partialPayment, setPartialPayment] = useState<PartialPaymentInfo | null>(null);
   const [downloadingInvoice, setDownloadingInvoice] = useState(false);
   const [autoOpenCountdown, setAutoOpenCountdown] = useState<number>(5);
 
   const prevLockedRef = useRef<boolean | null>(null);
+  const prevDaysLeftRef = useRef<number | null>(null);
   const lastStateJsonRef = useRef<string>('');
   const isLockedRef = useRef<boolean>(false);
   const lastWakeCheckRef = useRef<number>(0);
@@ -268,6 +277,9 @@ export const LicenseLockScreen: React.FC = () => {
 
   // 1. Skema Potong Hari Tunggakan (Continuous Arrears Billing)
   const arrearsDays = useMemo(() => {
+    if (partialPayment && typeof partialPayment.debtDays === 'number') {
+      return partialPayment.debtDays;
+    }
     if (!license) return 0;
     const remDays = typeof license.remainingDays === 'number'
       ? license.remainingDays
@@ -285,7 +297,7 @@ export const LicenseLockScreen: React.FC = () => {
       }
     }
     return 0;
-  }, [license]);
+  }, [license, partialPayment]);
 
   const defaultPkg = useMemo(() => {
     if (packages.length === 0) return null;
@@ -416,8 +428,36 @@ export const LicenseLockScreen: React.FC = () => {
       setUnlockSuccess(null);
     }
 
+    // Deteksi pengurangan tunggakan saat sinkronisasi / polling (Cicil Tunggakan)
+    const prevDays = prevDaysLeftRef.current;
+    const currDays = typeof data.remainingDays === 'number'
+      ? data.remainingDays
+      : typeof data.daysLeft === 'number'
+      ? data.daysLeft
+      : null;
+
+    if (
+      wasLocked === true &&
+      newLocked === true &&
+      prevDays !== null &&
+      currDays !== null &&
+      prevDays < 0 &&
+      currDays > prevDays
+    ) {
+      const remainingDebt = Math.abs(currDays);
+      playCelebrationChime();
+      setPartialPayment({
+        packageName: 'Paket 1 Hari',
+        amountText: '',
+        debtDays: remainingDebt,
+        timestamp: Date.now(),
+      });
+    }
+    prevDaysLeftRef.current = currDays;
+
     if (wasLocked === true && !newLocked) {
       playCelebrationChime();
+      setPartialPayment(null);
       setCheckMsg(null);
       setActivateMsg(null);
       const snap = unlockBillingSnapRef.current;
@@ -600,9 +640,44 @@ export const LicenseLockScreen: React.FC = () => {
       lastWakeCheckRef.current = now;
       triggerImmediateCheck();
     };
+    // 5. Tangani event renew cicil tunggakan (Partial Arrears Payment)
+    const handlePartialRenew = (e: any) => {
+      const data = e.detail;
+      playCelebrationChime();
+      const remDebt = typeof data.debt_days === 'number'
+        ? data.debt_days
+        : (data.license?.remainingDays ? Math.abs(data.license.remainingDays) : 1);
+
+      setPartialPayment({
+        packageName: data.package || 'Paket 1 Hari',
+        amountText: data.amount_text || (data.amount ? formatRupiah(data.amount) : ''),
+        debtDays: remDebt,
+        timestamp: Date.now(),
+      });
+
+      if (data.license) applyState(data.license);
+      if (data.billing) {
+        setLicense((prev) => (prev ? { ...prev, billing: data.billing } : prev));
+      }
+
+      // Tarik billing terbaru agar kode unik dan QRIS baru dari VOCML langsung terpasang (zero reload)
+      fetch('/api/license/billing', {
+        headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate', Pragma: 'no-cache' },
+        cache: 'no-store',
+      })
+        .then((r) => r.json())
+        .then((fresh) => {
+          if (fresh?.billing) {
+            setLicense((prev) => (prev ? { ...prev, billing: fresh.billing } : prev));
+          }
+        })
+        .catch(() => {});
+    };
+
     window.addEventListener('focus', handleWakeCheck);
     window.addEventListener('online', handleWakeCheck);
     document.addEventListener('visibilitychange', handleWakeCheck);
+    window.addEventListener('voc:license-partial-renew', handlePartialRenew);
 
     return () => {
       unsubscribe();
@@ -610,6 +685,7 @@ export const LicenseLockScreen: React.FC = () => {
       window.removeEventListener('focus', handleWakeCheck);
       window.removeEventListener('online', handleWakeCheck);
       document.removeEventListener('visibilitychange', handleWakeCheck);
+      window.removeEventListener('voc:license-partial-renew', handlePartialRenew);
     };
   }, [applyState, triggerImmediateCheck]);
 
@@ -1331,6 +1407,56 @@ export const LicenseLockScreen: React.FC = () => {
                 <QrCode size={14} /> QRIS Pembayaran Otomatis
               </div>
 
+              {/* Box Status Hijau & Hitungan Mundur Sisa Scan (Cicil Pelunasan Tunggakan) */}
+              {partialPayment && (
+                <div
+                  id="voc-partial-arrears-alert"
+                  style={{
+                    width: '100%',
+                    maxWidth: '300px',
+                    margin: '0 auto 14px',
+                    padding: '12px 14px',
+                    borderRadius: '12px',
+                    background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.16) 0%, rgba(6, 95, 70, 0.2) 100%)',
+                    border: '1px solid rgba(16, 185, 129, 0.45)',
+                    boxShadow: '0 8px 20px rgba(16, 185, 129, 0.12)',
+                    textAlign: 'left',
+                    animation: 'lockFadeIn 0.3s ease-out',
+                  }}
+                >
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    color: '#34d399',
+                    fontSize: '12px',
+                    fontWeight: 800,
+                    marginBottom: '4px',
+                    lineHeight: 1.35,
+                  }}>
+                    <CheckCircle2 size={16} style={{ flexShrink: 0, color: '#10b981' }} />
+                    <span>
+                      ✅ Pembayaran {partialPayment.packageName} {partialPayment.amountText ? `(${partialPayment.amountText}) ` : ''}Berhasil Diterima!
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '11px', color: '#a7f3d0', marginBottom: '8px', fontWeight: 600 }}>
+                    Tunggakan Anda berkurang 1 hari.
+                  </div>
+                  <div style={{
+                    padding: '8px 10px',
+                    borderRadius: '8px',
+                    background: 'rgba(239, 68, 68, 0.16)',
+                    border: '1px solid rgba(239, 68, 68, 0.35)',
+                    color: '#fca5a5',
+                    fontSize: '11px',
+                    lineHeight: 1.45,
+                    fontWeight: 600,
+                  }}>
+                    ⚠️ Sisa tunggakan: <strong style={{ color: '#ffffff' }}>{partialPayment.debtDays} hari lagi</strong>. Silakan scan QRIS baru di bawah ini sebanyak <strong style={{ color: '#ffffff' }}>{partialPayment.debtDays}x lagi</strong> (atau pilih paket yang lebih besar) agar aplikasi dapat aktif terbuka!
+                  </div>
+                </div>
+              )}
+
               {!qrFailed ? (
                 <div
                   className="voc-qr-box"
@@ -1497,6 +1623,30 @@ export const LicenseLockScreen: React.FC = () => {
           <section className="voc-right-col">
             {billing && packages.length > 0 && (
               <div style={{ marginBottom: '16px' }}>
+                {/* Status Cicil Tunggakan (Partial Payment Banner) */}
+                {partialPayment && (
+                  <div
+                    style={{
+                      marginBottom: '12px',
+                      padding: '10px 12px',
+                      borderRadius: '10px',
+                      background: 'rgba(16, 185, 129, 0.14)',
+                      border: '1px solid rgba(16, 185, 129, 0.35)',
+                      color: '#a7f3d0',
+                      fontSize: '11.5px',
+                      fontWeight: 600,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                    }}
+                  >
+                    <CheckCircle2 size={16} color="#34d399" style={{ flexShrink: 0 }} />
+                    <div>
+                      Pembayaran {partialPayment.packageName} diterima! Sisa tunggakan tinggal <strong>{partialPayment.debtDays} hari</strong> lagi.
+                    </div>
+                  </div>
+                )}
+
                 {/* 1. Ringkasan Info Pelunasan Hari Tunggakan */}
                 {arrearsDays > 0 && (
                   <div

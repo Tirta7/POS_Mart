@@ -69,7 +69,11 @@ function openEventSource(shouldStayOpen: () => boolean) {
       const parsed = JSON.parse(event.data);
       if (parsed.license) notifyLicense(parsed.license);
       channel?.postMessage({ type: 'renew', data: parsed });
-      window.dispatchEvent(new CustomEvent('voc:license-unlocked', { detail: parsed }));
+      if (parsed.allowed === false) {
+        window.dispatchEvent(new CustomEvent('voc:license-partial-renew', { detail: parsed }));
+      } else {
+        window.dispatchEvent(new CustomEvent('voc:license-unlocked', { detail: parsed }));
+      }
     } catch {}
   });
 
@@ -162,6 +166,11 @@ function startStream() {
       if (msg.type === 'license') notifyLicense(msg.data);
       else if ((msg.type === 'renew' || msg.type === 'unlock' || msg.type === 'lock') && msg.data?.license) {
         notifyLicense(msg.data.license);
+        if (msg.type === 'renew' && msg.data?.allowed === false) {
+          window.dispatchEvent(new CustomEvent('voc:license-partial-renew', { detail: msg.data }));
+        } else if (msg.type === 'renew' || msg.type === 'unlock') {
+          window.dispatchEvent(new CustomEvent('voc:license-unlocked', { detail: msg.data }));
+        }
       }
       else if (msg.type === 'messages') notifyMessages(msg.data);
       else if (msg.type === 'hello' && isLeader) {

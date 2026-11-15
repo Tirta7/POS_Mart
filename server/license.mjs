@@ -390,11 +390,49 @@ async function handleVocmlStreamEvent(event, rawData) {
   console.log(`[VOCML Stream] Event diterima: ${normalizedEvent || event}`, parsed || rawData);
 
   if (normalizedEvent === 'renew' || normalizedEvent === 'unlock') {
+    const isPartial = (parsed?.allowed === false) || (parsed?.debt_days !== undefined && parsed?.debt_days > 0 && parsed?.allowed !== true);
+    if (isPartial) {
+      console.log(`[VOCML Stream] Mendeteksi event RENEW PARSIAL (Cicil Tunggakan)! Sisa tunggakan: ${parsed?.debt_days} hari...`);
+      const nextLicense = await verifikasiAplikasi();
+      try {
+        const freshBilling = await fetchBilling({
+          serverUrl: VOCML_SERVER_URL,
+          product: VOCML_PRODUCT,
+          machineId: getMachineId(),
+          apiKey: VOCML_API_KEY,
+        });
+        if (freshBilling) {
+          licenseState.billing = freshBilling.billing || freshBilling;
+          nextLicense.billing = licenseState.billing;
+        }
+      } catch {}
+
+      const partialPayload = JSON.stringify({
+        event: 'renew',
+        allowed: false,
+        debt_days: parsed?.debt_days ?? (nextLicense.remainingDays ? Math.abs(nextLicense.remainingDays) : 1),
+        package: parsed?.package || parsed?.package_label || 'Paket 1 Hari',
+        amount: parsed?.amount || 0,
+        amount_text: parsed?.amount_text || (parsed?.amount ? `Rp${Number(parsed.amount).toLocaleString('id-ID')}` : ''),
+        license: nextLicense,
+        billing: licenseState.billing,
+      });
+
+      broadcastLicense(licenseState);
+      for (const client of sseClients) {
+        try {
+          client.write(`event: renew\ndata: ${partialPayload}\n\n`);
+        } catch {}
+      }
+      return;
+    }
+
     console.log(`[VOCML Stream] Mendeteksi event ${normalizedEvent.toUpperCase()}! Membuka lisensi seketika (< 2 detik)...`);
     const nextLicense = await verifikasiAplikasi();
     const unlockMsg = 'PEMBAYARAN QRIS BERHASIL DITERIMA';
     const notifyPayload = JSON.stringify({
       event: normalizedEvent,
+      allowed: true,
       message: unlockMsg,
       license: nextLicense,
       package: parsed?.package || parsed?.package_label || (nextLicense.unlockReceipt?.packageLabel) || 'Langganan Aktif',
