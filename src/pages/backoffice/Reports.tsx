@@ -12,12 +12,13 @@ import {
   CreditCard, CheckCircle2, Printer, Copy, Download, 
   FileSpreadsheet, RefreshCw, X, MessageSquare,
   Package, Check, Tag, Eye, Info, Truck, FileText,
-  RotateCcw, Edit3, Trash2, Calendar, Clock
+  RotateCcw, Edit3, Trash2, Calendar, Clock, Sparkles
 } from 'lucide-react';
 import EditInvoiceModal from '../../components/EditInvoiceModal';
 import SalesReturnModal from '../../components/SalesReturnModal';
 import InstallmentPaymentModal from '../../components/InstallmentPaymentModal';
 import VoidTransactionModal from '../../components/VoidTransactionModal';
+import { AprioriAnalyticsTab } from '../../components/AprioriAnalyticsTab';
 
 const Reports: React.FC = () => {
   const { sales, fetchSales } = useSalesStore();
@@ -41,7 +42,7 @@ const Reports: React.FC = () => {
     fetchSuppliers();
   }, [fetchSales, fetchProducts, fetchSuppliers]);
 
-  const [activeTab, setActiveTab] = useState<'sales' | 'low-stock' | 'supplier-debts'>('sales');
+  const [activeTab, setActiveTab] = useState<'sales' | 'low-stock' | 'supplier-debts' | 'apriori'>('sales');
   const [reprint, setReprint] = useState<{ sale: SalesTransaction; options: ReceiptOptions } | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
@@ -446,125 +447,127 @@ const Reports: React.FC = () => {
       </div>
 
       {/* =====================================================================
-          2. ANALYTICS KPI CARDS (4-COLS FULL WIDTH ON DESKTOP)
+          2. ANALYTICS KPI CARDS (HANYA UNTUK LAPORAN PENJUALAN & HUTANG)
           ===================================================================== */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: isMobileScreen ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)',
-        gap: isMobileScreen ? '10px' : '14px',
-        marginBottom: '14px',
-        flexShrink: 0
-      }}>
-        {/* Card 1: TOTAL PENDAPATAN */}
+      {activeTab !== 'apriori' && (
         <div style={{
-          background: '#ffffff', borderRadius: '16px', padding: isMobileScreen ? '14px' : '16px',
-          border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
-          display: 'flex', flexDirection: 'column'
+          display: 'grid',
+          gridTemplateColumns: isMobileScreen ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)',
+          gap: isMobileScreen ? '10px' : '14px',
+          marginBottom: '14px',
+          flexShrink: 0
         }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
-              TOTAL PENDAPATAN
-            </span>
-            <div style={{
-              width: '36px', height: '36px', borderRadius: '10px',
-              background: '#ecfdf5', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: '#10b981'
-            }}>
-              <TrendingUp size={18} />
+          {/* Card 1: TOTAL PENDAPATAN */}
+          <div style={{
+            background: '#ffffff', borderRadius: '16px', padding: isMobileScreen ? '14px' : '16px',
+            border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+            display: 'flex', flexDirection: 'column'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+                TOTAL PENDAPATAN
+              </span>
+              <div style={{
+                width: '36px', height: '36px', borderRadius: '10px',
+                background: '#ecfdf5', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: '#10b981'
+              }}>
+                <TrendingUp size={18} />
+              </div>
             </div>
+            <div style={{ fontSize: isMobileScreen ? '18px' : '22px', fontWeight: 900, color: '#0f172a', lineHeight: 1.1 }}>
+              {formatIDR(totalRevenue)}
+            </div>
+            <span style={{ fontSize: '11.5px', color: '#64748b', marginTop: '6px' }}>
+              rata-rata: <strong>{formatIDR(avgPerNota)}</strong> / nota
+            </span>
           </div>
-          <div style={{ fontSize: isMobileScreen ? '18px' : '22px', fontWeight: 900, color: '#0f172a', lineHeight: 1.1 }}>
-            {formatIDR(totalRevenue)}
-          </div>
-          <span style={{ fontSize: '11.5px', color: '#64748b', marginTop: '6px' }}>
-            rata-rata: <strong>{formatIDR(avgPerNota)}</strong> / nota
-          </span>
-        </div>
 
-        {/* Card 2: TOTAL LABA BERSIH */}
-        <div style={{
-          background: '#ffffff', borderRadius: '16px', padding: isMobileScreen ? '14px' : '16px',
-          border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
-          display: 'flex', flexDirection: 'column'
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
-              TOTAL LABA BERSIH
-            </span>
-            <div style={{
-              width: '36px', height: '36px', borderRadius: '10px',
-              background: '#fffbeb', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: '#d97706'
-            }}>
-              <DollarSign size={18} />
+          {/* Card 2: TOTAL LABA BERSIH */}
+          <div style={{
+            background: '#ffffff', borderRadius: '16px', padding: isMobileScreen ? '14px' : '16px',
+            border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+            display: 'flex', flexDirection: 'column'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+                TOTAL LABA BERSIH
+              </span>
+              <div style={{
+                width: '36px', height: '36px', borderRadius: '10px',
+                background: '#fffbeb', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: '#d97706'
+              }}>
+                <DollarSign size={18} />
+              </div>
             </div>
+            <div style={{ fontSize: isMobileScreen ? '18px' : '22px', fontWeight: 900, color: '#16a34a', lineHeight: 1.1 }}>
+              {formatIDR(totalProfit)}
+            </div>
+            <span style={{ fontSize: '11.5px', color: '#64748b', marginTop: '6px' }}>
+              Margin Bersih: <strong style={{ color: '#16a34a' }}>{marginPct.toFixed(1)}%</strong>
+            </span>
           </div>
-          <div style={{ fontSize: isMobileScreen ? '18px' : '22px', fontWeight: 900, color: '#16a34a', lineHeight: 1.1 }}>
-            {formatIDR(totalProfit)}
-          </div>
-          <span style={{ fontSize: '11.5px', color: '#64748b', marginTop: '6px' }}>
-            Margin Bersih: <strong style={{ color: '#16a34a' }}>{marginPct.toFixed(1)}%</strong>
-          </span>
-        </div>
 
-        {/* Card 3: TOTAL TRANSAKSI */}
-        <div style={{
-          background: '#ffffff', borderRadius: '16px', padding: isMobileScreen ? '14px' : '16px',
-          border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
-          display: 'flex', flexDirection: 'column'
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
-              TOTAL TRANSAKSI
-            </span>
-            <div style={{
-              width: '36px', height: '36px', borderRadius: '10px',
-              background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: '#3b82f6'
-            }}>
-              <CheckCircle2 size={18} />
+          {/* Card 3: TOTAL TRANSAKSI */}
+          <div style={{
+            background: '#ffffff', borderRadius: '16px', padding: isMobileScreen ? '14px' : '16px',
+            border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+            display: 'flex', flexDirection: 'column'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+                TOTAL TRANSAKSI
+              </span>
+              <div style={{
+                width: '36px', height: '36px', borderRadius: '10px',
+                background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: '#3b82f6'
+              }}>
+                <CheckCircle2 size={18} />
+              </div>
             </div>
+            <div style={{ fontSize: isMobileScreen ? '18px' : '22px', fontWeight: 900, color: '#0f172a', lineHeight: 1.1 }}>
+              {totalTransactions} <span style={{ fontSize: '13px', fontWeight: 600, color: '#64748b' }}>Nota</span>
+            </div>
+            {tempoSalesCount > 0 ? (
+              <span style={{ fontSize: '11.5px', color: '#d97706', marginTop: '6px', fontWeight: 700 }}>
+                ● {tempoSalesCount} Piutang Grosir ({formatIDR(totalCustomerReceivables)})
+              </span>
+            ) : (
+              <span style={{ fontSize: '11.5px', color: '#16a34a', marginTop: '6px', fontWeight: 700 }}>
+                ● 100% Lunas Terverifikasi
+              </span>
+            )}
           </div>
-          <div style={{ fontSize: isMobileScreen ? '18px' : '22px', fontWeight: 900, color: '#0f172a', lineHeight: 1.1 }}>
-            {totalTransactions} <span style={{ fontSize: '13px', fontWeight: 600, color: '#64748b' }}>Nota</span>
-          </div>
-          {tempoSalesCount > 0 ? (
-            <span style={{ fontSize: '11.5px', color: '#d97706', marginTop: '6px', fontWeight: 700 }}>
-              ● {tempoSalesCount} Piutang Grosir ({formatIDR(totalCustomerReceivables)})
-            </span>
-          ) : (
-            <span style={{ fontSize: '11.5px', color: '#16a34a', marginTop: '6px', fontWeight: 700 }}>
-              ● 100% Lunas Terverifikasi
-            </span>
-          )}
-        </div>
 
-        {/* Card 4: KEWAJIBAN HUTANG SUPPLIER */}
-        <div style={{
-          background: '#ffffff', borderRadius: '16px', padding: isMobileScreen ? '14px' : '16px',
-          border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
-          display: 'flex', flexDirection: 'column'
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <span style={{ fontSize: '11px', fontWeight: 800, color: '#e11d48', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
-              HUTANG SUPPLIER
-            </span>
-            <div style={{
-              width: '36px', height: '36px', borderRadius: '10px',
-              background: '#fff1f2', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: '#e11d48'
-            }}>
-              <CreditCard size={18} />
+          {/* Card 4: KEWAJIBAN HUTANG SUPPLIER */}
+          <div style={{
+            background: '#ffffff', borderRadius: '16px', padding: isMobileScreen ? '14px' : '16px',
+            border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+            display: 'flex', flexDirection: 'column'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <span style={{ fontSize: '11px', fontWeight: 800, color: '#e11d48', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+                HUTANG SUPPLIER
+              </span>
+              <div style={{
+                width: '36px', height: '36px', borderRadius: '10px',
+                background: '#fff1f2', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: '#e11d48'
+              }}>
+                <CreditCard size={18} />
+              </div>
             </div>
+            <div style={{ fontSize: isMobileScreen ? '18px' : '22px', fontWeight: 900, color: '#dc2626', lineHeight: 1.1 }}>
+              {formatIDR(totalSupplierDebt)}
+            </div>
+            <span style={{ fontSize: '11.5px', color: '#94a3b8', marginTop: '6px' }}>
+              {suppliersWithDebt.length} Vendor jatuh tempo
+            </span>
           </div>
-          <div style={{ fontSize: isMobileScreen ? '18px' : '22px', fontWeight: 900, color: '#dc2626', lineHeight: 1.1 }}>
-            {formatIDR(totalSupplierDebt)}
-          </div>
-          <span style={{ fontSize: '11.5px', color: '#94a3b8', marginTop: '6px' }}>
-            {suppliersWithDebt.length} Vendor jatuh tempo
-          </span>
         </div>
-      </div>
+      )}
 
       {/* =====================================================================
           3. SEGMENTED TABS (PENJUALAN, PERINGATAN STOK, HUTANG SUPPLIER)
@@ -646,6 +649,33 @@ const Reports: React.FC = () => {
           {suppliersWithDebt.length > 0 && (
             <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#dc2626' }} />
           )}
+        </button>
+
+        {/* Tab 4: Pola Pembelian (AI Apriori) */}
+        <button
+          type="button"
+          onClick={() => setActiveTab('apriori')}
+          style={{
+            flex: isMobileScreen ? 1.2 : 'initial', border: 'none',
+            background: activeTab === 'apriori' ? '#ffffff' : 'transparent',
+            color: activeTab === 'apriori' ? '#dc2626' : '#475569',
+            borderRadius: '9px', padding: '7px 16px',
+            fontSize: '12.5px', fontWeight: activeTab === 'apriori' ? 800 : 600,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+            cursor: 'pointer',
+            boxShadow: activeTab === 'apriori' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+            transition: 'all 0.15s'
+          }}
+        >
+          <Sparkles size={14} className={activeTab === 'apriori' ? 'text-amber-500' : 'text-slate-400'} />
+          <span>Pola Pembelian (AI)</span>
+          <span style={{
+            fontSize: '10px', fontWeight: 800, padding: '1px 6px', borderRadius: '999px',
+            background: activeTab === 'apriori' ? '#fef3c7' : '#f1f5f9',
+            color: activeTab === 'apriori' ? '#b45309' : '#64748b'
+          }}>
+            Apriori
+          </span>
         </button>
       </div>
 
@@ -2128,6 +2158,13 @@ const Reports: React.FC = () => {
             </div>
           </div>
         )
+      )}
+
+      {/* =====================================================================
+          TAB 4: POLA PEMBELIAN (AI APRIORI MARKET BASKET ANALYSIS)
+          ===================================================================== */}
+      {activeTab === 'apriori' && (
+        <AprioriAnalyticsTab sales={sales} products={products} />
       )}
 
       {/* =====================================================================

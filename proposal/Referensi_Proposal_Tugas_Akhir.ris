@@ -1,0 +1,151 @@
+TY  - BOOK
+AU  - Aggarwal, Charu C.
+TI  - Data Mining: The Textbook
+ET  - 2nd
+PB  - Springer
+PY  - 2020
+DO  - 10.1007/978-3-319-14142-8
+SN  - 978-3-319-14141-1
+ER  - 
+
+TY  - CONF
+AU  - Agrawal, Rakesh
+AU  - Srikant, Ramakrishnan
+TI  - Fast algorithms for mining association rules
+T2  - Proceedings of the 20th International Conference on Very Large Data Bases (VLDB)
+PY  - 1994
+SP  - 487
+EP  - 499
+ER  - 
+
+TY  - JOUR
+AU  - Ashari, I. A.
+AU  - Wirasto, A.
+AU  - Triwibowo, D. N.
+AU  - Purwono, P.
+TI  - Implementasi market basket analysis dengan algoritma apriori untuk analisis pendapatan usaha retail
+T2  - MATRIK: Jurnal Manajemen, Teknik Informatika, dan Rekayasa Komputer
+PY  - 2022
+VL  - 21
+IS  - 3
+SP  - 701
+EP  - 709
+DO  - 10.30812/matrik.v21i3.1439
+SN  - 2476-9843
+ER  - 
+
+TY  - JOUR
+AU  - Brighton, Kevin
+AU  - Hariyanto, Susanto
+TI  - Penerapan metode market basket analisis dengan algoritma apriori pada toko ritel elektronik
+T2  - bit-Tech: Jurnal Penelitian Komputer dan Informatika
+PY  - 2024
+VL  - 7
+IS  - 1
+SP  - 45
+EP  - 54
+DO  - 10.32877/bt.v7i1.1417
+SN  - 2622-2728
+ER  - 
+
+TY  - JOUR
+AU  - Fijriani, M.
+AU  - Hayati, U.
+AU  - Dwilestari, G.
+AU  - Rinaldi, A. R.
+AU  - Faturrohman, F.
+TI  - Implementasi market basket analysis pada toko retail menggunakan algoritma apriori
+T2  - Kopertip: Jurnal Ilmiah Manajemen Informatika dan Komputer
+PY  - 2023
+VL  - 7
+IS  - 1
+SP  - 29
+EP  - 34
+DO  - 10.32485/kopertip.v7i1.252
+SN  - 2549-8525
+ER  - 
+
+TY  - JOUR
+AU  - Noviana, Reski
+AU  - Hermawan, Arief
+AU  - Avianto, Donny
+TI  - Market basket analysis menggunakan algoritma apriori dan FP growth untuk menentukan pola pembelian konsumen
+T2  - Jurnal Media Informatika Budidarma
+PY  - 2023
+VL  - 7
+IS  - 3
+SP  - 1362
+EP  - 1371
+DO  - 10.30865/mib.v7i3.6304
+SN  - 2614-5278
+ER  - 
+
+TY  - JOUR
+AU  - Rizaldi, Deni
+AU  - Adnan, Arisman
+TI  - Market basket analysis menggunakan algoritma apriori: Kasus transaksi 212 Mart Soebrantas Pekanbaru
+T2  - Jurnal Statistika dan Aplikasinya
+PY  - 2021
+VL  - 5
+IS  - 1
+SP  - 1
+EP  - 10
+DO  - 10.21009/JSA.05103
+SN  - 2620-8369
+ER  - 
+
+TY  - JOUR
+AU  - Santoso, M. H.
+TI  - Application of association rule method using apriori algorithm to find sales patterns case study of Indomaret Tanjung Anom
+T2  - Brilliance: Research of Artificial Intelligence
+PY  - 2021
+VL  - 1
+IS  - 2
+SP  - 54
+EP  - 66
+DO  - 10.47709/brilliance.v1i2.1228
+SN  - 2808-7968
+ER  - 
+
+TY  - JOUR
+AU  - Susanto, Jonathan
+AU  - Fenriana, Indah
+TI  - Web-based POS with apriori market basket analysis
+T2  - bit-Tech: Jurnal Penelitian Komputer dan Informatika
+PY  - 2024
+VL  - 6
+IS  - 3
+SP  - 200
+EP  - 210
+DO  - 10.32877/bt.v6i3.926
+SN  - 2622-2728
+ER  - 
+
+TY  - JOUR
+AU  - Telikani, Akbar
+AU  - Gandomi, Amir H.
+AU  - Shahbahrami, Asadollah
+TI  - A survey of evolutionary computation for association rule mining
+T2  - Information Sciences
+PY  - 2020
+VL  - 524
+SP  - 318
+EP  - 352
+DO  - 10.1016/j.ins.2020.02.073
+SN  - 0020-0255
+ER  - 
+
+TY  - JOUR
+AU  - Wahyudi, R. N.
+AU  - Herwindiati, D. E.
+AU  - Hendryli, J.
+TI  - Market basket analysis dengan perbandingan metode apriori dan FP-growth pada data transaksi XYZ
+T2  - Jurnal Ilmu Komputer dan Sistem Informasi
+PY  - 2023
+VL  - 11
+IS  - 1
+SP  - 105
+EP  - 112
+DO  - 10.24912/jiksi.v11i1.24077
+SN  - 2355-7613
+ER  - 

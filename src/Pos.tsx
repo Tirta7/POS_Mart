@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   Search, Printer, ShoppingBag, Truck, Package, ShoppingCart,
@@ -6,7 +6,7 @@ import {
   LayoutGrid, Plus, Minus, X, LogOut, Camera, ChevronUp, Settings2,
   Grid, List, Tag, Edit3, Check,
   AlertCircle, RefreshCw, ChevronDown, CheckCircle2, Layers,
-  Clock, Monitor
+  Clock, Monitor, Sparkles
 } from 'lucide-react';
 import './index.css';
 import { useNavigate, Link } from 'react-router-dom';
@@ -32,6 +32,7 @@ import QuickRestockModal from './components/QuickRestockModal';
 import { sendCfdUpdate, subscribeCfd } from './utils/cfdSync';
 import CfdLauncherModal from './components/CfdLauncherModal';
 import DeliveryPosView from './components/DeliveryPosView';
+import { runApriori, getCrossSellingSuggestions } from './utils/apriori';
 
 /** Tanggal & jam real-time (mengikuti jam perangkat), diperbarui tiap detik. */
 function LiveClock() {
@@ -659,6 +660,24 @@ function App() {
   const formatIDR = (num: number) => {
     return 'Rp ' + num.toLocaleString('id-ID');
   };
+
+  // Apriori AI Rules untuk Rekomendasi Cross-Selling Realtime
+  const aprioriRules = useMemo(() => {
+    if (!sales || sales.length === 0) return [];
+    const prodMap: Record<string, string> = {};
+    for (const p of storeProducts) {
+      prodMap[p.id] = p.name;
+    }
+    const res = runApriori(sales, 0.02, 0.25, prodMap);
+    return res.rules.filter(r => r.lift > 1.0);
+  }, [sales, storeProducts]);
+
+  // Rekomendasi Cross-Selling berdasarkan item di keranjang saat ini
+  const cashierSuggestions = useMemo(() => {
+    if (cart.length === 0 || aprioriRules.length === 0) return [];
+    const cartProductIds = cart.map(i => String(i.id));
+    return getCrossSellingSuggestions(cartProductIds, aprioriRules, 2);
+  }, [cart, aprioriRules]);
 
   // Synchronize state with Customer Facing Display (CFD) in real-time
   const emitCfdState = useCallback((override?: any) => {
@@ -2437,6 +2456,62 @@ function App() {
           </div>
 
           <div className="payment-section">
+            {/* Real-time AI Cross-Selling Suggestion Card */}
+            {cashierSuggestions.length > 0 && (
+              <div style={{
+                margin: '0 0 12px 0',
+                padding: '10px 12px',
+                background: 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)',
+                borderRadius: '12px',
+                border: '1px solid #fde68a',
+                boxShadow: '0 1px 3px rgba(245, 158, 11, 0.08)'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', fontWeight: 800, color: '#92400e' }}>
+                    <Sparkles size={13} className="text-amber-500" />
+                    <span>Saran AI Kasir (Cross-Selling)</span>
+                  </div>
+                  <span style={{ fontSize: '9.5px', background: '#f59e0b', color: '#ffffff', fontWeight: 700, padding: '1px 5px', borderRadius: '4px' }}>
+                    Apriori
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {cashierSuggestions.map((sug: any) => {
+                    const matchedProd = storeProducts.find(p => p.id === sug.productId);
+                    if (!matchedProd) return null;
+                    return (
+                      <div key={sug.productId} style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        background: '#ffffff', padding: '6px 10px', borderRadius: '8px',
+                        border: '1px solid #fef08a'
+                      }}>
+                        <div style={{ flex: 1, minWidth: 0, paddingRight: '8px' }}>
+                          <div style={{ fontSize: '11.5px', fontWeight: 700, color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {matchedProd.name}
+                          </div>
+                          <div style={{ fontSize: '10px', color: '#d97706', fontWeight: 600 }}>
+                            {formatIDR(matchedProd.sellingPrice)} • Korelasi: {sug.lift.toFixed(1)}x
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => addToCart(matchedProd)}
+                          style={{
+                            background: '#d97706', color: '#ffffff', border: 'none',
+                            padding: '4px 8px', borderRadius: '6px', fontSize: '10.5px',
+                            fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '3px'
+                          }}
+                        >
+                          <Plus size={11} /> Tambah
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             <div className="totals-row">
               <span>Subtotal Pesanan</span>
               <span>{formatIDR(subtotal)}</span>
