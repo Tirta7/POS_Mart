@@ -149,3 +149,29 @@ EP  - 112
 DO  - 10.24912/jiksi.v11i1.24077
 SN  - 2355-7613
 ER  - 
+
+TY  - RPRT
+AU  - Gholamy, A.
+AU  - Kreinovich, V.
+AU  - Kosheleva, O.
+TI  - Why 70/30 or 80/20 relation between training and testing sets: A pedagogical explanation
+T2  - Departmental Technical Reports (CS)
+PY  - 2018
+VL  - 1209
+SP  - 1
+EP  - 6
+PB  - University of Texas at El Paso
+ER  - 
+
+TY  - JOUR
+AU  - Joseph, V. Roshan
+TI  - Optimal ratio for data splitting
+T2  - Statistical Analysis and Data Mining: The ASA Data Science Journal
+PY  - 2022
+VL  - 15
+IS  - 4
+SP  - 531
+EP  - 538
+DO  - 10.1002/sam.11583
+SN  - 1932-1872
+ER  - 
