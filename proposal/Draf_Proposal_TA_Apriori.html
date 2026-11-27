@@ -5,7 +5,7 @@
 <title>Draf Proposal TA - Penerapan Algoritma Apriori pada Sistem POS</title>
 <style>
   @page { size: A4; margin: 3cm 3cm 3cm 4cm; }
-  @page { @bottom-center { content: counter(page); font-family: "Times New Roman", serif; font-size: 11pt; } }
+  @page { @bottom-center { content: none; } }
   @page cover { @bottom-center { content: none; } }
   html, body { margin: 0; padding: 0; }
   body { font-family: "Times New Roman", Times, serif; font-size: 12pt; line-height: 1.5; color: #000; text-align: justify; }
@@ -54,26 +54,6 @@
 </style>
 </head>
 <body>
-
-<!-- ================= PANDUAN (HAPUS SEBELUM DIKUMPULKAN) ================= -->
-<div class="page guide">
-  <h2>PANDUAN MEMBACA DRAF INI<br><span style="font-size:11pt;">(halaman ini hapus sebelum dikumpulkan)</span></h2>
-  <p>Draf ini disusun mengikuti struktur <b>Template Buku Proposal TA IF TUS v3</b> (Telkom University Surabaya): A4, margin kiri 4 cm dan kanan/atas/bawah 3 cm, Times New Roman 12 pt, spasi 1,5, serta sitasi dan daftar pustaka format <b>APA 7th edition</b>. Isinya adalah <b>gambaran awal</b> yang perlu Anda baca, pahami, lalu tulis ulang dengan kata-kata sendiri. Template kampus menegaskan Tinjauan Pustaka tidak boleh berupa salinan.</p>
-  <p><b>Arti warna:</b></p>
-  <ul>
-    <li><span class="todo">Kuning</span>: wajib Anda isi atau sesuaikan, misalnya nama, NIM, data toko, angka hasil observasi, atau nama dosen.</li>
-    <li><span class="verify">Merah muda</span>: referensi yang perlu Anda buka dan cocokkan sendiri (judul, volume, halaman, DOI) sebelum dipakai.</li>
-  </ul>
-  <p><b>Tentang sitasi:</b> semua sitasi di dalam teks sudah dipasangkan dengan entri di Daftar Pustaka. Referensi klasik (Agrawal, Han, Tan, Brin, Fayyad) adalah karya standar di bidang data mining. Referensi jurnal Indonesia didapat dari penelusuran daring, jadi <b>wajib dicek</b> dengan membuka tautan DOI-nya. Jangan menambahkan nomor halaman kutipan langsung tanpa melihat sumber aslinya.</p>
-  <p><b>Saran alur kerja:</b></p>
-  <ol>
-    <li>Impor file <i>Referensi_Proposal.ris</i> ke Zotero atau Mendeley, sesuai anjuran template bagian 2.4.</li>
-    <li>Pasang plugin Zotero/Mendeley di Microsoft Word, lalu ganti sitasi teks biasa dengan sitasi dari plugin agar Daftar Pustaka terbentuk otomatis.</li>
-    <li>Isi bagian kuning dengan data nyata dari toko, seperti jumlah transaksi, periode data, dan hasil wawancara pemilik.</li>
-    <li>Diskusikan nilai minimum support dan confidence dengan dosen pembimbing.</li>
-  </ol>
-  <p><b>Catatan data:</b> sebelum penelitian, rapikan dulu harga modal (HPP) produk di aplikasi. Saat ini laporan menunjukkan laba lebih besar dari omzet, yang menandakan ada HPP salah input. Ini tidak mempengaruhi algoritma Apriori, tetapi akan dipertanyakan penguji bila tampil di laporan.</p>
-</div>
 
 <!-- ================= COVER ================= -->
 <div class="page cover">
@@ -141,9 +121,26 @@
 <!-- ================= KATA PENGANTAR ================= -->
 <div class="page">
   <h2 class="front">KATA PENGANTAR</h2>
-  <p class="noindent"><span class="todo">[Tulis dalam bentuk narasi utuh: ucapan syukur, penjelasan singkat topik penerapan algoritma Apriori pada sistem kasir toko perlengkapan biliar, terima kasih umum, harapan agar bermanfaat, dan permohonan maaf atas kekurangan.]</span></p>
-  <h2 class="front" style="margin-top:30pt;">UCAPAN TERIMA KASIH</h2>
-  <p class="noindent"><span class="todo">[Sebutkan secara spesifik: dosen pembimbing 1 dan 2, pemilik <i>Velco Pro Shop</i> yang memberi izin penggunaan data transaksi, orang tua, dan rekan. Sertakan bentuk bantuan masing-masing.]</span></p>
+  <p>Puji dan syukur penulis panjatkan ke hadirat Tuhan Yang Maha Esa atas limpahan rahmat, taufik, dan hidayah-Nya, sehingga penulis dapat menyelesaikan proposal Tugas Akhir yang berjudul <b>"Penerapan Algoritma Apriori untuk Rekomendasi Produk pada Sistem <i>Point of Sale</i> Toko Perlengkapan Biliar"</b> tepat pada waktunya.</p>
+  <p>Proposal Tugas Akhir ini disusun sebagai salah satu syarat akademik guna menyelesaikan mata kuliah CAK4EAB2 Proposal Tugas Akhir pada Program Studi Sarjana Informatika, Direktorat Kampus Surabaya, Universitas Telkom. Penelitian ini berfokus pada penerapan teknik <i>data mining</i> aturan asosiasi menggunakan algoritma Apriori yang diintegrasikan secara langsung ke dalam alur kerja kasir sistem <i>Point of Sale</i> (POS) Toko Velco Pro Shop untuk menghasilkan rekomendasi produk komplementer.</p>
+  <p>Penulis menyadari sepenuhnya bahwa penulisan proposal ini masih jauh dari kesempurnaan akibat keterbatasan pengetahuan dan pengalaman penulis. Oleh karena itu, penulis sangat mengharapkan kritik, masukan, dan saran yang membangun dari segenap pihak guna penyempurnaan karya ini ke depan. Semoga proposal ini dapat memberikan manfaat nyata bagi pengembangan ilmu pengetahuan dan teknologi informasi, khususnya pada bidang kecerdasan buatan dan ritel modern.</p>
+  <div class="sign" style="margin-top:40pt;">Surabaya, November 2026<br><br><br><br><b>Penulis</b></div>
+</div>
+
+<!-- ================= UCAPAN TERIMA KASIH ================= -->
+<div class="page">
+  <h2 class="front">UCAPAN TERIMA KASIH</h2>
+  <p>Dalam proses penyusunan proposal Tugas Akhir ini, penulis banyak mendapatkan bimbingan, dukungan, motivasi, arahan, serta fasilitas berharga dari berbagai pihak. Oleh karena itu, pada kesempatan ini penulis ingin menyampaikan rasa terima kasih dan penghargaan yang setinggi-tingginya kepada:</p>
+  <ol>
+    <li>Tuhan Yang Maha Esa, atas segala nikmat kesehatan, kekuatan, dan kelancaran yang senantiasa dilimpahkan selama penulisan proposal ini.</li>
+    <li>Bapak dan Ibu Dosen Pembimbing Tugas Akhir Program Studi S1 Informatika Universitas Telkom Surabaya, yang telah meluangkan banyak waktu, tenaga, dan pemikiran berharga untuk memberikan arahan, koreksi, serta bimbingan yang konstruktif hingga proposal ini selesai.</li>
+    <li>Ketua Program Studi dan seluruh Bapak/Ibu Dosen pengajar di lingkungan Program Studi Sarjana Informatika Universitas Telkom Surabaya atas bekal ilmu dan wawasan keilmuan yang telah diberikan selama masa perkuliahan.</li>
+    <li>Pemilik dan segenap staf Toko Velco Pro Shop Surabaya, yang telah memberikan izin penelitian, akses observasi sistem POS kasir, serta keterbukaan dalam penyediaan dataset transaksi penjualan.</li>
+    <li>Kedua orang tua dan keluarga tercinta, atas doa yang tiada putus, kasih sayang, kesabaran, serta dukungan moril maupun materiil yang tak ternilai harganya.</li>
+    <li>Rekan-rekan mahasiswa Program Studi S1 Informatika angkatan 2022/2023 Universitas Telkom Surabaya atas semangat kebersamaan, diskusi, dan motivasi yang senantiasa terjalin selama perkuliahan.</li>
+  </ol>
+  <p>Semoga kebaikan, ketulusan, dan bantuan yang telah diberikan mendapat balasan terbaik dari Tuhan Yang Maha Esa.</p>
+  <div class="sign" style="margin-top:30pt;">Surabaya, November 2026<br><br><br><br><b>Penulis</b></div>
 </div>
 
 <!-- ================= DAFTAR ISI ================= -->
@@ -154,59 +151,63 @@
   <div>ABSTRAK<span class="fill"></span>iv</div>
   <div>ABSTRACT<span class="fill"></span>v</div>
   <div>KATA PENGANTAR<span class="fill"></span>vi</div>
-  <div>DAFTAR ISI<span class="fill"></span>vii</div>
-  <div>DAFTAR TABEL<span class="fill"></span>viii</div>
-  <div>DAFTAR GAMBAR<span class="fill"></span>ix</div>
+  <div>UCAPAN TERIMA KASIH<span class="fill"></span>vii</div>
+  <div>DAFTAR ISI<span class="fill"></span>viii</div>
+  <div>DAFTAR TABEL<span class="fill"></span>x</div>
+  <div>DAFTAR GAMBAR<span class="fill"></span>xi</div>
   <div><b>BAB I PENDAHULUAN</b><span class="fill"></span>1</div>
-  <div class="l2">1.1. Latar Belakang<span class="fill"></span></div>
-  <div class="l2">1.2. Rumusan Masalah<span class="fill"></span></div>
-  <div class="l2">1.3. Tujuan Penelitian<span class="fill"></span></div>
-  <div class="l2">1.4. Batasan Masalah<span class="fill"></span></div>
-  <div class="l2">1.5. Manfaat Penelitian<span class="fill"></span></div>
-  <div class="l2">1.6. Sistematika Penulisan<span class="fill"></span></div>
-  <div><b>BAB II TINJAUAN PUSTAKA</b><span class="fill"></span></div>
-  <div class="l2">2.1. Penelitian Terdahulu<span class="fill"></span></div>
-  <div class="l2">2.2. Data Mining dan Knowledge Discovery in Databases<span class="fill"></span></div>
-  <div class="l2">2.3. Market Basket Analysis dan Aturan Asosiasi<span class="fill"></span></div>
-  <div class="l3">2.3.1. Support<span class="fill"></span></div>
-  <div class="l3">2.3.2. Confidence<span class="fill"></span></div>
-  <div class="l3">2.3.3. Lift Ratio<span class="fill"></span></div>
-  <div class="l2">2.4. Algoritma Apriori<span class="fill"></span></div>
-  <div class="l2">2.5. Sistem Point of Sale<span class="fill"></span></div>
-  <div class="l2">2.6. Alasan Pemilihan Metode<span class="fill"></span></div>
-  <div><b>BAB III METODOLOGI PENELITIAN</b><span class="fill"></span></div>
-  <div class="l2">3.1. Alur Penelitian<span class="fill"></span></div>
-  <div class="l2">3.2. Alat dan Bahan<span class="fill"></span></div>
-  <div class="l2">3.3. Perancangan Sistem<span class="fill"></span></div>
-  <div class="l3">3.3.1. Pengumpulan Data (Dataset Transaksi)<span class="fill"></span></div>
-  <div class="l3">3.3.2. Pra-pemrosesan Data (Data Preprocessing)<span class="fill"></span></div>
-  <div class="l3">3.3.3. Pembagian Data (Data Splitting 80:20)<span class="fill"></span></div>
-  <div class="l3">3.3.4. Penerapan Algoritma Apriori<span class="fill"></span></div>
-  <div class="l3">3.3.5. Pengujian dan Evaluasi Kinerja<span class="fill"></span></div>
-  <div class="l3">3.3.6. Integrasi Sistem dengan Aplikasi POS Web<span class="fill"></span></div>
-  <div class="l3">3.3.7. Hasil dan Luaran Rekomendasi Kasir<span class="fill"></span></div>
-  <div class="l2">3.4. Jadwal Penelitian<span class="fill"></span></div>
-  <div><b>DAFTAR PUSTAKA</b><span class="fill"></span></div>
-  <div><b>LAMPIRAN</b><span class="fill"></span></div>
-  <p class="noindent" style="font-size:10pt; margin-top:10pt;"><span class="todo">Nomor halaman isi diperbarui otomatis setelah dipindah ke Word (References → Update Table).</span></p>
+  <div class="l2">1.1. Latar Belakang<span class="fill"></span>1</div>
+  <div class="l2">1.2. Rumusan Masalah<span class="fill"></span>2</div>
+  <div class="l2">1.3. Tujuan Penelitian<span class="fill"></span>2</div>
+  <div class="l2">1.4. Batasan Masalah<span class="fill"></span>3</div>
+  <div class="l2">1.5. Manfaat Penelitian<span class="fill"></span>3</div>
+  <div class="l2">1.6. Sistematika Penulisan<span class="fill"></span>3</div>
+  <div><b>BAB II TINJAUAN PUSTAKA</b><span class="fill"></span>5</div>
+  <div class="l2">2.1. Penelitian Terdahulu<span class="fill"></span>5</div>
+  <div class="l2">2.2. Data Mining dan Knowledge Discovery in Databases<span class="fill"></span>8</div>
+  <div class="l2">2.3. Market Basket Analysis dan Aturan Asosiasi<span class="fill"></span>9</div>
+  <div class="l3">2.3.1. Support<span class="fill"></span>9</div>
+  <div class="l3">2.3.2. Confidence<span class="fill"></span>10</div>
+  <div class="l3">2.3.3. Lift Ratio<span class="fill"></span>10</div>
+  <div class="l2">2.4. Algoritma Apriori<span class="fill"></span>10</div>
+  <div class="l2">2.5. Sistem Point of Sale<span class="fill"></span>13</div>
+  <div class="l2">2.6. Alasan Pemilihan Metode<span class="fill"></span>13</div>
+  <div><b>BAB III METODOLOGI PENELITIAN</b><span class="fill"></span>15</div>
+  <div class="l2">3.1. Alur Penelitian<span class="fill"></span>15</div>
+  <div class="l2">3.2. Alat dan Bahan<span class="fill"></span>16</div>
+  <div class="l2">3.3. Perancangan Sistem<span class="fill"></span>16</div>
+  <div class="l3">3.3.1. Pengumpulan Data (Dataset Transaksi)<span class="fill"></span>16</div>
+  <div class="l3">3.3.2. Pra-pemrosesan Data (Data Preprocessing)<span class="fill"></span>16</div>
+  <div class="l3">3.3.3. Pembagian Data (Data Splitting 80:20)<span class="fill"></span>17</div>
+  <div class="l3">3.3.4. Penerapan Algoritma Apriori<span class="fill"></span>17</div>
+  <div class="l3">3.3.5. Pengujian dan Evaluasi Kinerja<span class="fill"></span>18</div>
+  <div class="l3">3.3.6. Integrasi Sistem dengan Aplikasi POS Web<span class="fill"></span>19</div>
+  <div class="l3">3.3.7. Hasil dan Luaran Rekomendasi Kasir<span class="fill"></span>21</div>
+  <div class="l2">3.4. Jadwal Penelitian<span class="fill"></span>21</div>
+  <div><b>DAFTAR PUSTAKA</b><span class="fill"></span>23</div>
+  <div><b>LAMPIRAN</b><span class="fill"></span>25</div>
 </div>
 
-<!-- ================= DAFTAR TABEL & GAMBAR ================= -->
+<!-- ================= DAFTAR TABEL ================= -->
 <div class="page toc">
   <h2 class="front">DAFTAR TABEL</h2>
-  <div>Tabel II.1. Contoh data transaksi (ilustrasi)<span class="fill"></span></div>
-  <div>Tabel II.2. Hasil iterasi pertama (C1 dan L1)<span class="fill"></span></div>
-  <div>Tabel II.3. Hasil iterasi kedua (C2 dan L2)<span class="fill"></span></div>
-  <div>Tabel II.4. Aturan asosiasi dari itemset {A, B, C}<span class="fill"></span></div>
-  <div>Tabel II.5. Perbandingan metode data mining<span class="fill"></span></div>
-  <div>Tabel III.1. Alat dan bahan penelitian<span class="fill"></span></div>
-  <div>Tabel III.2. Skenario pengujian dan evaluasi kinerja algoritma Apriori<span class="fill"></span></div>
-  <div>Tabel III.3. Jadwal pelaksanaan penelitian Tugas Akhir (6 bulan)<span class="fill"></span></div>
-<h2 class="front" style="margin-top:30pt;">DAFTAR GAMBAR</h2>
-  <div>Gambar II.1. Tahapan Knowledge Discovery in Databases<span class="fill"></span></div>
-  <div>Gambar III.1. Alur tahapan penelitian<span class="fill"></span></div>
-  <div>Gambar III.2. Diagram alir integrasi modul Apriori dengan aplikasi POS web<span class="fill"></span></div>
-  <div>Gambar III.3. Alur inferensi rekomendasi produk komplementer di layar kasir<span class="fill"></span></div>
+  <div>Tabel II.1. Contoh data transaksi (ilustrasi)<span class="fill"></span>11</div>
+  <div>Tabel II.2. Hasil iterasi pertama (C1 dan L1)<span class="fill"></span>11</div>
+  <div>Tabel II.3. Hasil iterasi kedua (C2 dan L2)<span class="fill"></span>12</div>
+  <div>Tabel II.4. Aturan asosiasi dari itemset {A, B, C}<span class="fill"></span>12</div>
+  <div>Tabel II.5. Perbandingan metode data mining<span class="fill"></span>13</div>
+  <div>Tabel III.1. Alat dan bahan penelitian<span class="fill"></span>16</div>
+  <div>Tabel III.2. Skenario pengujian dan evaluasi kinerja algoritma Apriori<span class="fill"></span>18</div>
+  <div>Tabel III.3. Jadwal pelaksanaan penelitian Tugas Akhir (6 bulan)<span class="fill"></span>21</div>
+</div>
+
+<!-- ================= DAFTAR GAMBAR ================= -->
+<div class="page toc">
+  <h2 class="front">DAFTAR GAMBAR</h2>
+  <div>Gambar II.1. Tahapan Knowledge Discovery in Databases<span class="fill"></span>9</div>
+  <div>Gambar III.1. Alur tahapan penelitian<span class="fill"></span>15</div>
+  <div>Gambar III.2. Diagram alir integrasi modul Apriori dengan aplikasi POS web<span class="fill"></span>20</div>
+  <div>Gambar III.3. Alur inferensi rekomendasi produk komplementer di layar kasir<span class="fill"></span>21</div>
 </div>
 
 <!-- ================= BAB I ================= -->
