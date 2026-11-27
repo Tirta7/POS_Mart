@@ -205,7 +205,7 @@
   <h2 class="front" style="margin-top:30pt;">DAFTAR GAMBAR</h2>
   <div>Gambar II.1. Tahapan Knowledge Discovery in Databases<span class="fill"></span></div>
   <div>Gambar III.1. Alur tahapan penelitian<span class="fill"></span></div>
-  <div>Gambar III.2. Arsitektur integrasi sistem POS dan modul penambangan data Apriori<span class="fill"></span></div>
+  <div>Gambar III.2. Diagram alir integrasi modul Apriori dengan aplikasi POS web<span class="fill"></span></div>
   <div>Gambar III.3. Alur inferensi rekomendasi produk komplementer di layar kasir<span class="fill"></span></div>
 </div>
 
@@ -459,14 +459,82 @@
   </table>
 
   <h4>3.3.6. Integrasi Sistem dengan Aplikasi POS Web</h4>
-  <p>Arsitektur integrasi sistem menghubungkan antarmuka kasir dengan mesin algoritma Apriori pada sisi server melalui arsitektur <i>three-tier</i> yang ditunjukkan pada Gambar III.2.</p>
-  <div class="arch">
-    <div><b>Lapisan Basis Data</b><br>PostgreSQL &amp; Prisma ORM<br>tabel transactions &amp; transaction_items</div>
-    <div><b>Lapisan Server (Backend)</b><br>Node.js, Express &amp; TypeScript<br>modul penambangan Apriori &amp; API endpoint</div>
-    <div><b>Lapisan Klien (Frontend)</b><br>React 18 &amp; Tailwind CSS<br>menu Analisis Back-office &amp; POS Kasir</div>
+  <p>Integrasi algoritma Apriori dengan aplikasi POS web dibangun di atas arsitektur <i>three-tier</i>, yaitu lapisan basis data (PostgreSQL dan Prisma ORM), lapisan server (Node.js, Express, dan TypeScript) yang memuat modul penambangan Apriori, serta lapisan klien (React) yang terdiri atas menu analisis <i>back-office</i> dan layar kasir. Alur proses integrasi tersebut digambarkan dalam bentuk diagram alir (<i>flowchart</i>) pada Gambar III.2.</p>
+  <div style="page-break-inside: avoid; margin: 8pt 0;">
+  <svg viewBox="0 0 640 640" width="100%" xmlns="http://www.w3.org/2000/svg" font-family="Times New Roman, serif" font-size="12" text-anchor="middle">
+    <defs>
+      <marker id="ah" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#000"/></marker>
+    </defs>
+    <g fill="#fff" stroke="#000" stroke-width="1.3">
+      <!-- ===== KOLOM KIRI: Pembentukan aturan (Back-office) ===== -->
+      <rect x="95" y="16" width="150" height="38" rx="19"/>
+      <polygon points="75,80 285,80 265,124 55,124"/>
+      <rect x="60" y="150" width="220" height="44"/>
+      <path d="M70,228 a100,9 0 0,0 200,0 a100,9 0 0,0 -200,0 v40 a100,9 0 0,0 200,0 v-40"/>
+      <rect x="60" y="304" width="220" height="44"/>
+      <rect x="60" y="374" width="220" height="44"/>
+      <polygon points="170,444 280,486 170,528 60,486"/>
+      <rect x="60" y="554" width="220" height="40"/>
+      <circle cx="170" cy="622" r="13"/>
+      <!-- ===== KOLOM KANAN: Rekomendasi kasir ===== -->
+      <circle cx="470" cy="30" r="13"/>
+      <polygon points="380,70 590,70 570,114 360,114"/>
+      <rect x="360" y="140" width="220" height="44"/>
+      <rect x="360" y="210" width="220" height="44"/>
+      <polygon points="470,280 580,322 470,364 360,322"/>
+      <rect x="360" y="390" width="220" height="44"/>
+      <polygon points="380,460 590,460 570,504 360,504"/>
+      <rect x="395" y="530" width="150" height="38" rx="19"/>
+    </g>
+    <!-- Garis & panah -->
+    <g stroke="#000" stroke-width="1.3" fill="none" marker-end="url(#ah)">
+      <line x1="170" y1="54" x2="170" y2="79"/>
+      <line x1="170" y1="124" x2="170" y2="149"/>
+      <line x1="170" y1="194" x2="170" y2="218"/>
+      <line x1="170" y1="278" x2="170" y2="303"/>
+      <line x1="170" y1="348" x2="170" y2="373"/>
+      <line x1="170" y1="418" x2="170" y2="443"/>
+      <line x1="170" y1="528" x2="170" y2="553"/>
+      <line x1="170" y1="594" x2="170" y2="608"/>
+      <polyline points="60,486 30,486 30,396 59,396"/>
+      <line x1="470" y1="43" x2="470" y2="69"/>
+      <line x1="470" y1="114" x2="470" y2="139"/>
+      <line x1="470" y1="184" x2="470" y2="209"/>
+      <line x1="470" y1="254" x2="470" y2="279"/>
+      <line x1="470" y1="364" x2="470" y2="389"/>
+      <line x1="470" y1="434" x2="470" y2="459"/>
+      <line x1="470" y1="504" x2="470" y2="529"/>
+      <polyline points="580,322 615,322 615,92 581,92"/>
+    </g>
+    <!-- Teks -->
+    <g fill="#000" stroke="none">
+      <text x="170" y="39" font-weight="bold">MULAI</text>
+      <text x="170" y="99">Input: admin menentukan</text><text x="170" y="114">min. support &amp; min. confidence</text>
+      <text x="170" y="168">Kirim request ke endpoint</text><text x="170" y="184">/api/analytics/association</text>
+      <text x="170" y="252">Ambil data transaksi lunas</text><text x="170" y="267">(transactions &amp; transaction_items)</text>
+      <text x="170" y="322">Pra-pemrosesan data &amp;</text><text x="170" y="338">pembentukan keranjang belanja</text>
+      <text x="170" y="392">Proses Apriori: hitung support,</text><text x="170" y="408">confidence, lift (Pers. II.1–II.3)</text>
+      <text x="170" y="483">confidence ≥ min</text><text x="170" y="498">dan lift &gt; 1?</text>
+      <text x="170" y="578">Simpan aturan asosiasi</text>
+      <text x="170" y="626" font-weight="bold">A</text>
+      <text x="44" y="478" font-size="11">Tidak</text>
+      <text x="186" y="544" font-size="11">Ya</text>
+      <text x="470" y="34" font-weight="bold">A</text>
+      <text x="470" y="89">Input: kasir memindai</text><text x="470" y="104">produk ke keranjang</text>
+      <text x="470" y="158">Frontend kasir mengirim</text><text x="470" y="174">isi keranjang ke server</text>
+      <text x="470" y="228">Cocokkan isi keranjang dengan</text><text x="470" y="244">antecedent aturan tersimpan</text>
+      <text x="470" y="318">Ada aturan</text><text x="470" y="333">yang cocok?</text>
+      <text x="470" y="408">Urutkan consequent berdasarkan</text><text x="470" y="424">confidence &amp; lift tertinggi</text>
+      <text x="470" y="479">Output: tampilkan kartu</text><text x="470" y="494">rekomendasi di layar kasir</text>
+      <text x="470" y="553" font-weight="bold">SELESAI</text>
+      <text x="598" y="314" font-size="11">Tidak</text>
+      <text x="486" y="380" font-size="11">Ya</text>
+    </g>
+  </svg>
   </div>
-  <div class="caption-g"><b>Gambar III.2</b>&nbsp;&nbsp;Arsitektur integrasi sistem POS dan modul penambangan data Apriori.</div>
-  <p>Berdasarkan Gambar III.2, modul Apriori berjalan secara asinkron di lapisan server backend. Backend menyediakan endpoint API <code>/api/analytics/association</code> untuk mengkalkulasi dan mengirimkan daftar aturan asosiasi ke antarmuka <i>back-office</i>, serta endpoint pencocokan aturan cepat untuk mendukung layar kasir.</p>
+  <div class="caption-g"><b>Gambar III.2</b>&nbsp;&nbsp;Diagram alir integrasi modul Apriori dengan aplikasi POS web.</div>
+  <p>Gambar III.2 disusun menggunakan simbol diagram alir standar, yaitu terminator (oval) sebagai titik mulai dan selesai, jajar genjang sebagai masukan dan keluaran data, persegi panjang sebagai proses, belah ketupat sebagai keputusan, silinder sebagai penyimpanan basis data, serta lingkaran berlabel A sebagai konektor antarbagian. Bagian kiri diagram menggambarkan pembentukan aturan asosiasi pada menu <i>back-office</i>: admin menentukan nilai <i>minimum support</i> dan <i>minimum confidence</i>, server mengambil data transaksi dari basis data, melakukan pra-pemrosesan, lalu menjalankan algoritma Apriori berdasarkan Persamaan (II.1), (II.2), dan (II.3). Aturan yang tidak memenuhi <i>minimum confidence</i> atau memiliki <i>lift</i> ≤ 1 dibuang, sedangkan aturan yang lolos disimpan.</p>
+  <p>Bagian kanan diagram menggambarkan pemanfaatan aturan pada layar kasir. Setiap kali kasir memindai produk, isi keranjang dikirim ke server dan dicocokkan dengan <i>antecedent</i> aturan yang tersimpan. Jika tidak ada aturan yang cocok, kasir melanjutkan transaksi seperti biasa. Jika terdapat aturan yang cocok, produk <i>consequent</i> diurutkan berdasarkan nilai <i>confidence</i> dan <i>lift</i> tertinggi, kemudian ditampilkan sebagai kartu rekomendasi di layar kasir.</p>
 
   <h4>3.3.7. Hasil dan Luaran Rekomendasi Kasir</h4>
   <p>Luaran utama dari integrasi algoritma ini adalah mekanisme inferensi rekomendasi produk otomatis pada antarmuka kasir. Mekanisme kerja inferensi saat transaksi berlangsung diilustrasikan pada Gambar III.3.</p>
