@@ -27,7 +27,8 @@
   th, td { border: 0.8pt solid #000; padding: 3pt 5pt; vertical-align: top; text-align: left; }
   th { background: #e8e8e8; text-align: center; }
   td.c { text-align: center; }
-  .caption-t { text-align: center; font-size: 11pt; margin: 10pt 0 2pt; }
+  .caption-t { text-align: center; font-size: 11pt; margin: 10pt 0 2pt; page-break-after: avoid; break-after: avoid; }
+  .table-block { page-break-inside: avoid; break-inside: avoid; margin-bottom: 12pt; }
   .caption-g { text-align: center; font-size: 11pt; margin: 2pt 0 12pt; }
   .caption-t b, .caption-g b { font-weight: bold; }
   .eq { display: flex; justify-content: space-between; align-items: center; margin: 6pt 0 6pt 1.25cm; font-style: italic; }
@@ -164,52 +165,53 @@
   <div class="l2">1.6. Sistematika Penulisan<span class="fill"></span>4</div>
   <div><b>BAB II TINJAUAN PUSTAKA</b><span class="fill"></span>5</div>
   <div class="l2">2.1. Penelitian Terdahulu<span class="fill"></span>5</div>
-  <div class="l2">2.2. Data Mining dan Knowledge Discovery in Databases<span class="fill"></span>10</div>
-  <div class="l2">2.3. Market Basket Analysis dan Aturan Asosiasi<span class="fill"></span>11</div>
-  <div class="l3">2.3.1. Support<span class="fill"></span>11</div>
-  <div class="l3">2.3.2. Confidence<span class="fill"></span>11</div>
+  <div class="l2">2.2. Data Mining dan Knowledge Discovery in Databases<span class="fill"></span>11</div>
+  <div class="l2">2.3. Market Basket Analysis dan Aturan Asosiasi<span class="fill"></span>12</div>
+  <div class="l3">2.3.1. Support<span class="fill"></span>12</div>
+  <div class="l3">2.3.2. Confidence<span class="fill"></span>12</div>
   <div class="l3">2.3.3. Lift Ratio<span class="fill"></span>12</div>
-  <div class="l2">2.4. Algoritma Apriori<span class="fill"></span>12</div>
-  <div class="l2">2.5. Sistem Point of Sale<span class="fill"></span>14</div>
-  <div class="l2">2.6. Alasan Pemilihan Metode<span class="fill"></span>15</div>
-  <div><b>BAB III METODOLOGI PENELITIAN</b><span class="fill"></span>16</div>
-  <div class="l2">3.1. Alur Penelitian<span class="fill"></span>16</div>
-  <div class="l2">3.2. Alat dan Bahan<span class="fill"></span>17</div>
-  <div class="l2">3.3. Perancangan Sistem<span class="fill"></span>17</div>
-  <div class="l3">3.3.1. Pengumpulan Data (Dataset Transaksi)<span class="fill"></span>17</div>
-  <div class="l3">3.3.2. Pra-pemrosesan Data (Data Preprocessing)<span class="fill"></span>17</div>
-  <div class="l3">3.3.3. Pembagian Data (Data Splitting 80:20)<span class="fill"></span>18</div>
-  <div class="l3">3.3.4. Penerapan Algoritma Apriori<span class="fill"></span>18</div>
-  <div class="l3">3.3.5. Pengujian dan Evaluasi Kinerja<span class="fill"></span>19</div>
-  <div class="l3">3.3.6. Integrasi Sistem dengan Aplikasi POS Web<span class="fill"></span>20</div>
-  <div class="l3">3.3.7. Hasil dan Luaran Rekomendasi Kasir<span class="fill"></span>22</div>
-  <div class="l2">3.4. Jadwal Penelitian<span class="fill"></span>22</div>
-  <div><b>DAFTAR PUSTAKA</b><span class="fill"></span>24</div>
-  <div><b>LAMPIRAN</b><span class="fill"></span>26</div>
-</div>
+  <div class="l2">2.4. Algoritma Apriori<span class="fill"></span>13</div>
+  <div class="l2">2.5. Sistem Point of Sale<span class="fill"></span>15</div>
+  <div class="l2">2.6. Alasan Pemilihan Metode<span class="fill"></span>16</div>
+  <div><b>BAB III METODOLOGI PENELITIAN</b><span class="fill"></span>17</div>
+  <div class="l2">3.1. Alur Penelitian<span class="fill"></span>17</div>
+  <div class="l2">3.2. Alat dan Bahan<span class="fill"></span>18</div>
+  <div class="l2">3.3. Perancangan Sistem<span class="fill"></span>18</div>
+  <div class="l3">3.3.1. Pengumpulan Data (Dataset Transaksi)<span class="fill"></span>18</div>
+  <div class="l3">3.3.2. Pra-pemrosesan Data (Data Preprocessing)<span class="fill"></span>18</div>
+  <div class="l3">3.3.3. Pembagian Data (Data Splitting 80:20)<span class="fill"></span>19</div>
+  <div class="l3">3.3.4. Penerapan Algoritma Apriori<span class="fill"></span>19</div>
+  <div class="l3">3.3.5. Pengujian dan Evaluasi Kinerja<span class="fill"></span>20</div>
+  <div class="l3">3.3.6. Integrasi Sistem dengan Aplikasi POS Web<span class="fill"></span>21</div>
+  <div class="l3">3.3.7. Hasil dan Luaran Rekomendasi Kasir<span class="fill"></span>23</div>
+  <div class="l2">3.4. Jadwal Penelitian<span class="fill"></span>23</div>
+  <div><b>DAFTAR PUSTAKA</b><span class="fill"></span>25</div>
+  <div><b>LAMPIRAN</b><span class="fill"></span>27</div></div>
 
 <!-- ================= DAFTAR TABEL ================= -->
 <div class="page toc">
   <h2 class="front">DAFTAR TABEL</h2>
-  <div>Tabel II.1. Ringkasan perbandingan penelitian terdahulu dan penelitian yang diusulkan<span class="fill"></span>8</div>
-  <div>Tabel II.2. Contoh data transaksi (ilustrasi)<span class="fill"></span>13</div>
-  <div>Tabel II.3. Hasil iterasi pertama (C1 dan L1)<span class="fill"></span>13</div>
-  <div>Tabel II.4. Hasil iterasi kedua (C2 dan L2)<span class="fill"></span>13</div>
-  <div>Tabel II.5. Aturan asosiasi dari itemset {A, B, C}<span class="fill"></span>14</div>
-  <div>Tabel II.6. Perbandingan metode data mining<span class="fill"></span>15</div>
-  <div>Tabel III.1. Alat dan bahan penelitian<span class="fill"></span>17</div>
-  <div>Tabel III.2. Skenario pengujian dan evaluasi kinerja algoritma Apriori<span class="fill"></span>19</div>
-  <div>Tabel III.3. Jadwal pelaksanaan penelitian Tugas Akhir (6 bulan)<span class="fill"></span>22</div>
-</div>
+  <div>Tabel II.1. Ringkasan penelitian Susanto dan Fenriana (2024)<span class="fill"></span>6</div>
+  <div>Tabel II.2. Ringkasan penelitian Brighton dan Hariyanto (2024)<span class="fill"></span>7</div>
+  <div>Tabel II.3. Ringkasan penelitian Noviana et al. (2023)<span class="fill"></span>8</div>
+  <div>Tabel II.4. Ringkasan penelitian Fijriani et al. (2023)<span class="fill"></span>9</div>
+  <div>Tabel II.5. Ringkasan penelitian Ashari et al. (2022)<span class="fill"></span>10</div>
+  <div>Tabel II.6. Contoh data transaksi (ilustrasi)<span class="fill"></span>14</div>
+  <div>Tabel II.7. Hasil iterasi pertama (C1 dan L1)<span class="fill"></span>14</div>
+  <div>Tabel II.8. Hasil iterasi kedua (C2 dan L2)<span class="fill"></span>15</div>
+  <div>Tabel II.9. Aturan asosiasi dari itemset {A, B, C}<span class="fill"></span>15</div>
+  <div>Tabel II.10. Perbandingan metode data mining<span class="fill"></span>16</div>
+  <div>Tabel III.1. Alat dan bahan penelitian<span class="fill"></span>18</div>
+  <div>Tabel III.2. Skenario pengujian dan evaluasi kinerja algoritma Apriori<span class="fill"></span>21</div>
+  <div>Tabel III.3. Jadwal pelaksanaan penelitian Tugas Akhir (6 bulan)<span class="fill"></span>24</div></div>
 
 <!-- ================= DAFTAR GAMBAR ================= -->
 <div class="page toc">
   <h2 class="front">DAFTAR GAMBAR</h2>
-  <div>Gambar II.1. Tahapan Knowledge Discovery in Databases<span class="fill"></span>10</div>
-  <div>Gambar III.1. Alur tahapan penelitian<span class="fill"></span>16</div>
-  <div>Gambar III.2. Diagram alir integrasi modul Apriori dengan aplikasi POS web<span class="fill"></span>21</div>
-  <div>Gambar III.3. Alur inferensi rekomendasi produk komplementer di layar kasir<span class="fill"></span>22</div>
-</div>
+  <div>Gambar II.1. Tahapan Knowledge Discovery in Databases<span class="fill"></span>11</div>
+  <div>Gambar III.1. Alur tahapan penelitian<span class="fill"></span>17</div>
+  <div>Gambar III.2. Diagram alir integrasi modul Apriori dengan aplikasi POS web<span class="fill"></span>22</div>
+  <div>Gambar III.3. Alur inferensi rekomendasi produk komplementer di layar kasir<span class="fill"></span>23</div></div>
 
 <!-- ================= BAB I ================= -->
 <div class="page">
@@ -267,72 +269,102 @@
   <h3>2.1. Penelitian Terdahulu</h3>
   <p>Penelitian mengenai <i>market basket analysis</i> dan sistem <i>point of sale</i> (POS) menggunakan algoritma Apriori telah banyak dilakukan dalam lima tahun terakhir (2020–2024). Kajian terhadap penelitian terdahulu diperlukan untuk memahami perkembangan metode, kelebihan dan kekurangan yang ada, serta memposisikan kontribusi penelitian ini.</p>
 
-  <p>Penelitian pertama dilakukan oleh Susanto dan Fenriana (2024) yang mengkaji permasalahan belum optimalnya pemanfaatan data riwayat transaksi kasir pada sistem penjualan ritel konvensional, di mana data tersebut umumnya hanya diolah untuk laporan keuangan berkala. Penelitian tersebut bertujuan merancang dan mengintegrasikan algoritma Apriori ke dalam sistem <i>point of sale</i> (POS) berbasis web guna menemukan kombinasi produk yang sering dibeli secara bersamaan untuk mendukung strategi <i>cross-selling</i> kasir. Metode yang digunakan adalah penambangan data asosiasi dengan algoritma Apriori menggunakan metrik evaluasi <i>support</i> dan <i>confidence</i> yang dihubungkan langsung ke antarmuka aplikasi web. Hasil penelitian membuktikan bahwa sistem POS mampu mengekstraksi aturan asosiasi secara otomatis dari basis data transaksi dan menyajikan rekomendasi produk kepada pengguna. Kelebihan dari penelitian ini terletak pada integrasi langsung antara mesin algoritma dengan aplikasi POS sehingga rekomendasi dapat langsung dimanfaatkan dalam alur kerja penjualan. Namun, kekurangannya adalah penelitian belum menguji pengaruh variasi ambang batas parameter <i>minimum support</i> dan <i>minimum confidence</i> secara mendalam pada data transaksi dengan variasi item yang timpang, serta belum melakukan validasi keabsahan hasil algoritma terhadap perhitungan manual. Keterkaitan penelitian tersebut dengan penelitian ini adalah sama-sama mengimplementasikan algoritma Apriori ke dalam aplikasi POS berbasis web, namun penelitian ini melengkapinya dengan pengujian variasi parameter, validasi manual 100%, serta penerapan spesifik pada Toko Velco Pro Shop (Susanto &amp; Fenriana, 2024).</p>
+  <p>Penelitian pertama dilakukan oleh Jonathan Susanto dan Indah Fenriana (2024) dengan judul artikel ilmiah <i>"Web-based POS with apriori market basket analysis"</i> yang dipublikasikan pada <i>bit-Tech: Jurnal Penelitian Komputer dan Informatika</i>, Volume 6, Nomor 3, halaman 200–210. Penelitian ini secara garis besar membahas perancangan dan integrasi mesin algoritma penambangan data asosiasi Apriori secara langsung ke dalam arsitektur sistem <i>point of sale</i> (POS) berbasis web pada usaha ritel barang kebutuhan umum. Rincian profil dan poin-poin penting penelitian tersebut disajikan pada Tabel II.1.</p>
 
-  <p>Penelitian kedua oleh Brighton dan Hariyanto (2024) mengangkat permasalahan penataan etalase dan penetapan paket promosi produk yang masih ditentukan secara intuitif tanpa dasar data pada toko ritel barang elektronik. Tujuan penelitian tersebut adalah menerapkan metode <i>market basket analysis</i> menggunakan algoritma Apriori untuk mengidentifikasi kombinasi produk komplementer yang memiliki kecenderungan dibeli secara berpasangan oleh konsumen. Metode penelitian menerapkan algoritma Apriori dengan kombinasi tiga metrik evaluasi utama, yaitu <i>support</i>, <i>confidence</i>, dan <i>lift ratio</i>. Hasil eksperimen menghasilkan sejumlah aturan asosiasi yang relevan dan dapat dijadikan acuan strategis dalam merancang tata letak pajangan produk (<i>display</i>) serta paket penjualan <i>bundling</i>. Kelebihan penelitian ini terletak pada ketajaman interpretasi bisnis dari metrik <i>lift ratio</i> untuk menyaring dan memastikan bahwa aturan asosiasi yang terbentuk bukan merupakan kejadian acak atau kebetulan semata. Adapun kekurangannya adalah pemrosesan data transaksi masih dilakukan secara terpisah (<i>offline</i>) di luar sistem kasir operasional sehingga kasir tidak dapat menerima rekomendasi secara langsung saat melayani pembeli. Relevansi penelitian tersebut terhadap penelitian ini adalah adopsi nilai ambang batas <i>lift ratio</i> lebih dari 1 sebagai kriteria mutlak penerimaan aturan asosiasi, di mana pada penelitian ini aturan tersebut disajikan secara otomatis pada layar kasir (Brighton &amp; Hariyanto, 2024).</p>
-
-  <p>Penelitian ketiga oleh Noviana et al. (2023) meneliti permasalahan belum diketahuinya efisiensi dan keakuratan komparatif antara algoritma Apriori dan <i>Frequent Pattern Growth</i> (FP-Growth) dalam menentukan pola pembelian konsumen pada data transaksi ritel. Penelitian tersebut bertujuan membandingkan kinerja kedua metode asosiasi tersebut dari aspek keakuratan aturan yang dihasilkan serta kompleksitas proses komputasinya. Metode yang digunakan adalah simulasi komparasi algoritma Apriori dan FP-Growth pada dataset transaksi penjualan konsumen menggunakan metrik <i>support</i>, <i>confidence</i>, dan <i>lift ratio</i>. Hasil penelitian menunjukkan bahwa kedua algoritma menghasilkan himpunan aturan asosiasi yang identik, namun Apriori memiliki keunggulan fundamental dalam aspek keterlacakan (<i>traceability</i>) tahapan pembentukan kandidat <i>itemset</i> yang transparan langkah demi langkah. Kelebihan dari penelitian ini adalah analisis perbandingan metrik evaluasi kedua algoritma dibahas secara mendalam dan komprehensif. Sementara itu, kekurangannya adalah penelitian hanya berhenti pada tahap eksperimen komputasi analitis tanpa diimplementasikan ke dalam antarmuka perangkat lunak operasional pengguna akhir. Relevansi penelitian tersebut terhadap penelitian ini adalah menjadi landasan ilmiah yang kuat dalam pemilihan algoritma Apriori yang transparan dan terstruktur sehingga memudahkan proses pengujian dan verifikasi sistem POS (Noviana et al., 2023).</p>
-
-  <p>Penelitian keempat dilakukan oleh Fijriani et al. (2023) yang meneliti permasalahan ketidakteraturan susunan penataan barang pada rak etalase toko ritel kebutuhan pokok harian yang mengakibatkan alur belanja pelanggan kurang efisien. Penelitian ini bertujuan mengekstraksi aturan asosiasi dari riwayat transaksi kasir untuk mengoptimalkan rancangan tata letak barang dagangan agar produk yang saling berhubungan diletakkan berdekatan. Metode yang diterapkan adalah penambangan aturan asosiasi dengan algoritma Apriori dengan menetapkan ambang batas <i>minimum support</i> dan <i>minimum confidence</i>. Hasil penelitian berhasil mengidentifikasi kombinasi produk kebutuhan harian yang sering dicari secara bersamaan dengan nilai keyakinan (<i>confidence</i>) di atas 70%. Kelebihan penelitian ini adalah keberhasilan menerjemahkan aturan asosiasi secara aplikatif ke dalam pemetaan desain rak fisik toko. Kekurangannya adalah data yang dianalisis berupa sampel statis yang diekspor dari sistem kasir tanpa adanya mekanisme pembaruan aturan secara dinamis saat terjadi pertambahan transaksi baru. Keterkaitannya dengan penelitian ini adalah pemanfaatan pola pembelian untuk strategi penataan produk dan penawaran barang pelengkap, di mana pada penelitian ini data diambil secara dinamis dari basis data sistem POS (Fijriani et al., 2023).</p>
-
-  <p>Penelitian kelima oleh Ashari et al. (2022) mengkaji permasalahan stagnasi pendapatan usaha ritel minimarket akibat ketiadaan strategi penawaran silang (<i>cross-selling</i>) berbasis data perilaku belanja konsumen. Penelitian tersebut bertujuan menerapkan algoritma Apriori untuk menemukan pola belanja konsumen dan menganalisis dampaknya terhadap peluang kenaikan omzet penjualan toko. Metode yang digunakan adalah pemodelan <i>market basket analysis</i> dengan algoritma Apriori yang dijalankan melalui perangkat lunak penambangan data pihak ketiga, yaitu RapidMiner. Hasil eksperimen membuktikan bahwa penerapan aturan asosiasi pada strategi <i>cross-selling</i> efektif dalam mengidentifikasi peluang peningkatan omzet penjualan toko. Kelebihan penelitian ini adalah adanya analisis estimasi dampak ekonomis dari aturan asosiasi terhadap potensi pendapatan ritel. Namun, kekurangannya adalah ketergantungan penuh pada perangkat lunak terpisah (RapidMiner) sehingga staf toko tidak dapat memperbarui atau menjalankan algoritma secara mandiri di meja kasir. Relevansi penelitian tersebut terhadap penelitian ini adalah adopsi konsep rekomendasi <i>cross-selling</i> berbasis aturan asosiasi, yang pada penelitian ini mesin algoritmanya ditanamkan langsung pada modul server POS tanpa membutuhkan aplikasi pihak ketiga (Ashari et al., 2022).</p>
-
-  <p>Ringkasan perbandingan komprehensif antara kelima penelitian terdahulu dengan penelitian yang diusulkan disajikan pada Tabel II.1.</p>
-
-  <div class="caption-t"><b>Tabel II.1</b>&nbsp;&nbsp;Ringkasan perbandingan penelitian terdahulu dan penelitian yang diusulkan.</div>
-  <table>
-    <tr>
-      <th style="width:20%">Peneliti &amp; Tahun</th>
-      <th style="width:18%">Objek Penelitian</th>
-      <th style="width:18%">Metode &amp; Metrik</th>
-      <th style="width:22%">Kelebihan</th>
-      <th>Kekurangan / Keterbatasan</th>
-    </tr>
-    <tr>
-      <td>Susanto &amp; Fenriana (2024)</td>
-      <td>Sistem POS ritel barang umum</td>
-      <td>Apriori Web-based POS (Support, Confidence)</td>
-      <td>Algoritma Apriori terhubung langsung dengan alur kerja operasional kasir web.</td>
-      <td>Belum menguji variasi ambang batas parameter min-support dan min-confidence serta validasi manual.</td>
-    </tr>
-    <tr>
-      <td>Brighton &amp; Hariyanto (2024)</td>
-      <td>Toko ritel elektronik</td>
-      <td>Apriori (Support, Confidence, Lift Ratio)</td>
-      <td>Analisis interpretasi bisnis berbasis lift ratio sangat detail untuk tata letak etalase.</td>
-      <td>Pengolahan data transaksi dilakukan secara terpisah (offline) di luar aplikasi kasir harian.</td>
-    </tr>
-    <tr>
-      <td>Noviana et al. (2023)</td>
-      <td>Data transaksi ritel konsumen</td>
-      <td>Komparasi Apriori &amp; FP-Growth</td>
-      <td>Evaluasi komparasi akurasi dan keterlacakan (traceability) aturan sangat komprehensif.</td>
-      <td>Hanya berupa simulasi eksperimen komputasi tanpa implementasi perangkat lunak operasional kasir.</td>
-    </tr>
-    <tr>
-      <td>Fijriani et al. (2023)</td>
-      <td>Toko ritel sembako harian</td>
-      <td>Apriori (Support, Confidence)</td>
-      <td>Pemetaan aturan asosiasi ke dalam desain tata letak rak fisik toko sangat aplikatif.</td>
-      <td>Menggunakan sampel data statis yang diekspor tanpa mekanisme sinkronisasi transaksi dinamis.</td>
-    </tr>
-    <tr>
-      <td>Ashari et al. (2022)</td>
-      <td>Minimarket retail mandiri</td>
-      <td>Apriori via RapidMiner</td>
-      <td>Mampu menganalisis estimasi kenaikan omzet toko dari strategi penawaran silang (cross-selling).</td>
-      <td>Ketergantungan penuh pada perangkat lunak pihak ketiga sehingga tidak praktis bagi kasir.</td>
-    </tr>
-    <tr>
-      <td><b>Penelitian ini</b></td>
-      <td>Toko perlengkapan biliar (Velco Pro Shop)</td>
-      <td>Apriori terintegrasi sistem POS</td>
-      <td>Algoritma tertanam langsung pada server POS, validasi manual 100%, uji parameter, dan rekomendasi kasir real-time.</td>
-      <td>Data transaksi bersumber dari satu toko spesifik perlengkapan biliar.</td>
-    </tr>
+  <div class="table-block">
+  <div class="caption-t"><b>Tabel II.1</b>&nbsp;&nbsp;Ringkasan penelitian Susanto dan Fenriana (2024).</div>
+  <table class="review" style="page-break-inside: avoid; margin-bottom: 12pt;">
+    <tr><td style="width:26%"><b>Peneliti &amp; Tahun</b></td><td>Susanto dan Fenriana (2024)</td></tr>
+    <tr><td><b>Objek Penelitian</b></td><td>Sistem <i>point of sale</i> (POS) ritel barang kebutuhan umum</td></tr>
+    <tr><td><b>Masalah</b></td><td>Data riwayat transaksi kasir pada sistem penjualan ritel konvensional hanya diolah untuk pencatatan keuangan berkala dan belum dioptimalkan untuk mengungkap pola belanja konsumen.</td></tr>
+    <tr><td><b>Tujuan</b></td><td>Mengembangkan dan mengintegrasikan algoritma Apriori ke dalam sistem POS berbasis web guna menghasilkan aturan asosiasi produk secara otomatis untuk mendukung strategi penawaran silang (<i>cross-selling</i>).</td></tr>
+    <tr><td><b>Metode &amp; Metrik</b></td><td>Algoritma Apriori berbasis web (React dan Node.js); metrik evaluasi <i>support</i> dan <i>confidence</i>.</td></tr>
+    <tr><td><b>Hasil</b></td><td>Mesin Apriori berhasil ditanamkan pada server POS web dan secara otomatis mengekstraksi kombinasi produk yang sering dibeli bersamaan untuk ditampilkan pada modul kasir.</td></tr>
+    <tr><td><b>Kelebihan</b></td><td>Algoritma terhubung langsung dengan alur kerja operasional kasir secara <i>real-time</i>, menghilangkan kebutuhan ekspor data manual ke aplikasi eksternal.</td></tr>
+    <tr><td><b>Kekurangan / Keterbatasan</b></td><td>Belum melakukan pengujian variasi ambang batas parameter <i>minimum support</i> dan <i>minimum confidence</i> secara komparatif serta belum memvalidasi keabsahan hasil sistem terhadap perhitungan manual.</td></tr>
+    <tr><td><b>Relevansi</b></td><td>Menjadi rujukan utama arsitektur teknis integrasi algoritma Apriori ke dalam antarmuka POS web. Penelitian ini melengkapinya dengan validasi perhitungan manual 100%, uji variasi parameter, dan implementasi pada Toko Velco Pro Shop.</td></tr>
   </table>
+</div>
 
-  <p>Sebagaimana disajikan pada Tabel II.1, kesenjangan penelitian (<i>research gap</i>) yang nyata adalah sebagian besar penelitian terdahulu masih mengolah data transaksi secara terpisah (<i>offline</i>) menggunakan perangkat lunak eksternal seperti RapidMiner atau simulasi skrip data, sehingga hasil analisis berhenti sebagai laporan statistik dan tidak terintegrasi dengan alur kerja kasir harian. Selain itu, penelitian yang telah mengintegrasikan Apriori ke sistem web belum melakukan validasi menyeluruh terhadap perhitungan manual dan variasi ambang batas parameter. Penelitian ini mengisi kesenjangan tersebut dengan mengintegrasikan algoritma Apriori secara langsung ke dalam sistem POS Toko Velco Pro Shop, memvalidasi hasil algoritma terhadap perhitungan manual Excel 100%, menguji ketahanan variasi parameter, serta menyajikan rekomendasi produk komplementer secara interaktif di layar kasir saat transaksi berlangsung.</p>
+  <p>Berdasarkan Tabel II.1, kontribusi penting dari penelitian Susanto dan Fenriana (2024) adalah pembuktian bahwa mesin algoritma Apriori dapat dieksekusi di sisi server aplikasi web tanpa membebani kinerja transaksi kasir. Namun, ketiadaan mekanisme pengujian variasi parameter dan validasi manual pada penelitian tersebut menjadi celah yang disempurnakan dalam penelitian ini melalui skenario pengujian komprehensif pada sistem POS Toko Velco Pro Shop (Susanto &amp; Fenriana, 2024).</p>
+
+  <p>Penelitian kedua dilakukan oleh Kevin Brighton dan Susanto Hariyanto (2024) dengan judul artikel <i>"Penerapan metode market basket analisis dengan algoritma apriori pada toko ritel elektronik"</i> yang diterbitkan pada <i>bit-Tech: Jurnal Penelitian Komputer dan Informatika</i>, Volume 7, Nomor 1, halaman 45–54. Penelitian ini mengkaji perilaku belanja konsumen pada toko ritel elektronik untuk memetakan produk komplementer yang sering dibeli secara berpasangan guna mengoptimalkan tata letak pajangan etalase dan penetapan paket promosi <i>bundling</i>. Rincian profil penelitian tersebut disajikan pada Tabel II.2.</p>
+
+  <div class="table-block">
+  <div class="caption-t"><b>Tabel II.2</b>&nbsp;&nbsp;Ringkasan penelitian Brighton dan Hariyanto (2024).</div>
+  <table class="review" style="page-break-inside: avoid; margin-bottom: 12pt;">
+    <tr><td style="width:26%"><b>Peneliti &amp; Tahun</b></td><td>Brighton dan Hariyanto (2024)</td></tr>
+    <tr><td><b>Objek Penelitian</b></td><td>Toko ritel barang elektronik</td></tr>
+    <tr><td><b>Masalah</b></td><td>Penataan etalase barang dan penentuan paket promosi <i>bundling</i> produk elektronik masih didasarkan pada perkiraan intuitif pemilik toko sehingga kurang efektif menarik minat pembeli.</td></tr>
+    <tr><td><b>Tujuan</b></td><td>Menerapkan metode <i>market basket analysis</i> dengan algoritma Apriori untuk menemukan kombinasi produk komplementer yang memiliki derajat korelasi tinggi.</td></tr>
+    <tr><td><b>Metode &amp; Metrik</b></td><td>Algoritma Apriori dengan tiga metrik evaluasi utama: <i>support</i>, <i>confidence</i>, dan <i>lift ratio</i>.</td></tr>
+    <tr><td><b>Hasil</b></td><td>Terbentuk sejumlah aturan asosiasi produk elektronik yang valid dengan nilai <i>lift ratio</i> &gt; 1 yang dijadikan acuan strategis desain tata letak rak dan paket penjualan.</td></tr>
+    <tr><td><b>Kelebihan</b></td><td>Menjelaskan interpretasi bisnis dari metrik <i>lift ratio</i> secara sangat tajam guna menyaring dan membuang aturan semu yang terjadi akibat faktor kebetulan.</td></tr>
+    <tr><td><b>Kekurangan / Keterbatasan</b></td><td>Pengolahan data transaksi masih dilakukan secara terpisah (<i>offline</i>) di luar aplikasi kasir operasional sehingga kasir tidak dapat menerima rekomendasi secara langsung saat transaksi berlangsung.</td></tr>
+    <tr><td><b>Relevansi</b></td><td>Memberikan landasan metodologis penetapan nilai ambang batas <i>lift ratio</i> &gt; 1 sebagai filter mutlak kualitas aturan. Penelitian ini menutup keterbatasannya dengan menampilkan rekomendasi tersebut langsung di layar kasir.</td></tr>
+  </table>
+</div>
+
+  <p>Sebagaimana dipaparkan pada Tabel II.2, kekuatan utama penelitian Brighton dan Hariyanto (2024) terletak pada penggunaan metrik <i>lift ratio</i> untuk memastikan signifikansi korelasi antar produk. Keterbatasan penelitian tersebut yang masih memproses data di luar sistem operasional kasir menjadi fokus perbaikan dalam penelitian ini, di mana mesin inferensi rekomendasi diaktifkan secara otomatis saat kasir memindai produk (Brighton &amp; Hariyanto, 2024).</p>
+
+  <p>Penelitian ketiga dilakukan oleh Reski Noviana, Arief Hermawan, dan Donny Avianto (2023) dengan judul <i>"Market basket analysis menggunakan algoritma apriori dan FP growth untuk menentukan pola pembelian konsumen"</i> yang dipublikasikan pada <i>Jurnal Media Informatika Budidarma</i>, Volume 7, Nomor 3, halaman 1362–1371. Penelitian ini berfokus pada analisis komparatif antara dua metode penambangan aturan asosiasi terpopuler, yaitu algoritma Apriori dan <i>Frequent Pattern Growth</i> (FP-Growth), dalam mengekstraksi pola belanja konsumen. Rincian penelitian tersebut disajikan pada Tabel II.3.</p>
+
+  <div class="table-block">
+  <div class="caption-t"><b>Tabel II.3</b>&nbsp;&nbsp;Ringkasan penelitian Noviana et al. (2023).</div>
+  <table class="review" style="page-break-inside: avoid; margin-bottom: 12pt;">
+    <tr><td style="width:26%"><b>Peneliti &amp; Tahun</b></td><td>Noviana et al. (2023)</td></tr>
+    <tr><td><b>Objek Penelitian</b></td><td>Data riwayat transaksi penjualan ritel konsumen</td></tr>
+    <tr><td><b>Masalah</b></td><td>Perlunya evaluasi komparatif untuk mengetahui algoritma asosiasi yang paling efektif dan terstruktur antara Apriori dan FP-Growth dalam menemukan pola keranjang belanja ritel.</td></tr>
+    <tr><td><b>Tujuan</b></td><td>Membandingkan performa algoritma Apriori dan FP-Growth dari aspek keakuratan aturan asosiasi yang terbentuk serta karakteristik proses komputasinya.</td></tr>
+    <tr><td><b>Metode &amp; Metrik</b></td><td>Eksperimen komparasi algoritma Apriori dan FP-Growth; metrik evaluasi <i>support</i>, <i>confidence</i>, dan <i>lift ratio</i>.</td></tr>
+    <tr><td><b>Hasil</b></td><td>Kedua algoritma menghasilkan himpunan aturan asosiasi yang identik; Apriori terbukti lebih unggul dalam aspek keterlacakan (<i>traceability</i>) tahapan pembentukan <i>k-itemset</i>.</td></tr>
+    <tr><td><b>Kelebihan</b></td><td>Analisis perbandingan metrik dilakukan secara komprehensif dan objektif pada dataset yang sama dengan visualisasi perbandingan yang jelas.</td></tr>
+    <tr><td><b>Kekurangan / Keterbatasan</b></td><td>Penelitian hanya berhenti pada ranah eksperimen komputasi analitis tanpa diimplementasikan ke dalam aplikasi perangkat lunak operasional kasir.</td></tr>
+    <tr><td><b>Relevansi</b></td><td>Menjadi rujukan ilmiah utama dalam pemilihan algoritma Apriori dibanding FP-Growth pada penelitian ini karena tahapannya yang transparan dan mudah diverifikasi saat pengujian sistem.</td></tr>
+  </table>
+</div>
+
+  <p>Tabel II.3 mempertegas keunggulan algoritma Apriori dalam hal transparansi pembentukan kandidat himpunan barang (<i>itemsets</i>). Meskipun FP-Growth memiliki efisiensi waktu komputasi pada data berskala masif, Apriori memberikan kejelasan logika langkah demi langkah yang sangat krusial untuk diverifikasi secara manual pada skala transaksi toko menengah seperti Toko Velco Pro Shop (Noviana et al., 2023).</p>
+
+  <p>Penelitian keempat dilakukan oleh M. Fijriani, U. Hayati, G. Dwilestari, A. R. Rinaldi, dan F. Faturrohman (2023) dengan judul <i>"Implementasi market basket analysis pada toko retail menggunakan algoritma apriori"</i> yang diterbitkan pada <i>Kopertip: Jurnal Ilmiah Manajemen Informatika dan Komputer</i>, Volume 7, Nomor 1, halaman 29–34. Penelitian ini membahas pemanfaatan data riwayat penjualan kasir toko ritel kebutuhan harian untuk mengoptimalkan penataan tata letak fisik barang pada rak etalase toko. Rincian penelitian disajikan pada Tabel II.4.</p>
+
+  <div class="table-block">
+  <div class="caption-t"><b>Tabel II.4</b>&nbsp;&nbsp;Ringkasan penelitian Fijriani et al. (2023).</div>
+  <table class="review" style="page-break-inside: avoid; margin-bottom: 12pt;">
+    <tr><td style="width:26%"><b>Peneliti &amp; Tahun</b></td><td>Fijriani et al. (2023)</td></tr>
+    <tr><td><b>Objek Penelitian</b></td><td>Toko ritel barang kebutuhan pokok harian</td></tr>
+    <tr><td><b>Masalah</b></td><td>Penataan tata letak barang dagangan di rak toko ritel sembako belum teratur dan tidak berbasis data perilaku belanja konsumen, menyulitkan konsumen dalam menemukan produk terkait.</td></tr>
+    <tr><td><b>Tujuan</b></td><td>Menemukan pola aturan asosiasi produk dari data transaksi kasir guna merancang tata letak penempatan barang pada etalase yang lebih optimal dan memudahkan alur belanja.</td></tr>
+    <tr><td><b>Metode &amp; Metrik</b></td><td>Algoritma Apriori dengan penetapan ambang batas <i>minimum support</i> dan <i>minimum confidence</i>.</td></tr>
+    <tr><td><b>Hasil</b></td><td>Berhasil menemukan kombinasi produk kebutuhan pokok yang sering dicari bersamaan dengan nilai keyakinan (<i>confidence</i>) mencapai di atas 70%.</td></tr>
+    <tr><td><b>Kelebihan</b></td><td>Mampu menerjemahkan hasil aturan asosiasi matematis secara aplikatif menjadi denah tata letak penataan rak fisik toko yang memudahkan pembeli.</td></tr>
+    <tr><td><b>Kekurangan / Keterbatasan</b></td><td>Dataset yang digunakan masih berupa sampel statis yang diekspor dari aplikasi lain tanpa adanya mekanisme pembaruan aturan secara dinamis saat ada transaksi baru.</td></tr>
+    <tr><td><b>Relevansi</b></td><td>Memberikan bukti empiris manfaat aturan asosiasi untuk penataan produk dan penawaran barang komplementer. Penelitian ini mengembangkannya dengan menghubungkan algoritma langsung ke basis data POS.</td></tr>
+  </table>
+</div>
+
+  <p>Sebagaimana disajikan pada Tabel II.4, penelitian Fijriani et al. (2023) mendemonstrasikan bahwa aturan asosiasi Apriori bernilai guna tinggi dalam menata <i>display</i> barang. Kelemahan terkait sifat data yang statis dijawab dalam penelitian ini dengan menarik data langsung dari tabel transaksi basis data PostgreSQL aplikasi POS Toko Velco Pro Shop secara dinamis (Fijriani et al., 2023).</p>
+
+  <p>Penelitian kelima dilakukan oleh I. A. Ashari, A. Wirasto, D. N. Triwibowo, dan P. Purwono (2022) dengan judul <i>"Implementasi market basket analysis dengan algoritma apriori untuk analisis pendapatan usaha retail"</i> yang dipublikasikan pada <i>MATRIK: Jurnal Manajemen, Teknik Informatika, dan Rekayasa Komputer</i>, Volume 21, Nomor 3, halaman 701–709. Penelitian ini mengkaji penerapan algoritma Apriori menggunakan perangkat lunak RapidMiner untuk menganalisis potensi peningkatan omzet minimarket melalui strategi penawaran silang. Rincian penelitian disajikan pada Tabel II.5.</p>
+
+  <div class="table-block">
+  <div class="caption-t"><b>Tabel II.5</b>&nbsp;&nbsp;Ringkasan penelitian Ashari et al. (2022).</div>
+  <table class="review" style="page-break-inside: avoid; margin-bottom: 12pt;">
+    <tr><td style="width:26%"><b>Peneliti &amp; Tahun</b></td><td>Ashari et al. (2022)</td></tr>
+    <tr><td><b>Objek Penelitian</b></td><td>Usaha retail minimarket mandiri</td></tr>
+    <tr><td><b>Masalah</b></td><td>Pendapatan minimarket mengalami stagnasi akibat ketiadaan strategi penawaran silang (<i>cross-selling</i>) yang terarah berdasarkan data riwayat transaksi kasir.</td></tr>
+    <tr><td><b>Tujuan</b></td><td>Menerapkan algoritma Apriori untuk mengidentifikasi pola pembelian konsumen dan menganalisis dampaknya terhadap peluang peningkatan omzet toko.</td></tr>
+    <tr><td><b>Metode &amp; Metrik</b></td><td>Pemodelan <i>market basket analysis</i> algoritma Apriori menggunakan perangkat lunak RapidMiner; metrik <i>support</i> dan <i>confidence</i>.</td></tr>
+    <tr><td><b>Hasil</b></td><td>Teridentifikasi kombinasi pola belanja yang kuat untuk strategi penawaran silang kasir dengan potensi peningkatan omzet toko yang terukur.</td></tr>
+    <tr><td><b>Kelebihan</b></td><td>Mengaitkan secara kuantitatif antara aturan asosiasi yang ditemukan dengan analisis proyeksi estimasi dampak finansial bagi pemilik ritel.</td></tr>
+    <tr><td><b>Kekurangan / Keterbatasan</b></td><td>Ketergantungan penuh pada perangkat lunak pihak ketiga (RapidMiner) sehingga staf toko tidak dapat menjalankan algoritma secara mandiri pada sistem kasir harian.</td></tr>
+    <tr><td><b>Relevansi</b></td><td>Memperkuat justifikasi bisnis mengenai efektivitas strategi <i>cross-selling</i> berbasis aturan asosiasi. Penelitian ini mengintegrasikan fungsi tersebut langsung ke dalam kode sistem POS tanpa bantuan perangkat lunak eksternal.</td></tr>
+  </table>
+</div>
+
+  <p>Tabel II.5 menunjukkan relevansi kuat antara penemuan aturan asosiasi dengan strategi penawaran silang kasir. Namun, ketergantungan pada perangkat lunak pihak ketiga membuat hasil analisis sulit diterapkan langsung oleh kasir. Penelitian ini mengatasi kelemahan tersebut dengan menanamkan logika algoritma Apriori langsung ke modul backend sistem POS Toko Velco Pro Shop (Ashari et al., 2022).</p>
+
+  <p>Berdasarkan tinjauan terstruktur pada Tabel II.1 hingga Tabel II.5, kesenjangan penelitian (<i>research gap</i>) utama yang teridentifikasi adalah sebagian besar penelitian terdahulu mengolah data secara terpisah menggunakan perangkat lunak analitik eksternal atau berhenti pada tahap penemuan aturan tanpa integrasi operasional. Selain itu, penelitian yang telah berbasis web belum menyertakan validasi manual dan pengujian variasi parameter secara komprehensif. Penelitian ini mengisi kesenjangan tersebut dengan menerapkan algoritma Apriori yang tertanam langsung pada server sistem POS Toko Velco Pro Shop, memvalidasi perhitungannya terhadap Excel manual 100%, menguji ketahanan variasi parameter, serta menyajikan rekomendasi produk komplementer interaktif di layar kasir secara <i>real-time</i>.</p>
 
   <h3>2.2. Data Mining dan Knowledge Discovery in Databases</h3>
   <p><i>Data mining</i> didefinisikan sebagai serangkaian proses komputasi cerdas untuk mengekstraksi pola tersembunyi, hubungan baru, dan pengetahuan bermanfaat dari kumpulan data transaksi berskala besar (Aggarwal, 2020). Dalam kerangka <i>Knowledge Discovery in Databases</i> (KDD), <i>data mining</i> merupakan tahapan inti setelah seleksi data, pembersihan (<i>data cleaning</i>), dan transformasi data (Aggarwal, 2020; Telikani et al., 2020). Tahapan KDD ditunjukkan pada Gambar II.1.</p>
@@ -375,8 +407,8 @@
     <li>Ulangi langkah 3 dan 4 hingga tidak ada kandidat baru.</li>
     <li>Bentuk aturan dari setiap <i>frequent itemset</i>, hitung <i>confidence</i> dan <i>lift</i>, lalu simpan aturan yang memenuhi <i>minimum confidence</i> dan memiliki <i>lift</i> lebih dari 1.</li>
   </ol>
-  <p>Untuk memperjelas cara kerja algoritma, berikut contoh perhitungan dengan data ilustrasi sepuluh transaksi pada Tabel II.2. Produk disingkat A = <i>Cue Tip</i>, B = <i>Chalk</i>, C = <i>Glove</i>, D = <i>Bumper</i> karet, dan E = <i>Case</i>. Nilai <i>minimum support</i> ditetapkan 30% (minimal 3 transaksi) dan <i>minimum confidence</i> 70%.</p>
-  <div class="caption-t"><b>Tabel II.2</b>&nbsp;&nbsp;Contoh data transaksi (ilustrasi, bukan data penelitian).</div>
+  <p>Untuk memperjelas cara kerja algoritma, berikut contoh perhitungan dengan data ilustrasi sepuluh transaksi pada Tabel II.6. Produk disingkat A = <i>Cue Tip</i>, B = <i>Chalk</i>, C = <i>Glove</i>, D = <i>Bumper</i> karet, dan E = <i>Case</i>. Nilai <i>minimum support</i> ditetapkan 30% (minimal 3 transaksi) dan <i>minimum confidence</i> 70%.</p>
+  <div class="caption-t"><b>Tabel II.6</b>&nbsp;&nbsp;Contoh data transaksi (ilustrasi, bukan data penelitian).</div>
   <table style="width:70%; margin-left:auto; margin-right:auto;">
     <tr><th style="width:25%">Transaksi</th><th>Produk yang dibeli</th></tr>
     <tr><td class="c">T1</td><td>A, B, C</td></tr>
@@ -390,7 +422,7 @@
     <tr><td class="c">T9</td><td>B, D</td></tr>
     <tr><td class="c">T10</td><td>A, E</td></tr>
   </table>
-  <div class="caption-t"><b>Tabel II.3</b>&nbsp;&nbsp;Hasil iterasi pertama (C1 dan L1).</div>
+  <div class="caption-t"><b>Tabel II.7</b>&nbsp;&nbsp;Hasil iterasi pertama (C1 dan L1).</div>
   <table style="width:70%; margin-left:auto; margin-right:auto;">
     <tr><th>Itemset</th><th>Jumlah</th><th>Support</th><th>Status</th></tr>
     <tr><td>{A}</td><td class="c">7</td><td class="c">70%</td><td class="c">Lolos</td></tr>
@@ -399,8 +431,8 @@
     <tr><td>{D}</td><td class="c">2</td><td class="c">20%</td><td class="c">Dipangkas</td></tr>
     <tr><td>{E}</td><td class="c">3</td><td class="c">30%</td><td class="c">Lolos</td></tr>
   </table>
-  <p>Produk D dipangkas, sehingga seluruh kombinasi yang memuat D tidak perlu dihitung pada iterasi berikutnya. Kandidat 2-itemset dibentuk dari A, B, C, dan E seperti pada Tabel II.4.</p>
-  <div class="caption-t"><b>Tabel II.4</b>&nbsp;&nbsp;Hasil iterasi kedua (C2 dan L2).</div>
+  <p>Produk D dipangkas, sehingga seluruh kombinasi yang memuat D tidak perlu dihitung pada iterasi berikutnya. Kandidat 2-itemset dibentuk dari A, B, C, dan E seperti pada Tabel II.8.</p>
+  <div class="caption-t"><b>Tabel II.8</b>&nbsp;&nbsp;Hasil iterasi kedua (C2 dan L2).</div>
   <table style="width:70%; margin-left:auto; margin-right:auto;">
     <tr><th>Itemset</th><th>Jumlah</th><th>Support</th><th>Status</th></tr>
     <tr><td>{A, B}</td><td class="c">5</td><td class="c">50%</td><td class="c">Lolos</td></tr>
@@ -410,8 +442,8 @@
     <tr><td>{B, E}</td><td class="c">1</td><td class="c">10%</td><td class="c">Dipangkas</td></tr>
     <tr><td>{C, E}</td><td class="c">1</td><td class="c">10%</td><td class="c">Dipangkas</td></tr>
   </table>
-  <p>Pada iterasi ketiga hanya terbentuk satu kandidat, yaitu {A, B, C}, karena seluruh himpunan bagiannya ({A, B}, {A, C}, {B, C}) <i>frequent</i>. Kandidat ini muncul pada T1, T2, T6, dan T8, sehingga <i>support</i>-nya 4/10 = 40% dan lolos. Tidak ada kandidat 4-itemset yang dapat dibentuk, sehingga iterasi berhenti. Aturan yang dibentuk dari {A, B, C} disajikan pada Tabel II.5.</p>
-  <div class="caption-t"><b>Tabel II.5</b>&nbsp;&nbsp;Aturan asosiasi dari itemset {A, B, C}.</div>
+  <p>Pada iterasi ketiga hanya terbentuk satu kandidat, yaitu {A, B, C}, karena seluruh himpunan bagiannya ({A, B}, {A, C}, {B, C}) <i>frequent</i>. Kandidat ini muncul pada T1, T2, T6, dan T8, sehingga <i>support</i>-nya 4/10 = 40% dan lolos. Tidak ada kandidat 4-itemset yang dapat dibentuk, sehingga iterasi berhenti. Aturan yang dibentuk dari {A, B, C} disajikan pada Tabel II.9.</p>
+  <div class="caption-t"><b>Tabel II.9</b>&nbsp;&nbsp;Aturan asosiasi dari itemset {A, B, C}.</div>
   <table>
     <tr><th>Aturan</th><th>Support</th><th>Confidence</th><th>Lift</th><th>Keputusan</th></tr>
     <tr><td>{A, B} ⇒ {C}</td><td class="c">40%</td><td class="c">4/5 = 80,0%</td><td class="c">0,80 ÷ 0,60 = 1,33</td><td class="c">Diterima</td></tr>
@@ -427,8 +459,8 @@
   <p>Sistem <i>point of sale</i> (POS) adalah sistem informasi operasional yang mencatat seluruh transaksi kasir di titik penjualan, mengelola katalog produk, menghitung pembayaran, dan merekam data struk belanja secara terstruktur (Susanto &amp; Fenriana, 2024). Aplikasi POS yang digunakan dalam penelitian ini adalah aplikasi modern berbasis web yang dikembangkan dengan React dan TypeScript di sisi antarmuka pengguna, Node.js (Express) di sisi server, serta basis data PostgreSQL dengan Prisma ORM. Setiap transaksi tersimpan pada tabel <i>transactions</i> dan rincian produknya pada tabel <i>transaction_items</i>, sehingga data keranjang belanja dapat dibentuk dan dianalisis langsung dari basis data tanpa proses ekspor manual. Selain itu, sistem POS ini dilengkapi antarmuka kasir interaktif yang dapat menampilkan kartu rekomendasi produk cerdas secara <i>real-time</i> saat kasir memindai barang belanjaan konsumen.</p>
 
   <h3>2.6. Alasan Pemilihan Metode</h3>
-  <p>Pemilihan metode didasarkan pada kesesuaian antara pertanyaan penelitian dan jenis tugas <i>data mining</i>. Perbandingan disajikan pada Tabel II.6.</p>
-  <div class="caption-t"><b>Tabel II.6</b>&nbsp;&nbsp;Perbandingan metode data mining terhadap kebutuhan penelitian.</div>
+  <p>Pemilihan metode didasarkan pada kesesuaian antara pertanyaan penelitian dan jenis tugas <i>data mining</i>. Perbandingan disajikan pada Tabel II.10.</p>
+  <div class="caption-t"><b>Tabel II.10</b>&nbsp;&nbsp;Perbandingan metode data mining terhadap kebutuhan penelitian.</div>
   <table>
     <tr><th style="width:20%">Metode</th><th>Pertanyaan yang dijawab</th><th style="width:16%">Sesuai?</th></tr>
     <tr><td>Asosiasi</td><td>Produk apa yang sering dibeli bersamaan?</td><td class="c">Ya</td></tr>
